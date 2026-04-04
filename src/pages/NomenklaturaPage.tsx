@@ -39,18 +39,18 @@ export function NomenklaturaPage() {
     safePage * PAGE_SIZE,
   );
 
-  const toggleSort = (key: SortKey) => {
+  const toggleSort = (key: string) => {
     setPage(1);
     if (sortKey === key) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
-      setSortKey(key);
+      setSortKey(key as SortKey);
       setSortDir("asc");
     }
   };
 
   const columns: {
-    key: SortKey;
+    key: string;
     label: string;
     sortable: boolean;
   }[] = [

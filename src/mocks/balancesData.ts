@@ -739,10 +739,6 @@ export function getTransactionsByNomenclature(id: string): StockTransaction[] {
   )
 }
 
-function uniqueSortedDates(dates: string[]): string[] {
-  return [...new Set(dates)].sort((a, b) => a.localeCompare(b))
-}
-
 function uniqueSortedStrings(values: string[]): string[] {
   return [...new Set(values)].sort((a, b) => a.localeCompare(b, 'ru'))
 }
