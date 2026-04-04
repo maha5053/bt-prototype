@@ -5,6 +5,7 @@ import {
 } from "react-router-dom";
 import { AppLayout } from "./layouts/AppLayout";
 import { NomenklaturaDetailPage } from "./pages/NomenklaturaDetailPage";
+import { NomenklaturaPage } from "./pages/NomenklaturaPage";
 import { BalancePage } from "./pages/BalancePage";
 import {
   PeremeshcheniyaCreatePage,
@@ -31,7 +32,7 @@ const router = createBrowserRouter(
             },
             {
               path: "nomenklatura",
-              element: <SectionPage title="Номенклатура" />,
+              element: <NomenklaturaPage />,
             },
             {
               path: "postupleniya",

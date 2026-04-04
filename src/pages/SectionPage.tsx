@@ -7,6 +7,8 @@ const UNDER_CONSTRUCTION = new Set([
   "Расходники и материалы",
   "Помещения",
   "Оборудования",
+  "Поступления",
+  "Номенклатура",
 ]);
 
 export function SectionPage({ title }: SectionPageProps) {

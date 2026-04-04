@@ -15,7 +15,7 @@ export const SIDEBAR_BY_SECTION: Record<
   { path: string; label: string }[]
 > = {
   sklad: [
-    { path: '/sklad/balance', label: 'Остатки (balance)' },
+    { path: '/sklad/balance', label: 'Остатки' },
     { path: '/sklad/postupleniya', label: 'Поступления' },
     { path: '/sklad/peremeshcheniya', label: 'Перемещения' },
     { path: '/sklad/nomenklatura', label: 'Номенклатура' },

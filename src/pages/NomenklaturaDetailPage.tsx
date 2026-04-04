@@ -1,29 +1,29 @@
-import { Link, useParams } from 'react-router-dom'
-import { useMemo, useState } from 'react'
+import { Link, useParams } from "react-router-dom";
+import { useMemo, useState } from "react";
 import {
   formatRuDate,
   getCatalogById,
-  getStockLinesByNomenclature,
+  getEnrichedStockLinesByNomenclature,
   getTransactionsByNomenclature,
-} from '../mocks/balancesData'
+} from "../mocks/balancesData";
 
-type TabId = 'stock' | 'info' | 'journal'
+type TabId = "stock" | "info" | "journal";
 
 const tabs: { id: TabId; label: string }[] = [
-  { id: 'stock', label: 'Остаток' },
-  { id: 'info', label: 'Информация' },
-  { id: 'journal', label: 'Журнал' },
-]
+  { id: "stock", label: "Остаток" },
+  { id: "info", label: "Информация" },
+  { id: "journal", label: "Журнал" },
+];
 
 export function NomenklaturaDetailPage() {
-  const { nomenclatureId } = useParams<{ nomenclatureId: string }>()
-  const [tab, setTab] = useState<TabId>('stock')
+  const { nomenclatureId } = useParams<{ nomenclatureId: string }>();
+  const [tab, setTab] = useState<TabId>("stock");
 
-  const catalog = nomenclatureId ? getCatalogById(nomenclatureId) : undefined
+  const catalog = nomenclatureId ? getCatalogById(nomenclatureId) : undefined;
   const transactions = useMemo(
     () => (nomenclatureId ? getTransactionsByNomenclature(nomenclatureId) : []),
     [nomenclatureId],
-  )
+  );
 
   if (!nomenclatureId || !catalog) {
     return (
@@ -36,10 +36,10 @@ export function NomenklaturaDetailPage() {
           ← К остаткам
         </Link>
       </div>
-    )
+    );
   }
 
-  const stockLines = getStockLinesByNomenclature(nomenclatureId)
+  const stockLines = getEnrichedStockLinesByNomenclature(nomenclatureId);
 
   return (
     <div className="p-6 md:p-8">
@@ -74,8 +74,8 @@ export function NomenklaturaDetailPage() {
             onClick={() => setTab(t.id)}
             className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
               tab === t.id
-                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200'
-                : 'text-slate-600 hover:bg-white/60 hover:text-slate-900'
+                ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200"
+                : "text-slate-600 hover:bg-white/60 hover:text-slate-900"
             }`}
           >
             {t.label}
@@ -83,7 +83,7 @@ export function NomenklaturaDetailPage() {
         ))}
       </div>
 
-      {tab === 'stock' ? (
+      {tab === "stock" ? (
         <section aria-labelledby="stock-heading" className="space-y-3">
           <h2 id="stock-heading" className="sr-only">
             Остаток по местам и партиям
@@ -110,28 +110,67 @@ export function NomenklaturaDetailPage() {
                 <tbody>
                   {stockLines.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                      <td
+                        colSpan={6}
+                        className="px-4 py-10 text-center text-slate-500"
+                      >
                         Нет строк остатков по выбранной номенклатуре.
                       </td>
                     </tr>
                   ) : (
-                    stockLines.map((line, idx) => (
-                      <tr
-                        key={`${line.lot}-${line.place}-${idx}`}
-                        className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80"
-                      >
-                        <td className="px-4 py-3 text-slate-800">{catalog.name}</td>
-                        <td className="px-4 py-3">{line.place}</td>
-                        <td className="px-4 py-3 font-mono text-xs">{line.lot}</td>
-                        <td className="px-4 py-3 tabular-nums">{line.quantity}</td>
-                        <td className="px-4 py-3 tabular-nums whitespace-nowrap">
-                          {formatRuDate(line.expiryDate)}
-                        </td>
-                        <td className="px-4 py-3 tabular-nums whitespace-nowrap">
-                          {formatRuDate(line.receiptDate)}
-                        </td>
-                      </tr>
-                    ))
+                    stockLines.map((line, idx) => {
+                      const now = new Date();
+                      const expDate = new Date(line.expiryDate + "T00:00:00");
+                      const isExpired = expDate < now;
+                      const thirtyDaysFromNow = new Date(now);
+                      thirtyDaysFromNow.setDate(
+                        thirtyDaysFromNow.getDate() + 30,
+                      );
+                      const isExpiringSoon =
+                        !isExpired && expDate <= thirtyDaysFromNow;
+
+                      const expiryClassName = isExpired
+                        ? "text-red-700 font-medium bg-red-50 rounded px-1.5 py-0.5"
+                        : isExpiringSoon
+                          ? "text-amber-700 font-medium bg-amber-50 rounded px-1.5 py-0.5"
+                          : "text-slate-600";
+
+                      return (
+                        <tr
+                          key={`${line.lot}-${line.place}-${idx}`}
+                          className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80"
+                        >
+                          <td className="px-4 py-3 text-slate-800">
+                            {catalog.name}
+                          </td>
+                          <td className="px-4 py-3">{line.place}</td>
+                          <td className="px-4 py-3 font-mono text-xs">
+                            {line.lot}
+                          </td>
+                          <td className="px-4 py-3 tabular-nums">
+                            {line.quantity}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className={expiryClassName}>
+                              {formatRuDate(line.expiryDate)}
+                              {isExpired && (
+                                <span className="ml-1.5 inline-block rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700 ring-1 ring-red-200">
+                                  просрочен
+                                </span>
+                              )}
+                              {isExpiringSoon && (
+                                <span className="ml-1.5 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 ring-1 ring-amber-200">
+                                  скоро истекает
+                                </span>
+                              )}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 tabular-nums whitespace-nowrap">
+                            {formatRuDate(line.receiptDate)}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -140,9 +179,12 @@ export function NomenklaturaDetailPage() {
         </section>
       ) : null}
 
-      {tab === 'info' ? (
+      {tab === "info" ? (
         <section aria-labelledby="info-heading">
-          <h2 id="info-heading" className="mb-3 text-lg font-semibold text-slate-900">
+          <h2
+            id="info-heading"
+            className="mb-3 text-lg font-semibold text-slate-900"
+          >
             Информация (справочник)
           </h2>
           <dl className="grid max-w-3xl gap-x-6 gap-y-3 sm:grid-cols-2">
@@ -151,12 +193,6 @@ export function NomenklaturaDetailPage() {
             <InfoRow label="Группа" value={catalog.group} />
             <InfoRow label="Ед. изм." value={catalog.unit} />
             <InfoRow label="Производитель" value={catalog.manufacturer} />
-            <InfoRow label="Код поставщика" value={catalog.vendorCode} />
-            <InfoRow label="Код счёта" value={catalog.accountCode} />
-            <InfoRow
-              label="Мин. остаток"
-              value={String(catalog.minStockLevel)}
-            />
             <div className="sm:col-span-2">
               <InfoRow label="Описание" value={catalog.description} />
             </div>
@@ -167,15 +203,18 @@ export function NomenklaturaDetailPage() {
               />
             </div>
             <div className="sm:col-span-2">
-              <InfoRow label="Примечания" value={catalog.notes || '—'} />
+              <InfoRow label="Примечания" value={catalog.notes || "—"} />
             </div>
           </dl>
         </section>
       ) : null}
 
-      {tab === 'journal' ? (
+      {tab === "journal" ? (
         <section aria-labelledby="journal-heading" className="space-y-3">
-          <h2 id="journal-heading" className="text-lg font-semibold text-slate-900">
+          <h2
+            id="journal-heading"
+            className="text-lg font-semibold text-slate-900"
+          >
             Журнал движений
           </h2>
           <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -183,7 +222,9 @@ export function NomenklaturaDetailPage() {
               <table className="min-w-[1000px] w-full border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                    <th className="px-3 py-3 font-medium whitespace-nowrap">ID</th>
+                    <th className="px-3 py-3 font-medium whitespace-nowrap">
+                      ID
+                    </th>
                     <th className="px-3 py-3 font-medium whitespace-nowrap">
                       Время
                     </th>
@@ -217,17 +258,24 @@ export function NomenklaturaDetailPage() {
                           {tx.id}
                         </td>
                         <td className="px-3 py-2.5 tabular-nums text-xs whitespace-nowrap text-slate-700">
-                          {new Date(tx.timestamp).toLocaleString('ru-RU')}
+                          {new Date(tx.timestamp).toLocaleString("ru-RU")}
                         </td>
                         <td className="px-3 py-2.5 capitalize">{tx.type}</td>
                         <td className="px-3 py-2.5">{tx.initiator}</td>
                         <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">
                           {tx.quantity}
                         </td>
-                        <td className="px-3 py-2.5 font-mono text-xs">{tx.lot}</td>
-                        <td className="px-3 py-2.5 text-slate-700">{tx.context}</td>
-                        <td className="max-w-[200px] px-3 py-2.5 text-slate-600 truncate" title={tx.comment}>
-                          {tx.comment || '—'}
+                        <td className="px-3 py-2.5 font-mono text-xs">
+                          {tx.lot}
+                        </td>
+                        <td className="px-3 py-2.5 text-slate-700">
+                          {tx.context}
+                        </td>
+                        <td
+                          className="max-w-[200px] px-3 py-2.5 text-slate-600 truncate"
+                          title={tx.comment}
+                        >
+                          {tx.comment || "—"}
                         </td>
                       </tr>
                     ))
@@ -239,7 +287,7 @@ export function NomenklaturaDetailPage() {
         </section>
       ) : null}
     </div>
-  )
+  );
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -250,5 +298,5 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       </dt>
       <dd className="mt-0.5 text-sm text-slate-900">{value}</dd>
     </div>
-  )
+  );
 }
