@@ -6,11 +6,11 @@
 const spaRedirectUrl = localStorage.getItem("spa-redirect");
 if (spaRedirectUrl) {
   localStorage.removeItem("spa-redirect");
-  // Extract just the path portion from the full URL
   const urlObj = new URL(spaRedirectUrl);
   const path = urlObj.pathname + urlObj.search + urlObj.hash;
-  // Change the address bar URL without triggering a server request.
-  // React Router's basename-aware routing will pick up the new URL.
+  // Keep the full path including /bt-prototype so the address bar URL
+  // is valid on GitHub Pages. React Router's basename option strips it
+  // internally for route matching.
   window.history.replaceState(null, "", path);
 }
 
