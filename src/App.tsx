@@ -15,6 +15,10 @@ import {
 } from "./pages/Peremeshcheniya";
 import { SectionPage } from "./pages/SectionPage";
 import { KarantinPage } from "./pages/KarantinPage";
+import {
+  InventoryListPage,
+  InventorySessionPage,
+} from "./pages/InventoryPages";
 
 const router = createBrowserRouter(
   [
@@ -43,6 +47,14 @@ const router = createBrowserRouter(
             {
               path: "karantin",
               element: <KarantinPage />,
+            },
+            {
+              path: "inventarizatsiya",
+              element: <InventoryListPage />,
+            },
+            {
+              path: "inventarizatsiya/:sessionId",
+              element: <InventorySessionPage />,
             },
             {
               path: "peremeshcheniya",
