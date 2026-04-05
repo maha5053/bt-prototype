@@ -18,3 +18,53 @@ body {
 .animate-slide-up {
   animation: slide-up 0.3s ease-out;
 }
+
+/* Print styles for write-off act */
+@media print {
+  /* Hide everything except the print container */
+  body * {
+    visibility: hidden;
+  }
+  
+  .print-container,
+  .print-container * {
+    visibility: visible;
+  }
+  
+  .print-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 20mm;
+  }
+  
+  /* Hide browser headers/footers */
+  @page {
+    margin: 15mm 10mm;
+    size: A4;
+  }
+  
+  /* Hide sidebar, header, etc. */
+  header,
+  nav,
+  aside,
+  footer {
+    display: none !important;
+  }
+  
+  /* Remove backgrounds for cleaner print */
+  .print-container {
+    background: white;
+  }
+  
+  /* Ensure borders print properly */
+  .print-container table {
+    border-collapse: collapse;
+  }
+  
+  .print-container th,
+  .print-container td {
+    border: 1px solid black;
+  }
+}

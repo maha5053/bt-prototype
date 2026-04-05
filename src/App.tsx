@@ -19,6 +19,8 @@ import {
   InventoryListPage,
   InventorySessionPage,
 } from "./pages/InventoryPages";
+import { WriteOffListPage, WriteOffSessionPage } from "./pages/WriteOffPages";
+import { WriteOffPrintPage } from "./pages/WriteOffPrintPage";
 
 const router = createBrowserRouter(
   [
@@ -55,6 +57,14 @@ const router = createBrowserRouter(
             {
               path: "inventarizatsiya/:sessionId",
               element: <InventorySessionPage />,
+            },
+            {
+              path: "spisaniya",
+              element: <WriteOffListPage />,
+            },
+            {
+              path: "spisaniya/:sessionId",
+              element: <WriteOffSessionPage />,
             },
             {
               path: "peremeshcheniya",
@@ -99,6 +109,10 @@ const router = createBrowserRouter(
           ],
         },
       ],
+    },
+    {
+      path: "sklad/spisaniya/:sessionId/print",
+      element: <WriteOffPrintPage />,
     },
   ],
   { basename: import.meta.env.BASE_URL },

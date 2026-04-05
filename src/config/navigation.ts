@@ -20,6 +20,7 @@ export const SIDEBAR_BY_SECTION: Record<
     { path: "/sklad/peremeshcheniya", label: "Перемещения" },
     { path: "/sklad/karantin", label: "Карантин" },
     { path: "/sklad/inventarizatsiya", label: "Инвентаризация" },
+    { path: "/sklad/spisaniya", label: "Списания" },
     { path: "/sklad/nomenklatura", label: "Номенклатура" },
   ],
   spravochniki: [
