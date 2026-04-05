@@ -1,17 +1,10 @@
-// Handle GitHub Pages SPA redirect BEFORE React renders.
+// Store the SPA redirect path before React renders.
 // 404.html saves the target URL, then redirects to /bt-prototype/.
-// When the app loads at /bt-prototype/, we swap the URL in the address bar
-// to the intended path WITHOUT a server request (history.replaceState),
-// then let React Router handle the navigation client-side.
+// We'll read it here and pass it to a component that uses React Router's
+// useNavigate for proper client-side navigation.
 const spaRedirectUrl = localStorage.getItem("spa-redirect");
 if (spaRedirectUrl) {
   localStorage.removeItem("spa-redirect");
-  const urlObj = new URL(spaRedirectUrl);
-  const path = urlObj.pathname + urlObj.search + urlObj.hash;
-  // Keep the full path including /bt-prototype so the address bar URL
-  // is valid on GitHub Pages. React Router's basename option strips it
-  // internally for route matching.
-  window.history.replaceState(null, "", path);
 }
 
 import { StrictMode } from "react";
