@@ -27,7 +27,11 @@ function rootLoader() {
   const redirectUrl = localStorage.getItem("spa-redirect");
   if (redirectUrl) {
     localStorage.removeItem("spa-redirect");
-    throw redirect(redirectUrl.replace(window.location.origin, ""));
+    // The router uses basename="/bt-prototype/", so we must strip it
+    // from the path before redirecting to avoid double-prefixing.
+    const origin = window.location.origin;
+    const path = redirectUrl.replace(origin, "").replace("/bt-prototype", "");
+    throw redirect(path || "/");
   }
   return null;
 }
