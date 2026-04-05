@@ -1,4 +1,5 @@
-import { useNavigate, useEffect } from "react-router-dom";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 /** Handles SPA redirect from GitHub Pages 404.html fallback.
  *  Uses React Router's navigate() which properly updates the router's
