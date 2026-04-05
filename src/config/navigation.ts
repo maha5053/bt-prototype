@@ -18,6 +18,7 @@ export const SIDEBAR_BY_SECTION: Record<
     { path: '/sklad/balance', label: 'Остатки' },
     { path: '/sklad/postupleniya', label: 'Поступления' },
     { path: '/sklad/peremeshcheniya', label: 'Перемещения' },
+    { path: '/sklad/karantin', label: 'Карантин' },
     { path: '/sklad/nomenklatura', label: 'Номенклатура' },
   ],
   spravochniki: [

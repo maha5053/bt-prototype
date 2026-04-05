@@ -14,6 +14,7 @@ import {
   TransfersLayout,
 } from "./pages/Peremeshcheniya";
 import { SectionPage } from "./pages/SectionPage";
+import { KarantinPage } from "./pages/KarantinPage";
 
 const router = createBrowserRouter(
   [
@@ -39,6 +40,10 @@ const router = createBrowserRouter(
               element: <SectionPage title="Поступления" />,
             },
             { path: "balance", element: <BalancePage /> },
+            {
+              path: "karantin",
+              element: <KarantinPage />,
+            },
             {
               path: "peremeshcheniya",
               element: <TransfersLayout />,

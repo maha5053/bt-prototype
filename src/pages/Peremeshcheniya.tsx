@@ -330,7 +330,7 @@ export function PeremeshcheniyaListPage() {
             <button
               type="button"
               onClick={() => setFiltersOpen(true)}
-              className={`rounded-md border border-slate-300 bg-white p-2 shadow-sm hover:bg-slate-50 ${hasActiveFilters ? "border-slate-400 bg-slate-100 ring-2 ring-slate-200" : ""}`}
+              className={`relative rounded-md border border-slate-300 bg-white p-2 shadow-sm hover:bg-slate-50 ${hasActiveFilters ? "border-slate-400 bg-slate-100 ring-2 ring-slate-200" : ""}`}
               aria-label="Открыть фильтры"
               title="Фильтры"
             >
@@ -346,7 +346,7 @@ export function PeremeshcheniyaListPage() {
                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
               </svg>
               {hasActiveFilters && (
-                <span className="ml-1.5 inline-block size-1.5 rounded-full bg-emerald-500"></span>
+                <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full border-2 border-white bg-emerald-500"></span>
               )}
             </button>
             <span>
@@ -583,18 +583,10 @@ export function PeremeshcheniyaCreatePage() {
         </div>
 
         <div>
-          <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="mb-2 flex items-center gap-2">
             <span className="text-sm font-medium text-slate-800">
               Позиции (номенклатура + лот)
             </span>
-            <button
-              type="button"
-              onClick={() => setDraftLines((rows) => [...rows, emptyLine()])}
-              disabled={!fromPlace}
-              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Добавить строку
-            </button>
           </div>
 
           {!fromPlace ? (
@@ -606,95 +598,111 @@ export function PeremeshcheniyaCreatePage() {
               В этом месте нет положительных остатков в мок-данных.
             </p>
           ) : (
-            <ul className="space-y-3">
-              {draftLines.map((row) => (
-                <li
-                  key={row.key}
-                  className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-slate-50/80 p-3"
-                >
-                  <div className="min-w-[200px] flex-1">
-                    <label className="mb-1 block text-xs text-slate-500">
-                      Номенклатура
-                    </label>
-                    <select
-                      value={row.nomenclatureId}
-                      onChange={(e) =>
-                        updateDraftLine(row.key, (r) => ({
-                          ...r,
-                          nomenclatureId: e.target.value,
-                          lot: "",
-                          quantity: "",
-                        }))
-                      }
-                      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-                    >
-                      <option value="">—</option>
-                      {nomOptions.map(([id, name]) => (
-                        <option key={id} value={id}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="min-w-[120px]">
-                    <label className="mb-1 block text-xs text-slate-500">
-                      Лот
-                    </label>
-                    <select
-                      value={row.lot}
-                      onChange={(e) =>
-                        updateDraftLine(row.key, (r) => ({
-                          ...r,
-                          lot: e.target.value,
-                          quantity: "",
-                        }))
-                      }
-                      disabled={!row.nomenclatureId}
-                      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50"
-                    >
-                      <option value="">—</option>
-                      {availability
-                        .filter((a) => a.nomenclatureId === row.nomenclatureId)
-                        .map((a) => (
-                          <option key={a.lot} value={a.lot}>
-                            {a.lot} (доступно {a.quantity})
+            <>
+              <ul className="space-y-3">
+                {draftLines.map((row) => (
+                  <li
+                    key={row.key}
+                    className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-slate-50/80 p-3"
+                  >
+                    <div className="min-w-[200px] flex-1">
+                      <label className="mb-1 block text-xs text-slate-500">
+                        Номенклатура
+                      </label>
+                      <select
+                        value={row.nomenclatureId}
+                        onChange={(e) =>
+                          updateDraftLine(row.key, (r) => ({
+                            ...r,
+                            nomenclatureId: e.target.value,
+                            lot: "",
+                            quantity: "",
+                          }))
+                        }
+                        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                      >
+                        <option value="">—</option>
+                        {nomOptions.map(([id, name]) => (
+                          <option key={id} value={id}>
+                            {name}
                           </option>
                         ))}
-                    </select>
-                  </div>
-                  <div className="w-28">
-                    <label className="mb-1 block text-xs text-slate-500">
-                      Кол-во
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={row.quantity}
-                      onChange={(e) =>
-                        updateDraftLine(row.key, (r) => ({
-                          ...r,
-                          quantity: e.target.value,
-                        }))
+                      </select>
+                    </div>
+                    <div className="min-w-[120px]">
+                      <label className="mb-1 block text-xs text-slate-500">
+                        Лот
+                      </label>
+                      <select
+                        value={row.lot}
+                        onChange={(e) =>
+                          updateDraftLine(row.key, (r) => ({
+                            ...r,
+                            lot: e.target.value,
+                            quantity: "",
+                          }))
+                        }
+                        disabled={!row.nomenclatureId}
+                        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50"
+                      >
+                        <option value="">—</option>
+                        {availability
+                          .filter(
+                            (a) => a.nomenclatureId === row.nomenclatureId,
+                          )
+                          .map((a) => (
+                            <option key={a.lot} value={a.lot}>
+                              {a.lot} (доступно {a.quantity})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                    <div className="w-28">
+                      <label className="mb-1 block text-xs text-slate-500">
+                        Кол-во
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={row.quantity}
+                        onChange={(e) =>
+                          updateDraftLine(row.key, (r) => ({
+                            ...r,
+                            quantity: e.target.value,
+                          }))
+                        }
+                        disabled={!row.lot}
+                        className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDraftLines((rows) =>
+                          rows.filter((r) => r.key !== row.key),
+                        )
                       }
-                      disabled={!row.lot}
-                      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm disabled:opacity-50"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setDraftLines((rows) =>
-                        rows.filter((r) => r.key !== row.key),
-                      )
-                    }
-                    disabled={draftLines.length <= 1}
-                    className="mb-0.5 rounded-md px-2 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-30"
-                  >
-                    Удалить
-                  </button>
-                </li>
-              ))}
-            </ul>
+                      disabled={draftLines.length <= 1}
+                      className="mb-0.5 rounded-md px-2 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-30"
+                    >
+                      Удалить
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDraftLines((rows) => [...rows, emptyLine()])
+                  }
+                  disabled={!fromPlace}
+                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Добавить строку
+                </button>
+              </div>
+            </>
           )}
         </div>
 
