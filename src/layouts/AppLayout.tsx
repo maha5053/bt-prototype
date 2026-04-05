@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { BioTrackLogo } from "../components/BioTrackLogo";
+import { SpaRedirectHandler } from "../components/SpaRedirectHandler";
 import {
   SIDEBAR_BY_SECTION,
   TOP_NAV,
@@ -110,6 +111,7 @@ export function AppLayout() {
         </aside>
 
         <main className="flex-1 overflow-auto bg-white">
+          <SpaRedirectHandler />
           <Outlet />
         </main>
       </div>
