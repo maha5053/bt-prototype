@@ -1,7 +1,6 @@
 import {
   createBrowserRouter,
   Navigate,
-  redirect,
   RouterProvider,
 } from "react-router-dom";
 import { AppLayout } from "./layouts/AppLayout";
@@ -21,27 +20,11 @@ import {
   InventorySessionPage,
 } from "./pages/InventoryPages";
 
-/** Root loader: intercept SPA redirect from GitHub Pages 404.html
- *  before any route renders, preventing race with index <Navigate>. */
-function rootLoader() {
-  const redirectUrl = localStorage.getItem("spa-redirect");
-  if (redirectUrl) {
-    localStorage.removeItem("spa-redirect");
-    // The router uses basename="/bt-prototype/", so we must strip it
-    // from the path before redirecting to avoid double-prefixing.
-    const origin = window.location.origin;
-    const path = redirectUrl.replace(origin, "").replace("/bt-prototype", "");
-    throw redirect(path || "/");
-  }
-  return null;
-}
-
 const router = createBrowserRouter(
   [
     {
       path: "/",
       element: <AppLayout />,
-      loader: rootLoader,
       children: [
         { index: true, element: <Navigate to="/sklad/nomenklatura" replace /> },
         {
