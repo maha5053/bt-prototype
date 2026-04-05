@@ -5,15 +5,16 @@
   <meta charset="utf-8">
   <title>Bio — прототип</title>
   <script>
+    // Use hash-based redirect to avoid 404.html re-triggering
     var path = window.location.pathname.replace('/bt-prototype', '');
-    var url = window.location.origin + '/bt-prototype' + path + window.location.search;
-    localStorage.setItem('spa-redirect', url);
-    window.location.replace('/bt-prototype/');
+    // Store the path in hash format so 404.html doesn't re-trigger on redirect
+    var hashPath = '#redirect' + path;
+    window.location.replace('/bt-prototype/' + hashPath + window.location.search);
   </script>
 </head>
 
 <body>
-  <p>Redirecting to <a href="/bt-prototype/">main page</a>...</p>
+  <p>Redirecting...</p>
 </body>
 
 </html>
