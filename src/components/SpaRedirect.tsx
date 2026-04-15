@@ -12,7 +12,16 @@ export function SpaRedirect() {
     if (spaRedirectUrl) {
       localStorage.removeItem("spa-redirect");
       const urlObj = new URL(spaRedirectUrl);
-      const path = urlObj.pathname + urlObj.search + urlObj.hash;
+      const base = import.meta.env.BASE_URL || "/";
+      const baseNoTrailing = base.endsWith("/") ? base.slice(0, -1) : base;
+
+      let pathname = urlObj.pathname;
+      if (baseNoTrailing && baseNoTrailing !== "/" && pathname.startsWith(baseNoTrailing)) {
+        pathname = pathname.slice(baseNoTrailing.length);
+        if (!pathname.startsWith("/")) pathname = "/" + pathname;
+      }
+
+      const path = pathname + urlObj.search + urlObj.hash;
       // Navigate using React Router — this updates both the URL bar
       // AND the router's internal state, triggering the correct route.
       navigate(path, { replace: true });
