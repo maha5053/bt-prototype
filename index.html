@@ -22,7 +22,9 @@
           .join("&");
 
         var newPath = decoded.slice(1); // remove leading "/"
-        l.replace(l.pathname.replace(/\/$/, "") + newPath + l.hash);
+        var base = l.pathname;
+        if (base[base.length - 1] !== "/") base += "/";
+        l.replace(base + newPath + l.hash);
       })();
     </script>
     <script type="module" crossorigin src="/bt-prototype/assets/index-DezWumle.js"></script>
