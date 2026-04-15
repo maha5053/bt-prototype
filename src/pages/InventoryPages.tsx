@@ -628,18 +628,18 @@ function InventorySessionContent() {
             {session.createdBy}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2 sm:flex-nowrap">
           {session.status === "draft" && (
             <>
               <button
                 onClick={openAddModal}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                className="whitespace-nowrap rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
                 + Добавить позицию
               </button>
               <button
                 onClick={handleSaveDraft}
-                className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
+                className="whitespace-nowrap rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
               >
                 <div className="flex items-center gap-1.5">
                   <svg
@@ -660,7 +660,7 @@ function InventorySessionContent() {
               </button>
               <button
                 onClick={() => setConfirmComplete(true)}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
+                className="whitespace-nowrap rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
               >
                 Завершить
               </button>
