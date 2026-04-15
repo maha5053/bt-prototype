@@ -45,6 +45,18 @@ npm run dev -- --host
 - **Колонки**: номер (без префикса `inv-`), дата, создал, статус (бейдж), позиций, совпало / излишки / недостачи (подсчёт по `session.lines`).
 - **Пагинация**: `PAGE_SIZE = 15`, футер «Показано X–Y из Z» и «Назад / Стр. / Вперёд»; поиска и фильтров нет.
 
+## Сессия инвентаризации (документ)
+
+- **Маршрут**: `/sklad/inventarizatsiya/:sessionId` → `InventorySessionPage` / `InventorySessionContent` в [`src/pages/InventoryPages.tsx`](src/pages/InventoryPages.tsx).
+- **Хранилище**: `localStorage` ключ **`bio-inventory`** (контекст: [`src/context/InventoryContext.tsx`](src/context/InventoryContext.tsx)).
+- **Завершение**: кнопка «Завершить» открывает модалку подтверждения; если есть непроверенные строки (`actualQuantity === null`), показывается предупреждение с количеством.
+- **Добавление позиции**: кнопка «+ Добавить позицию» открывает модалку:
+  - номенклатура — `Combobox` (autocomplete) на `@headlessui/react` с фильтрацией по названию/производителю/группе
+  - лот — dropdown по всем лотам выбранной номенклатуры (из `MOCK_STOCK_LINES` + строк текущей сессии)
+  - место хранения — dropdown из `getAllStoragePlaces()`
+  - ключ уникальности строки: `(nomenclatureId, place, lot)`
+  - если строка уже существует — UI скроллит и подсвечивает её; если нет — создаётся новая строка и сразу открывается ввод фактического количества
+
 ## Плашка «прототип»
 
 - Компонент: [`src/components/PrototypeDisclaimer.tsx`](src/components/PrototypeDisclaimer.tsx) — жёлтая полоса **фиксирована снизу** (`fixed bottom-0`), скрывается при печати (`print:hidden`).

@@ -13,6 +13,7 @@ import {
   type InventorySession,
   type InventoryStatus,
   type DiscrepancyStatus,
+  type InventoryLine,
 } from "../mocks/inventoryData";
 
 const STORAGE_KEY = "bio-inventory";
@@ -39,6 +40,17 @@ type InventoryContextValue = {
   sessions: InventorySession[];
   activeSession: InventorySession | null;
   createSession: () => InventorySession;
+  addOrFocusLine: (
+    sessionId: string,
+    input: {
+      nomenclatureId: string;
+      nomenclatureName: string;
+      group: InventoryLine["group"];
+      manufacturer: string;
+      lot: string;
+      place: string;
+    },
+  ) => { index: number; created: boolean };
   updateLineActualQuantity: (
     sessionId: string,
     lineIndex: number,
@@ -93,6 +105,78 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
     });
     return newSession;
   }, []);
+
+  const addOrFocusLine = useCallback(
+    (
+      sessionId: string,
+      input: {
+        nomenclatureId: string;
+        nomenclatureName: string;
+        group: InventoryLine["group"];
+        manufacturer: string;
+        lot: string;
+        place: string;
+      },
+    ): { index: number; created: boolean } => {
+      const snapshot = sessions.find((s) => s.id === sessionId && s.status === "draft");
+      const existedBefore =
+        snapshot?.lines.some(
+          (l) =>
+            l.nomenclatureId === input.nomenclatureId &&
+            l.place === input.place &&
+            l.lot === input.lot,
+        ) ?? false;
+
+      let result: { index: number; created: boolean } = { index: 0, created: false };
+
+      setSessions((prev) => {
+        const next = prev.map((s) => {
+          if (s.id !== sessionId || s.status !== "draft") return s;
+
+          const existingIndex = s.lines.findIndex(
+            (l) =>
+              l.nomenclatureId === input.nomenclatureId &&
+              l.place === input.place &&
+              l.lot === input.lot,
+          );
+          if (existingIndex >= 0) {
+            result = { index: existingIndex, created: false };
+            return s;
+          }
+
+          if (existedBefore) {
+            // Extremely unlikely: snapshot said it exists, but it's missing from latest state.
+            // Do not create a duplicate line.
+            return s;
+          }
+
+          const newLine: InventoryLine = {
+            nomenclatureId: input.nomenclatureId,
+            nomenclatureName: input.nomenclatureName,
+            group: input.group,
+            manufacturer: input.manufacturer,
+            lot: input.lot,
+            place: input.place,
+            systemQuantity: 0,
+            actualQuantity: null,
+            discrepancy: null,
+            status: "совпадение",
+            comment: "",
+          };
+
+          const updatedLines = [newLine, ...s.lines];
+          result = { index: 0, created: true };
+          return { ...s, lines: updatedLines };
+        });
+
+        saveToStorage(next);
+        return next;
+      });
+
+      return result;
+    },
+    [sessions],
+  );
 
   const updateLineActualQuantity = useCallback(
     (sessionId: string, lineIndex: number, actualQuantity: number) => {
@@ -207,6 +291,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       sessions,
       activeSession,
       createSession,
+      addOrFocusLine,
       updateLineActualQuantity,
       updateLineComment,
       completeSession,
@@ -217,6 +302,7 @@ export function InventoryProvider({ children }: { children: ReactNode }) {
       sessions,
       activeSession,
       createSession,
+      addOrFocusLine,
       updateLineActualQuantity,
       updateLineComment,
       completeSession,

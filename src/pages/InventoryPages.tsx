@@ -1,11 +1,17 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { Combobox } from "@headlessui/react";
 import { InventoryProvider, useInventory } from "../context/InventoryContext";
 import { getAllStoragePlaces, ALL_GROUPS } from "../mocks/inventoryData";
 import type {
   DiscrepancyStatus,
   InventorySession,
 } from "../mocks/inventoryData";
+import {
+  MOCK_CATALOG,
+  MOCK_STOCK_LINES,
+  type CatalogItem,
+} from "../mocks/balancesData";
 
 const PAGE_SIZE = 15;
 
@@ -338,6 +344,7 @@ function InventorySessionContent() {
   const navigate = useNavigate();
   const {
     sessions,
+    addOrFocusLine,
     updateLineActualQuantity,
     updateLineComment,
     completeSession,
@@ -361,6 +368,15 @@ function InventorySessionContent() {
   } | null>(null);
   const [confirmComplete, setConfirmComplete] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showAddLine, setShowAddLine] = useState(false);
+  const [addNomId, setAddNomId] = useState<string>("");
+  const [addNomSearch, setAddNomSearch] = useState<string>("");
+  const [addPlace, setAddPlace] = useState<string>("");
+  const [addLot, setAddLot] = useState<string>("");
+
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const [flashKey, setFlashKey] = useState<string | null>(null);
+  const focusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Toast notification for save draft
   const [saveToast, setSaveToast] = useState<{
@@ -395,6 +411,35 @@ function InventorySessionContent() {
       navigate("/sklad/inventarizatsiya", { replace: true });
     }
   }, [session, sessionId, navigate]);
+
+  // Scroll/focus helper: after page/filter changes, bring the row into view and flash it.
+  useEffect(() => {
+    if (!focusKey) return;
+
+    const encoded = encodeURIComponent(focusKey);
+    const run = () => {
+      const el = document.querySelector(
+        `[data-inv-key="${encoded}"]`,
+      ) as HTMLElement | null;
+      if (!el) return;
+      el.scrollIntoView({ block: "center" });
+
+      setFlashKey(focusKey);
+      setFocusKey(null);
+
+      if (focusTimer.current) clearTimeout(focusTimer.current);
+      focusTimer.current = setTimeout(() => setFlashKey(null), 1400);
+    };
+
+    const t = window.setTimeout(run, 0);
+    return () => window.clearTimeout(t);
+  }, [focusKey, page, search, placeFilter, groupFilter, discrepancyFilter]);
+
+  useEffect(() => {
+    return () => {
+      if (focusTimer.current) clearTimeout(focusTimer.current);
+    };
+  }, []);
 
   // Filter & paginate session lines
   const filteredLines = useMemo(() => {
@@ -448,6 +493,51 @@ function InventorySessionContent() {
   }, [session]);
 
   const storagePlaces = useMemo(() => getAllStoragePlaces(), []);
+  const catalog = useMemo(() => [...MOCK_CATALOG], []);
+  const filteredCatalog = useMemo(() => {
+    const q = addNomSearch.trim().toLowerCase();
+    const base = catalog
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    if (!q) return base;
+    return base.filter((c) => {
+      const hay = `${c.name} ${c.manufacturer} ${c.group}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [catalog, addNomSearch]);
+
+  const selectedCatalogItem = useMemo<CatalogItem | null>(() => {
+    if (!addNomId) return null;
+    return catalog.find((c) => c.id === addNomId) ?? null;
+  }, [addNomId, catalog]);
+
+  const addLots = useMemo(() => {
+    if (!selectedCatalogItem) return [];
+
+    const fromStock = MOCK_STOCK_LINES.filter(
+      (l) => l.nomenclatureId === selectedCatalogItem.id,
+    ).map((l) => l.lot);
+
+    const fromSession = (session?.lines ?? [])
+      .filter(
+        (l) =>
+          l.nomenclatureId === selectedCatalogItem.id,
+      )
+      .map((l) => l.lot);
+
+    return [...new Set([...fromStock, ...fromSession])].sort((a, b) =>
+      a.localeCompare(b, "ru"),
+    );
+  }, [selectedCatalogItem, session?.lines]);
+
+  const canSubmitAdd = Boolean(addNomId && addPlace && addLot);
+
+  useEffect(() => {
+    if (!addLot) return;
+    if (addLots.length > 0 && !addLots.includes(addLot)) {
+      setAddLot("");
+    }
+  }, [addLot, addLots]);
 
   const resetFilters = () => {
     setSearch("");
@@ -458,6 +548,51 @@ function InventorySessionContent() {
   };
 
   if (!session) return null;
+
+  const clearAddModal = () => {
+    setAddNomId("");
+    setAddNomSearch("");
+    setAddPlace("");
+    setAddLot("");
+  };
+
+  const openAddModal = () => {
+    clearAddModal();
+    setShowAddLine(true);
+  };
+
+  const computeTargetPage = (targetIndex: number) =>
+    Math.floor(targetIndex / PAGE_SIZE) + 1;
+
+  const focusRow = (targetIndex: number, key: string) => {
+    // Ensure row is visible: reset filters and go to correct page.
+    setSearch("");
+    setPlaceFilter("all");
+    setGroupFilter("all");
+    setDiscrepancyFilter("all");
+    setPage(computeTargetPage(targetIndex));
+    setFocusKey(key);
+  };
+
+  const handleAddOrFocus = () => {
+    if (session.status !== "draft") return;
+    if (!canSubmitAdd || !selectedCatalogItem) return;
+
+    const res = addOrFocusLine(session.id, {
+      nomenclatureId: selectedCatalogItem.id,
+      nomenclatureName: selectedCatalogItem.name,
+      group: selectedCatalogItem.group,
+      manufacturer: selectedCatalogItem.manufacturer,
+      lot: addLot,
+      place: addPlace,
+    });
+
+    setShowAddLine(false);
+    focusRow(res.index, makeLineKey(selectedCatalogItem.id, addPlace, addLot));
+    if (res.created) {
+      setEditingCell({ lineIndex: res.index, field: "qty" });
+    }
+  };
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
@@ -496,6 +631,12 @@ function InventorySessionContent() {
         <div className="flex items-center gap-2">
           {session.status === "draft" && (
             <>
+              <button
+                onClick={openAddModal}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+              >
+                + Добавить позицию
+              </button>
               <button
                 onClick={handleSaveDraft}
                 className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
@@ -679,10 +820,17 @@ function InventorySessionContent() {
               {paginatedLines.map((line) => {
                 const realIndex = session.lines.indexOf(line);
                 const isEditable = session.status === "draft";
+                const rowKey = makeLineKey(
+                  line.nomenclatureId,
+                  line.place,
+                  line.lot,
+                );
+                const isFlashing = flashKey === rowKey;
                 return (
                   <tr
                     key={`${line.nomenclatureId}-${line.lot}-${line.place}`}
-                    className="transition hover:bg-slate-50"
+                    data-inv-key={encodeURIComponent(rowKey)}
+                    className={`transition hover:bg-slate-50 ${isFlashing ? "bg-amber-50" : ""}`}
                   >
                     <td className="px-4 py-2.5">
                       <div className="font-medium text-slate-800">
@@ -988,10 +1136,20 @@ function InventorySessionContent() {
             <h3 className="text-lg font-semibold text-slate-800">
               Завершить инвентаризацию?
             </h3>
+            {summary.unchecked > 0 && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Не проверено{" "}
+                <span className="font-semibold tabular-nums">
+                  {summary.unchecked}{" "}
+                  {ruPlural(summary.unchecked, "позиция", "позиции", "позиций")}
+                </span>
+                . Вы точно хотите завершить инвентаризацию?
+              </div>
+            )}
             <p className="mt-2 text-sm text-slate-500">
-              После завершения данные будут зафиксированы и редактирование
-              станет недоступным. Убедитесь, что все фактические количества
-              введены корректно.
+              После завершения данные будут зафиксированы и редактирование станет
+              недоступным. Убедитесь, что фактические количества введены
+              корректно.
             </p>
             <div className="mt-2 text-sm tabular-nums text-slate-600">
               <div>
@@ -1028,6 +1186,161 @@ function InventorySessionContent() {
                 className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
               >
                 Завершить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add line modal */}
+      {showAddLine && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setShowAddLine(false)}
+        >
+          <div
+            className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Добавить позицию"
+          >
+            <h3 className="text-lg font-semibold text-slate-800">
+              Добавить позицию
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Выберите номенклатуру, место хранения и лот.
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <label className="block">
+                <div className="mb-1 text-xs font-medium text-slate-600">
+                  Номенклатура
+                </div>
+                <Combobox
+                  value={selectedCatalogItem}
+                  onChange={(item: CatalogItem | null) => {
+                    setAddNomId(item?.id ?? "");
+                    setAddNomSearch("");
+                    setAddLot("");
+                  }}
+                >
+                  <div className="relative">
+                    <Combobox.Input
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 pr-9 text-sm outline-none transition focus:border-blue-400"
+                      placeholder="Выберите…"
+                      displayValue={(item: CatalogItem | null) =>
+                        item ? `${item.name} — ${item.manufacturer}` : ""
+                      }
+                      onChange={(event) => setAddNomSearch(event.target.value)}
+                    />
+                    <Combobox.Button className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600">
+                      <svg
+                        className="h-4 w-4"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </Combobox.Button>
+                    <Combobox.Options className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg focus:outline-none">
+                      {filteredCatalog.length === 0 ? (
+                        <div className="px-3 py-2 text-slate-500">
+                          Ничего не найдено.
+                        </div>
+                      ) : (
+                        filteredCatalog.map((c) => (
+                          <Combobox.Option
+                            key={c.id}
+                            value={c}
+                            className={({ active }) =>
+                              `cursor-pointer select-none px-3 py-2 ${
+                                active ? "bg-blue-600 text-white" : "text-slate-700"
+                              }`
+                            }
+                          >
+                            <div className="flex items-baseline justify-between gap-3">
+                              <span className="font-medium">{c.name}</span>
+                              <span className="shrink-0 text-xs opacity-80">
+                                {c.manufacturer}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 text-xs opacity-80">
+                              {c.group}
+                            </div>
+                          </Combobox.Option>
+                        ))
+                      )}
+                    </Combobox.Options>
+                  </div>
+                </Combobox>
+              </label>
+
+              <label className="block">
+                <div className="mb-1 text-xs font-medium text-slate-600">
+                  Лот
+                </div>
+                <select
+                  value={addLot}
+                  onChange={(e) => setAddLot(e.target.value)}
+                  disabled={!selectedCatalogItem}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-blue-400 disabled:bg-slate-50"
+                >
+                  <option value="">
+                    {!selectedCatalogItem ? "Сначала выберите номенклатуру" : "Выберите…"}
+                  </option>
+                  {addLots.map((lot) => (
+                    <option key={lot} value={lot}>
+                      {lot}
+                    </option>
+                  ))}
+                </select>
+                {selectedCatalogItem && addLots.length === 0 && (
+                  <div className="mt-1 text-xs text-slate-500">
+                    Для выбранной номенклатуры нет доступных лотов.
+                  </div>
+                )}
+              </label>
+
+              <label className="block">
+                <div className="mb-1 text-xs font-medium text-slate-600">
+                  Место хранения
+                </div>
+                <select
+                  value={addPlace}
+                  onChange={(e) => {
+                    setAddPlace(e.target.value);
+                  }}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-blue-400"
+                >
+                  <option value="">Выберите…</option>
+                  {storagePlaces.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setShowAddLine(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-50"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleAddOrFocus}
+                disabled={!canSubmitAdd}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Добавить / перейти
               </button>
             </div>
           </div>
@@ -1103,6 +1416,19 @@ function inventoryListRowCounts(session: InventorySession) {
     surplus: session.lines.filter((l) => l.status === "излишек").length,
     shortage: session.lines.filter((l) => l.status === "недостача").length,
   };
+}
+
+function ruPlural(n: number, one: string, few: string, many: string) {
+  const abs = Math.abs(n) % 100;
+  const last = abs % 10;
+  if (abs >= 11 && abs <= 14) return many;
+  if (last === 1) return one;
+  if (last >= 2 && last <= 4) return few;
+  return many;
+}
+
+function makeLineKey(nomenclatureId: string, place: string, lot: string) {
+  return `${nomenclatureId}||${place}||${lot}`;
 }
 
 function formatRuDateTime(iso: string): string {
