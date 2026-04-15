@@ -24,7 +24,9 @@
         var newPath = decoded.slice(1); // remove leading "/"
         var base = l.pathname;
         if (base[base.length - 1] !== "/") base += "/";
-        l.replace(base + newPath + l.hash);
+        // Use History API to avoid a network navigation loop on GitHub Pages.
+        // GitHub Pages can't serve /<repo>/<route> directly; it serves index.html only for /<repo>/.
+        window.history.replaceState(null, "", base + newPath + l.hash);
       })();
     </script>
   </head>
