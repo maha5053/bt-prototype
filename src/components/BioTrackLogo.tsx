@@ -1,14 +1,29 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink } from "react-router-dom";
 
 type BioTrackLogoProps = {
-  className?: string
-}
+  className?: string;
+  /** default: подпись с md; always: всегда; never: только иконка */
+  wordmark?: "default" | "always" | "never";
+  onClick?: () => void;
+};
 
 /** Макет логотипа: символ «путь + жизнь» (линия трека и лист/капля). */
-export function BioTrackLogo({ className = '' }: BioTrackLogoProps) {
+export function BioTrackLogo({
+  className = "",
+  wordmark = "default",
+  onClick,
+}: BioTrackLogoProps) {
+  const wordmarkClass =
+    wordmark === "always"
+      ? "inline"
+      : wordmark === "never"
+        ? "hidden"
+        : "hidden md:inline";
+
   return (
     <NavLink
       to="/"
+      onClick={onClick}
       className={`group flex shrink-0 items-center gap-2.5 rounded-md outline-none ring-slate-400 focus-visible:ring-2 ${className}`}
       aria-label="BioTrack — на главную"
     >
@@ -33,10 +48,12 @@ export function BioTrackLogo({ className = '' }: BioTrackLogoProps) {
           />
         </svg>
       </span>
-      <span className="hidden text-[1.05rem] font-semibold tracking-tight sm:inline">
+      <span
+        className={`${wordmarkClass} text-[1.05rem] font-semibold tracking-tight`}
+      >
         <span className="text-emerald-700 group-hover:text-emerald-800">Bio</span>
         <span className="text-slate-800">Track</span>
       </span>
     </NavLink>
-  )
+  );
 }

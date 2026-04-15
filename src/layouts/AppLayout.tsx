@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { BioTrackLogo } from "../components/BioTrackLogo";
 import { SpaRedirect } from "../components/SpaRedirect";
@@ -11,7 +12,7 @@ const MOCK_USER = { name: "Анна Смирнова", initials: "АС" };
 
 const navClassName = ({ isActive }: { isActive: boolean }) =>
   [
-    "rounded-md px-3 py-2 text-sm font-medium transition-colors",
+    "rounded-md px-2 py-1.5 text-xs font-medium transition-colors md:px-3 md:py-2 md:text-sm",
     isActive
       ? "bg-slate-800 text-white"
       : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
@@ -30,12 +31,91 @@ export function AppLayout() {
   const section = topSectionFromPath(pathname);
   const sidebarItems = section ? SIDEBAR_BY_SECTION[section] : [];
 
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [pathname]);
+
+  const closeMobileSidebar = () => setMobileSidebarOpen(false);
+
+  const sidebarContent =
+    sidebarItems.length > 0 ? (
+      <nav className="flex flex-col gap-0.5">
+        {sidebarItems.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            end
+            className={sidebarLinkClass}
+            onClick={closeMobileSidebar}
+          >
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
+    ) : (
+      <p className="px-2 py-3 text-sm text-slate-500">
+        Выберите раздел в боковом меню.
+      </p>
+    );
+
+  const asideClassName = [
+    "w-60 shrink-0 flex-col border-r border-slate-200 bg-slate-50 p-3",
+    mobileSidebarOpen
+      ? "flex fixed left-0 top-14 bottom-0 z-40 overflow-y-auto shadow-lg"
+      : "hidden",
+    "md:flex md:static md:inset-auto md:z-auto md:overflow-visible md:shadow-none",
+  ].join(" ");
+
   return (
     <div className="flex min-h-screen flex-col bg-slate-100">
-      <header className="flex h-14 shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-4 shadow-sm">
-        <BioTrackLogo />
+      <header className="relative z-50 flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 shadow-sm md:gap-4 md:px-4">
+        {sidebarItems.length > 0 ? (
+          <button
+            type="button"
+            className="flex size-10 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 md:hidden"
+            aria-expanded={mobileSidebarOpen}
+            aria-controls="app-sidebar"
+            aria-label={
+              mobileSidebarOpen
+                ? "Закрыть меню подразделов"
+                : "Открыть меню подразделов"
+            }
+            onClick={() => setMobileSidebarOpen((open) => !open)}
+          >
+            <svg
+              className="size-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              {mobileSidebarOpen ? (
+                <>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </>
+              ) : (
+                <>
+                  <line x1="4" y1="6" x2="20" y2="6" />
+                  <line x1="4" y1="12" x2="20" y2="12" />
+                  <line x1="4" y1="18" x2="20" y2="18" />
+                </>
+              )}
+            </svg>
+          </button>
+        ) : (
+          <span className="size-10 shrink-0 md:hidden" aria-hidden />
+        )}
+        <BioTrackLogo
+          className={sidebarItems.length > 0 ? "hidden md:flex" : ""}
+        />
         <nav
-          className="flex min-w-0 flex-1 flex-wrap items-center gap-1"
+          className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5 md:gap-1"
           aria-label="Основное меню"
         >
           {TOP_NAV.map((item) => (
@@ -45,11 +125,11 @@ export function AppLayout() {
           ))}
         </nav>
         <div
-          className="flex shrink-0 items-center gap-3 border-l border-slate-200 pl-4"
+          className="flex shrink-0 items-center gap-2 border-l border-slate-200 pl-3 md:gap-3 md:pl-4"
           role="group"
           aria-label="Текущий пользователь"
         >
-          <span className="hidden max-w-[9rem] truncate text-sm font-medium text-slate-800 sm:inline md:max-w-[14rem]">
+          <span className="hidden max-w-[9rem] truncate text-sm font-medium text-slate-800 md:inline md:max-w-[14rem]">
             {MOCK_USER.name}
           </span>
           <span
@@ -85,29 +165,30 @@ export function AppLayout() {
         </div>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
+        {mobileSidebarOpen ? (
+          <div
+            className="fixed inset-0 z-30 bg-slate-900/40 md:hidden"
+            aria-hidden
+            onClick={closeMobileSidebar}
+          />
+        ) : null}
+
         <aside
-          className="w-60 shrink-0 border-r border-slate-200 bg-slate-50 p-3"
+          id="app-sidebar"
+          className={asideClassName}
           aria-label="Подразделы"
         >
           {sidebarItems.length > 0 ? (
-            <nav className="flex flex-col gap-0.5">
-              {sidebarItems.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end
-                  className={sidebarLinkClass}
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-            </nav>
-          ) : (
-            <p className="px-2 py-3 text-sm text-slate-500">
-              Выберите раздел в боковом меню.
-            </p>
-          )}
+            <div className="mb-3 border-b border-slate-200 pb-3 md:hidden">
+              <BioTrackLogo
+                wordmark="always"
+                onClick={closeMobileSidebar}
+                className="w-full min-w-0"
+              />
+            </div>
+          ) : null}
+          {sidebarContent}
         </aside>
 
         <main className="flex-1 overflow-auto bg-white">
