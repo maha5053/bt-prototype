@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { BioTrackLogo } from "../components/BioTrackLogo";
+import { PrototypeDisclaimer } from "../components/PrototypeDisclaimer";
+import { usePrototypeDisclaimerBottomPad } from "../hooks/usePrototypeDisclaimerBottomPad";
 import { SpaRedirect } from "../components/SpaRedirect";
 import {
   SIDEBAR_BY_SECTION,
@@ -30,6 +32,8 @@ export function AppLayout() {
   const { pathname } = useLocation();
   const section = topSectionFromPath(pathname);
   const sidebarItems = section ? SIDEBAR_BY_SECTION[section] : [];
+
+  const reserveDisclaimerPad = usePrototypeDisclaimerBottomPad();
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
@@ -200,11 +204,19 @@ export function AppLayout() {
           {sidebarContent}
         </aside>
 
-        <main className="min-h-0 flex-1 overflow-auto bg-white">
+        <main
+          className={
+            reserveDisclaimerPad
+              ? "min-h-0 flex-1 overflow-auto bg-white pb-24"
+              : "min-h-0 flex-1 overflow-auto bg-white"
+          }
+        >
           <SpaRedirect />
           <Outlet />
         </main>
       </div>
+
+      <PrototypeDisclaimer />
     </div>
   );
 }

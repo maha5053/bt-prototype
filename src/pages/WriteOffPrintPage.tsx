@@ -6,6 +6,8 @@ import {
   MOCK_CATALOG,
   WRITE_OFF_ACTIONS,
 } from "../mocks/writeOffData";
+import { PrototypeDisclaimer } from "../components/PrototypeDisclaimer";
+import { usePrototypeDisclaimerBottomPad } from "../hooks/usePrototypeDisclaimerBottomPad";
 
 export function WriteOffPrintPage() {
   return (
@@ -18,6 +20,7 @@ export function WriteOffPrintPage() {
 function WriteOffPrintContent() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const { sessions } = useWriteOff();
+  const reserveDisclaimerPad = usePrototypeDisclaimerBottomPad();
 
   const session = sessions.find((s) => s.id === sessionId) ?? null;
 
@@ -41,7 +44,18 @@ function WriteOffPrintContent() {
 
   if (!session) {
     return (
-      <div className="p-8 text-center text-slate-500">Документ не найден.</div>
+      <div
+        className={
+          reserveDisclaimerPad
+            ? "flex min-h-screen flex-col bg-white pb-24"
+            : "flex min-h-screen flex-col bg-white"
+        }
+      >
+        <div className="flex flex-1 items-center justify-center p-8 text-center text-slate-500">
+          Документ не найден.
+        </div>
+        <PrototypeDisclaimer />
+      </div>
     );
   }
 
@@ -49,7 +63,14 @@ function WriteOffPrintContent() {
   const sessionDate = formatRuDate(session.createdAt);
 
   return (
-    <div className="print-container mx-auto max-w-4xl bg-white p-8 font-serif text-sm leading-relaxed text-black">
+    <div
+      className={
+        reserveDisclaimerPad
+          ? "flex min-h-screen flex-col bg-white pb-24"
+          : "flex min-h-screen flex-col bg-white"
+      }
+    >
+      <div className="print-container mx-auto max-w-4xl flex-1 bg-white p-8 font-serif text-sm leading-relaxed text-black">
       {/* Header */}
       <div className="mb-6 text-center">
         <p className="text-base font-semibold">
@@ -209,6 +230,8 @@ function WriteOffPrintContent() {
           </div>
         </div>
       </div>
+      </div>
+      <PrototypeDisclaimer />
     </div>
   );
 }
