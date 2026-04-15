@@ -25,7 +25,19 @@ function InventoryListContent() {
   const { sessions, createSession } = useInventory();
   const navigate = useNavigate();
 
+  const [page, setPage] = useState(1);
   const [showDevTools, setShowDevTools] = useState(false);
+
+  const listTotalPages = Math.max(1, Math.ceil(sessions.length / PAGE_SIZE));
+  const safeListPage = Math.min(page, listTotalPages);
+  const shownSessions = useMemo(
+    () =>
+      sessions.slice(
+        (safeListPage - 1) * PAGE_SIZE,
+        safeListPage * PAGE_SIZE,
+      ),
+    [sessions, safeListPage],
+  );
 
   const STORAGE_KEY = "bio-inventory";
 
@@ -65,17 +77,134 @@ function InventoryListContent() {
 
       {/* Session list */}
       {sessions.length > 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 px-5 py-3">
-            <h2 className="text-sm font-medium text-slate-700">
-              Документы инвентаризации
-            </h2>
+        <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                  <th className="px-4 py-3 font-medium">Номер</th>
+                  <th className="px-4 py-3 font-medium">Дата</th>
+                  <th className="px-4 py-3 font-medium">Создал</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">
+                    Статус
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium">
+                    Позиций
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium">
+                    Совпало
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium">
+                    Излишки
+                  </th>
+                  <th className="px-4 py-3 text-right font-medium">
+                    Недостачи
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {shownSessions.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="px-4 py-12 text-center text-slate-500"
+                    >
+                      Нет документов инвентаризации.
+                    </td>
+                  </tr>
+                ) : (
+                  shownSessions.map((session) => {
+                    const { match, surplus, shortage } =
+                      inventoryListRowCounts(session);
+                    return (
+                      <tr
+                        key={session.id}
+                        onClick={() =>
+                          navigate(`/sklad/inventarizatsiya/${session.id}`)
+                        }
+                        className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50/80"
+                      >
+                        <td className="px-4 py-3 font-mono text-xs text-slate-600">
+                          {session.id.replace(/^inv-/, "")}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {formatRuDateTime(session.createdAt)}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {session.createdBy}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
+                              session.status === "completed"
+                                ? "bg-slate-100 text-slate-600 ring-slate-500/20"
+                                : "bg-amber-50 text-amber-700 ring-amber-500/20"
+                            }`}
+                          >
+                            {session.status === "completed"
+                              ? "Завершена"
+                              : "В процессе"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-700">
+                          {session.lines.length}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-emerald-700">
+                          {match}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-blue-700">
+                          {surplus}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-red-700">
+                          {shortage}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
-          <div className="divide-y divide-slate-100">
-            {sessions.map((session) => (
-              <SessionRow key={session.id} session={session} />
-            ))}
-          </div>
+
+          <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
+            <span>
+              Показано{" "}
+              <strong className="font-medium text-slate-800">
+                {sessions.length === 0
+                  ? 0
+                  : (safeListPage - 1) * PAGE_SIZE + 1}
+                –
+                {Math.min(safeListPage * PAGE_SIZE, sessions.length)}
+              </strong>{" "}
+              из{" "}
+              <strong className="font-medium text-slate-800">
+                {sessions.length}
+              </strong>
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={safeListPage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ← Назад
+              </button>
+              <span className="tabular-nums text-slate-700">
+                Стр. {safeListPage} / {listTotalPages}
+              </span>
+              <button
+                type="button"
+                disabled={safeListPage >= listTotalPages}
+                onClick={() =>
+                  setPage((p) => Math.min(listTotalPages, p + 1))
+                }
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Вперёд →
+              </button>
+            </div>
+          </footer>
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 py-16">
@@ -966,6 +1095,16 @@ function InventorySessionContent() {
    Helpers & sub-components
    =========================== */
 
+function inventoryListRowCounts(session: InventorySession) {
+  return {
+    match: session.lines.filter(
+      (l) => l.status === "совпадение" && l.actualQuantity !== null,
+    ).length,
+    surplus: session.lines.filter((l) => l.status === "излишек").length,
+    shortage: session.lines.filter((l) => l.status === "недостача").length,
+  };
+}
+
 function formatRuDateTime(iso: string): string {
   const d = new Date(iso);
   const day = String(d.getDate()).padStart(2, "0");
@@ -1025,69 +1164,3 @@ function DiscrepancyBadge({ status }: { status: DiscrepancyStatus }) {
   );
 }
 
-function SessionRow({ session }: { session: InventorySession }) {
-  const matchCount = session.lines.filter(
-    (l) => l.status === "совпадение" && l.actualQuantity !== null,
-  ).length;
-  const surplusCount = session.lines.filter(
-    (l) => l.status === "излишек",
-  ).length;
-  const shortageCount = session.lines.filter(
-    (l) => l.status === "недостача",
-  ).length;
-  const uncheckedCount = session.lines.filter(
-    (l) => l.actualQuantity === null,
-  ).length;
-
-  return (
-    <Link
-      to={`/sklad/inventarizatsiya/${session.id}`}
-      className="flex items-center justify-between px-5 py-3 transition hover:bg-blue-50/50 hover:cursor-pointer"
-    >
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-slate-700">
-            {formatRuDateTime(session.createdAt)}
-          </span>
-          <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
-              session.status === "completed"
-                ? "bg-slate-100 text-slate-600 ring-slate-500/20"
-                : "bg-amber-50 text-amber-700 ring-amber-500/20"
-            }`}
-          >
-            {session.status === "completed" ? "Завершена" : "В процессе"}
-          </span>
-        </div>
-        <div className="mt-0.5 text-xs text-slate-500">
-          Создал: {session.createdBy}
-          {session.completedAt && (
-            <> · Завершена: {formatRuDateTime(session.completedAt)}</>
-          )}
-        </div>
-        <div className="mt-1 flex flex-wrap gap-3 text-xs tabular-nums text-slate-500">
-          <span>
-            Всего: <span className="font-medium">{session.lines.length}</span>
-          </span>
-          {uncheckedCount > 0 && (
-            <span className="text-amber-600">
-              Не проверено: {uncheckedCount}
-            </span>
-          )}
-          <span className="text-emerald-600">Совпало: {matchCount}</span>
-          <span className="text-blue-600">Излишки: {surplusCount}</span>
-          <span className="text-red-600">Недостачи: {shortageCount}</span>
-        </div>
-      </div>
-      <svg
-        className="h-5 w-5 shrink-0 text-slate-400"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={2}
-      >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-      </svg>
-    </Link>
-  );
-}

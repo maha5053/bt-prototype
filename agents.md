@@ -38,6 +38,23 @@ npm run dev -- --host
 
 Старый фрагмент в `404.html`, который писал `spa-redirect` и редиректил на главную, **нельзя дублировать** вторым HTML-документом в том же файле — это ломало страницу.
 
+## Список инвентаризации
+
+- **Маршрут**: `/sklad/inventarizatsiya` → `InventoryListPage` в [`src/pages/InventoryPages.tsx`](src/pages/InventoryPages.tsx).
+- Список документов — **таблица** в стиле страницы списаний (`WriteOffListContent`): обводка, шапка `bg-slate-50`, строки с `hover`, клик ведёт в сессию.
+- **Колонки**: номер (без префикса `inv-`), дата, создал, статус (бейдж), позиций, совпало / излишки / недостачи (подсчёт по `session.lines`).
+- **Пагинация**: `PAGE_SIZE = 15`, футер «Показано X–Y из Z» и «Назад / Стр. / Вперёд»; поиска и фильтров нет.
+
+## Плашка «прототип»
+
+- Компонент: [`src/components/PrototypeDisclaimer.tsx`](src/components/PrototypeDisclaimer.tsx) — жёлтая полоса **фиксирована снизу** (`fixed bottom-0`), скрывается при печати (`print:hidden`).
+- Закрытие на сутки: [`src/lib/prototypeDisclaimerStorage.ts`](src/lib/prototypeDisclaimerStorage.ts), событие `bio-prototype-disclaimer-dismiss`; нижний отступ контента — хук [`src/hooks/usePrototypeDisclaimerBottomPad.ts`](src/hooks/usePrototypeDisclaimerBottomPad.ts) в [`src/layouts/AppLayout.tsx`](src/layouts/AppLayout.tsx) и [`src/pages/WriteOffPrintPage.tsx`](src/pages/WriteOffPrintPage.tsx).
+
+## Мобильная вёрстка shell
+
+- [`src/layouts/AppLayout.tsx`](src/layouts/AppLayout.tsx): бургер и выезжающий сайдбар на `< md`, логотип/имя в шапке скрыты или перенесены по брейкпоинтам; `sticky` шапка, `min-h-0` + `100dvh` на мобильном, блокировка `body` при открытом drawer.
+- Логотип: [`src/components/BioTrackLogo.tsx`](src/components/BioTrackLogo.tsx) — варианты `wordmark` (`default` / `always`).
+
 ## Печать списаний
 
 - Кнопка «Печать» в `WriteOffSessionContent` (`src/pages/WriteOffPages.tsx`): `window.open(\`${import.meta.env.BASE_URL}sklad/spisaniya/${session.id}/print\`, ...)`.
