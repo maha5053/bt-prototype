@@ -37,6 +37,15 @@ export function AppLayout() {
     setMobileSidebarOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    if (!mobileSidebarOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [mobileSidebarOpen]);
+
   const closeMobileSidebar = () => setMobileSidebarOpen(false);
 
   const sidebarContent =
@@ -69,8 +78,8 @@ export function AppLayout() {
   ].join(" ");
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-100">
-      <header className="relative z-50 flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 shadow-sm md:gap-4 md:px-4">
+    <div className="flex min-h-screen max-md:h-[100dvh] max-md:max-h-[100dvh] flex-col overflow-hidden bg-slate-100 md:max-h-none md:overflow-visible">
+      <header className="sticky top-0 z-50 flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 shadow-sm md:gap-4 md:px-4">
         {sidebarItems.length > 0 ? (
           <button
             type="button"
@@ -165,7 +174,7 @@ export function AppLayout() {
         </div>
       </header>
 
-      <div className="relative flex flex-1 overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
         {mobileSidebarOpen ? (
           <div
             className="fixed inset-0 z-30 bg-slate-900/40 md:hidden"
@@ -191,7 +200,7 @@ export function AppLayout() {
           {sidebarContent}
         </aside>
 
-        <main className="flex-1 overflow-auto bg-white">
+        <main className="min-h-0 flex-1 overflow-auto bg-white">
           <SpaRedirect />
           <Outlet />
         </main>
