@@ -1,3 +1,29 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bio — прототип</title>
+    <script>
+      // GitHub Pages doesn't support SPA deep links (BrowserRouter) out of the box.
+      // This redirects /<repo>/<route> to /<repo>/?/<route> so index.html can restore it.
+      (function () {
+        var l = window.location;
+        var segmentCount = 1; // for https://<user>.github.io/<repo>/
+        var repoBase = l.pathname.split("/").slice(0, 1 + segmentCount).join("/") + "/";
+        var pathAfterBase = l.pathname.slice(repoBase.length);
+        var newUrl =
+          repoBase +
+          "?/" +
+          pathAfterBase.replace(/&/g, "~and~") +
+          (l.search ? "&" + l.search.slice(1).replace(/&/g, "~and~") : "") +
+          l.hash;
+        l.replace(newUrl);
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>
 <!DOCTYPE html>
 <html>
 
