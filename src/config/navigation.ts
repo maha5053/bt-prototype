@@ -1,4 +1,4 @@
-export type TopSectionKey = "sklad" | "spravochniki" | "admin";
+export type TopSectionKey = "sklad" | "proizvodstvo" | "spravochniki" | "admin";
 
 export const TOP_NAV: {
   key: TopSectionKey;
@@ -6,6 +6,7 @@ export const TOP_NAV: {
   basePath: string;
 }[] = [
   { key: "sklad", label: "Склад", basePath: "/sklad" },
+  { key: "proizvodstvo", label: "Производство", basePath: "/proizvodstvo" },
   { key: "spravochniki", label: "Справочники", basePath: "/spravochniki" },
   { key: "admin", label: "Администрирование", basePath: "/admin" },
 ];
@@ -23,6 +24,10 @@ export const SIDEBAR_BY_SECTION: Record<
     { path: "/sklad/spisaniya", label: "Списания" },
     { path: "/sklad/nomenklatura", label: "Номенклатура" },
   ],
+  proizvodstvo: [
+    { path: "/proizvodstvo", label: "Журнал заказов" },
+    { path: "/proizvodstvo/shablony", label: "Шаблоны" },
+  ],
   spravochniki: [
     {
       path: "/spravochniki/raskhodniki-i-materialy",
@@ -31,11 +36,15 @@ export const SIDEBAR_BY_SECTION: Record<
     { path: "/spravochniki/oborudovaniya", label: "Оборудования" },
     { path: "/spravochniki/pomeshcheniya", label: "Помещения" },
   ],
-  admin: [{ path: "/admin/polzovateli", label: "Пользователи" }],
+  admin: [
+    { path: "/admin/polzovateli", label: "Пользователи" },
+    { path: "/admin/konstruktor", label: "Конструктор процессов" },
+  ],
 };
 
 export function topSectionFromPath(pathname: string): TopSectionKey | null {
   if (pathname.startsWith("/sklad")) return "sklad";
+  if (pathname.startsWith("/proizvodstvo")) return "proizvodstvo";
   if (pathname.startsWith("/spravochniki")) return "spravochniki";
   if (pathname.startsWith("/admin")) return "admin";
   return null;

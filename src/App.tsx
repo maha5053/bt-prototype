@@ -21,6 +21,15 @@ import {
 } from "./pages/InventoryPages";
 import { WriteOffListPage, WriteOffSessionPage } from "./pages/WriteOffPages";
 import { WriteOffPrintPage } from "./pages/WriteOffPrintPage";
+import {
+  ProductionListPage,
+  ProductionOrderPage,
+} from "./pages/ProductionPages";
+import {
+  ConstructorEditorPage,
+  ConstructorListPage,
+} from "./pages/ConstructorPages";
+import { TemplateListPage } from "./pages/TemplateListPage";
 
 const router = createBrowserRouter(
   [
@@ -106,6 +115,20 @@ const router = createBrowserRouter(
               path: "polzovateli",
               element: <SectionPage title="Пользователи" />,
             },
+            { path: "konstruktor", element: <ConstructorListPage /> },
+            { path: "konstruktor/novyy", element: <ConstructorEditorPage /> },
+            {
+              path: "konstruktor/:templateId",
+              element: <ConstructorEditorPage />,
+            },
+          ],
+        },
+        {
+          path: "proizvodstvo",
+          children: [
+            { index: true, element: <ProductionListPage /> },
+            { path: "shablony", element: <TemplateListPage /> },
+            { path: ":orderId", element: <ProductionOrderPage /> },
           ],
         },
       ],
