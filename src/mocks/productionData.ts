@@ -37,6 +37,8 @@ export interface FieldDefinition {
   required: boolean;
   options?: string[];
   placeholder?: string;
+  /** Многострочное поле (textarea) для типа text. */
+  multiline?: boolean;
   computedFrom?: string;
   computeRule?: ComputeRule;
   refStageIndex?: number;
@@ -72,6 +74,30 @@ export interface ProcessTemplate {
 export type ProductionOrderStatus = "in_progress" | "completed" | "rejected";
 export type ExecutionStatus = "pending" | "in_progress" | "completed";
 
+/** Этап процесса, на котором зафиксирован брак (для учёта и отчётности). */
+export type ProductionRejectionPhase =
+  | "incoming_material"
+  | "production"
+  | "quality_control"
+  | "logistics";
+
+export const PRODUCTION_REJECTION_PHASE_LABELS: Record<
+  ProductionRejectionPhase,
+  string
+> = {
+  incoming_material: "Входной материал",
+  production: "Производство",
+  quality_control: "QC",
+  logistics: "Логистика",
+};
+
+export interface ProductionRejectionAttachment {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  dataUrl: string;
+}
+
 export type FieldValue = string | number | boolean | null;
 
 export interface StepExecution {
@@ -99,6 +125,8 @@ export interface StageExecution {
   deferredAt?: string;
   deferredBy?: string;
   deferredReason?: string;
+  completedAt?: string;
+  completedBy?: string;
   steps: StepExecution[];
 }
 
@@ -114,6 +142,8 @@ export interface ProductionOrder {
   rejectedAt?: string;
   rejectedBy?: string;
   rejectedReason?: string;
+  rejectedPhase?: ProductionRejectionPhase;
+  rejectedAttachments?: ProductionRejectionAttachment[];
   rejectedStageIndex?: number;
   rejectedStepTemplateId?: string;
   stages: StageExecution[];
@@ -180,13 +210,13 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
   stages: [
     {
       id: "stg-reg",
-      name: "Регистрация биоматериала",
+      name: "1. Регистрация биоматериала",
       type: "registration",
       allowedRoles: [],
       steps: [
         {
           id: "step-reg-1",
-          name: "Регистрация",
+          name: "1. Регистрация",
           hasDeviations: true,
           consumables: [],
           equipment: [],
@@ -267,13 +297,13 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
     },
     {
       id: "stg-prod",
-      name: "Производство",
+      name: "2. Производство",
       type: "production",
       allowedRoles: [],
       steps: [
         {
           id: "step-prod-1",
-          name: "Получение обогащённой тромбоцитами плазмы",
+          name: "1. Получение обогащённой тромбоцитами плазмы",
           hasDeviations: true,
           fields: [
             { id: "centrifugation1", label: "Центрифугирование", type: "checkbox", required: false },
@@ -303,7 +333,7 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
         },
         {
           id: "step-prod-2",
-          name: "Получение тромбогеля",
+          name: "2. Получение тромбогеля",
           hasDeviations: true,
           fields: [
             { id: "resusp", label: "Ресуспендирование осадка", type: "checkbox", required: false },
@@ -322,13 +352,13 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
     },
     {
       id: "stg-qc",
-      name: "Контроль качества",
+      name: "3. Контроль качества",
       type: "quality_control",
       allowedRoles: [],
       steps: [
         {
           id: "step-qc-1",
-          name: "Результаты контроля качества",
+          name: "1. Результаты контроля качества",
           hasDeviations: true,
           consumables: [],
           equipment: [],
@@ -349,19 +379,27 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
               options: ["стерильно", "нестерильно"],
             },
             { id: "extraQc", label: "Дополнительные показатели", type: "text", required: false },
+            {
+              id: "qcComment",
+              label: "Комментарий",
+              type: "text",
+              required: false,
+              multiline: true,
+              placeholder: "При необходимости укажите комментарий…",
+            },
           ],
         },
       ],
     },
     {
       id: "stg-release",
-      name: "Выдача",
+      name: "4. Выдача",
       type: "release",
       allowedRoles: [],
       steps: [
         {
           id: "step-release-1",
-          name: "Выдача готового продукта",
+          name: "1. Выдача готового продукта",
           hasDeviations: true,
           consumables: [],
           equipment: [],
@@ -381,7 +419,7 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
               label: "Отклонения (сводка)",
               type: "text",
               required: false,
-              refDeviations: [0, 1, 2],
+              refDeviations: [0],
             },
             {
               id: "processDoneBy",
@@ -445,6 +483,8 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {
   rejected.rejectedAt = "2025-03-12T11:05:00.000Z";
   rejected.rejectedBy = "Иванова Е.";
   rejected.rejectedReason = "Гемолиз образца при входном контроле";
+  rejected.rejectedPhase = "incoming_material";
+  rejected.rejectedAttachments = [];
   rejected.rejectedStageIndex = 0;
   rejected.rejectedStepTemplateId = "step-reg-1";
   rejected.currentStageIndex = 0;

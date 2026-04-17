@@ -1,14 +1,39 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ProductionProvider, useProduction } from "../context/ProductionContext";
 import {
+  PRODUCTION_REJECTION_PHASE_LABELS,
   type FieldDefinition,
   type FieldValue,
   type ProcessTemplate,
   type ProductionOrder,
+  type ProductionRejectionAttachment,
+  type ProductionRejectionPhase,
   type StageTemplate,
   type StepTemplate,
 } from "../mocks/productionData";
+
+const REJECTION_PHASE_OPTIONS = Object.entries(
+  PRODUCTION_REJECTION_PHASE_LABELS,
+) as [ProductionRejectionPhase, string][];
+
+const MAX_REJECT_ATTACHMENTS = 6;
+const MAX_REJECT_FILE_BYTES = 4 * 1024 * 1024;
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result));
+    r.onerror = () => reject(new Error("read"));
+    r.readAsDataURL(file);
+  });
+}
+
+function rejectionAttachmentId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 export function ProductionListPage() {
   return (
@@ -132,6 +157,11 @@ function ProductionListContent() {
                         <StatusBadge
                           status={order.status}
                           reason={order.rejectedReason}
+                          currentStageLabel={
+                            order.status === "in_progress"
+                              ? currentStage
+                              : undefined
+                          }
                         />
                       </td>
                       <td className="px-4 py-3 text-slate-600">
@@ -342,6 +372,15 @@ function ProductionOrderContent() {
   const [showReject, setShowReject] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectTouched, setRejectTouched] = useState(false);
+  const [rejectPhase, setRejectPhase] =
+    useState<ProductionRejectionPhase>("incoming_material");
+  const [rejectAttachments, setRejectAttachments] = useState<
+    ProductionRejectionAttachment[]
+  >([]);
+  const [rejectAttachError, setRejectAttachError] = useState<string | null>(
+    null,
+  );
+  const rejectFileRef = useRef<HTMLInputElement>(null);
 
   const effectiveActiveStageIndex =
     activeStageIndex ?? (order ? order.currentStageIndex : 0);
@@ -368,13 +407,66 @@ function ProductionOrderContent() {
     template?.stages[effectiveActiveStageIndex] ?? null;
 
   const stageExecution = order.stages[effectiveActiveStageIndex] ?? null;
+  const stageTitle =
+    stageTemplate?.name ?? stageExecution?.name ?? "Этап";
 
   const isOrderReadonly = order.status !== "in_progress";
-  const isCurrentStage = effectiveActiveStageIndex === order.currentStageIndex;
-  const canEditStage = !isOrderReadonly && isCurrentStage;
+  const canEditStage =
+    !isOrderReadonly &&
+    effectiveActiveStageIndex === order.currentStageIndex;
 
   const stepsTpl: StepTemplate[] = stageTemplate?.steps ?? [];
   const stepTpl = stepsTpl[activeStepIndex] ?? null;
+  const viewedStepExecution =
+    stageExecution && stageTemplate
+      ? stageExecution.steps[
+          stageTemplate.type === "quality_control"
+            ? 0
+            : Math.min(
+                activeStepIndex,
+                Math.max(0, stageExecution.steps.length - 1),
+              )
+        ]
+      : null;
+  const viewedStepCompletion = (() => {
+    const isMultiStepStage =
+      Boolean(stageTemplate) &&
+      stageTemplate!.type !== "quality_control" &&
+      (stageTemplate!.steps?.length ?? 0) > 1;
+
+    if (isMultiStepStage && stageExecution) {
+      const last = stageExecution.steps[stageExecution.steps.length - 1];
+      if (last?.completedBy && last?.completedAt) {
+        return { by: last.completedBy, at: last.completedAt };
+      }
+      for (let i = stageExecution.steps.length - 1; i >= 0; i -= 1) {
+        const s = stageExecution.steps[i];
+        if (s?.completedBy && s?.completedAt) {
+          return { by: s.completedBy, at: s.completedAt };
+        }
+      }
+    } else {
+      if (
+        viewedStepExecution?.status === "completed" &&
+        viewedStepExecution.completedBy &&
+        viewedStepExecution.completedAt
+      ) {
+        return {
+          by: viewedStepExecution.completedBy,
+          at: viewedStepExecution.completedAt,
+        };
+      }
+    }
+
+    if (
+      stageExecution?.status === "completed" &&
+      stageExecution.completedBy &&
+      stageExecution.completedAt
+    ) {
+      return { by: stageExecution.completedBy, at: stageExecution.completedAt };
+    }
+    return null;
+  })();
 
   const rejectError =
     rejectTouched && !rejectReason.trim()
@@ -424,16 +516,68 @@ function ProductionOrderContent() {
               {order.rejectedReason || "—"}
             </span>
           </div>
+          {order.rejectedPhase ? (
+            <div className="mt-2 text-red-800">
+              Этап:{" "}
+              <span className="font-medium">
+                {PRODUCTION_REJECTION_PHASE_LABELS[order.rejectedPhase]}
+              </span>
+            </div>
+          ) : null}
           <div className="mt-1 text-xs text-red-700/80">
             Зафиксировал: {order.rejectedBy || "—"} ·{" "}
             {order.rejectedAt ? formatRuDateTime(order.rejectedAt) : "—"}
           </div>
+          {order.rejectedAttachments && order.rejectedAttachments.length > 0 ? (
+            <div className="mt-3 border-t border-red-200/80 pt-3">
+              <div className="text-xs font-semibold uppercase tracking-wide text-red-800/90">
+                Вложения
+              </div>
+              <ul className="mt-2 space-y-3">
+                {order.rejectedAttachments.map((a) => (
+                  <li
+                    key={a.id}
+                    className="flex flex-wrap items-start gap-3 text-xs text-red-900"
+                  >
+                    {a.mimeType.startsWith("image/") ? (
+                      <a
+                        href={a.dataUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 rounded-md border border-red-200/80 bg-white p-0.5 shadow-sm"
+                      >
+                        <img
+                          src={a.dataUrl}
+                          alt={a.fileName}
+                          className="h-16 w-16 rounded object-cover"
+                        />
+                      </a>
+                    ) : null}
+                    <div className="min-w-0 flex-1">
+                      <a
+                        href={a.dataUrl}
+                        download={a.fileName}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium text-red-900 underline decoration-red-300 underline-offset-2 transition hover:text-red-950"
+                      >
+                        {a.fileName}
+                      </a>
+                      <div className="mt-0.5 text-[11px] text-red-700/80">
+                        {a.mimeType || "файл"}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
       <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0 flex-1">
             <StageStepper
               order={order}
               template={template}
@@ -445,17 +589,17 @@ function ProductionOrderContent() {
             />
           </div>
           {!isOrderReadonly ? (
-            <button
-              type="button"
-              onClick={() => {
+            <StageActionsMenu
+              onReject={() => {
                 setRejectReason("");
                 setRejectTouched(false);
+                setRejectPhase("incoming_material");
+                setRejectAttachments([]);
+                setRejectAttachError(null);
+                if (rejectFileRef.current) rejectFileRef.current.value = "";
                 setShowReject(true);
               }}
-              className="h-9 whitespace-nowrap rounded-lg border border-red-300 bg-red-50 px-4 text-sm font-medium text-red-700 transition hover:bg-red-100"
-            >
-              Забраковать заказ
-            </button>
+            />
           ) : null}
         </div>
       </div>
@@ -465,13 +609,14 @@ function ProductionOrderContent() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-slate-900">
-                {stageTemplate?.name ?? stageExecution?.name ?? "Этап"}
+                {stageTitle}
               </div>
-              <div className="mt-1 text-sm text-slate-500">
-                {isCurrentStage ? "Текущий этап" : "Просмотр этапа"} · Доступ:{" "}
-                {canEditStage ? "редактирование" : "только просмотр"}
-                {stageExecution?.deferred ? " · Ожидает результатов" : ""}
-              </div>
+              {viewedStepCompletion ? (
+                <div className="mt-1 text-xs text-slate-500">
+                  Завершил: {viewedStepCompletion.by} ·{" "}
+                  {formatRuDateTime(viewedStepCompletion.at)}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -560,7 +705,7 @@ function ProductionOrderContent() {
           onClick={() => setShowReject(false)}
         >
           <div
-            className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            className="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
@@ -598,7 +743,34 @@ function ProductionOrderContent() {
               </button>
             </div>
 
-            <label className="block">
+            <fieldset className="mt-4">
+              <legend className="mb-2 text-xs font-medium text-slate-600">
+                Этап брака
+              </legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {REJECTION_PHASE_OPTIONS.map(([value, label]) => (
+                  <label
+                    key={value}
+                    className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+                      rejectPhase === value
+                        ? "border-red-300 bg-red-50 text-red-900"
+                        : "border-slate-200 bg-white text-slate-800 hover:border-slate-300"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="reject-phase"
+                      className="size-4 shrink-0 border-slate-300 text-red-600 focus:ring-red-500"
+                      checked={rejectPhase === value}
+                      onChange={() => setRejectPhase(value)}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <label className="mt-4 block">
               <div className="mb-1 text-xs font-medium text-slate-600">
                 Причина (обязательно)
               </div>
@@ -619,6 +791,106 @@ function ProductionOrderContent() {
               ) : null}
             </label>
 
+            <div className="mt-4">
+              <div className="mb-1 text-xs font-medium text-slate-600">
+                Вложения (необязательно)
+              </div>
+              <input
+                ref={rejectFileRef}
+                type="file"
+                className="sr-only"
+                accept="image/*,.pdf,.doc,.docx,application/pdf"
+                multiple
+                onChange={(e) => {
+                  const input = e.target;
+                  const list = input.files;
+                  input.value = "";
+                  if (!list?.length) return;
+                  setRejectAttachError(null);
+
+                  void (async () => {
+                    const toAdd: ProductionRejectionAttachment[] = [];
+                    for (const file of Array.from(list)) {
+                      if (file.size > MAX_REJECT_FILE_BYTES) {
+                        setRejectAttachError(
+                          `«${file.name}» слишком большой (макс. ${MAX_REJECT_FILE_BYTES / (1024 * 1024)} МБ).`,
+                        );
+                        continue;
+                      }
+                      try {
+                        const dataUrl = await readFileAsDataUrl(file);
+                        toAdd.push({
+                          id: rejectionAttachmentId(),
+                          fileName: file.name,
+                          mimeType: file.type || "application/octet-stream",
+                          dataUrl,
+                        });
+                      } catch {
+                        setRejectAttachError(
+                          `Не удалось прочитать «${file.name}».`,
+                        );
+                      }
+                    }
+                    if (!toAdd.length) return;
+                    setRejectAttachments((prev) => {
+                      const space = Math.max(
+                        0,
+                        MAX_REJECT_ATTACHMENTS - prev.length,
+                      );
+                      const slice = toAdd.slice(0, space);
+                      if (slice.length < toAdd.length) {
+                        setRejectAttachError(
+                          `Не более ${MAX_REJECT_ATTACHMENTS} файлов.`,
+                        );
+                      }
+                      return slice.length ? [...prev, ...slice] : prev;
+                    });
+                  })();
+                }}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => rejectFileRef.current?.click()}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                >
+                  Прикрепить файл или фото
+                </button>
+                <span className="text-xs text-slate-500">
+                  До {MAX_REJECT_ATTACHMENTS} файлов, до{" "}
+                  {MAX_REJECT_FILE_BYTES / (1024 * 1024)} МБ каждый
+                </span>
+              </div>
+              {rejectAttachError ? (
+                <div className="mt-2 text-xs text-amber-700">{rejectAttachError}</div>
+              ) : null}
+              {rejectAttachments.length > 0 ? (
+                <ul className="mt-3 space-y-2 rounded-lg border border-slate-100 bg-slate-50/80 p-3">
+                  {rejectAttachments.map((a) => (
+                    <li
+                      key={a.id}
+                      className="flex items-center justify-between gap-2 text-xs text-slate-800"
+                    >
+                      <span className="min-w-0 truncate font-medium">
+                        {a.fileName}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRejectAttachments((prev) =>
+                            prev.filter((x) => x.id !== a.id),
+                          )
+                        }
+                        className="shrink-0 rounded-md px-2 py-1 text-slate-500 transition hover:bg-slate-200/80 hover:text-slate-800"
+                      >
+                        Удалить
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
@@ -636,6 +908,11 @@ function ProductionOrderContent() {
                     orderId: order.id,
                     rejectedBy: "Смирнова А.",
                     rejectedReason: rejectReason.trim(),
+                    rejectedPhase: rejectPhase,
+                    rejectedAttachments:
+                      rejectAttachments.length > 0
+                        ? rejectAttachments
+                        : undefined,
                     rejectedStageIndex: order.currentStageIndex,
                     rejectedStepTemplateId: stepTpl?.id,
                   });
@@ -653,6 +930,107 @@ function ProductionOrderContent() {
   );
 }
 
+function StageActionsMenu({ onReject }: { onReject: () => void }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      const el = rootRef.current;
+      if (!el) return;
+      if (e.target instanceof Node && !el.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative shrink-0" ref={rootRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Действия"
+        title="Действия"
+      >
+        <span className="text-lg leading-none">⋯</span>
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="w-full px-3 py-2 text-left text-sm text-red-700 transition hover:bg-red-50"
+            onClick={() => {
+              setOpen(false);
+              onReject();
+            }}
+          >
+            Забраковать
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function scrollToProductionField(fieldId: string) {
+  const safeId = fieldId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  const el = document.querySelector(
+    `[data-production-field="${safeId}"]`,
+  ) as HTMLElement | null;
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  window.setTimeout(() => {
+    const focusable = el.querySelector(
+      "input:not([type='hidden']), select, textarea, button",
+    ) as HTMLElement | null;
+    if (!focusable || (focusable as HTMLInputElement).disabled) return;
+    focusable.focus({ preventScroll: true });
+  }, 250);
+}
+
+function MissingRequiredFieldsHint({
+  fields,
+}: {
+  fields: FieldDefinition[];
+}) {
+  const shown = fields.slice(0, 3);
+  return (
+    <div className="text-right text-xs text-slate-500">
+      Заполните обязательные поля:{" "}
+      {shown.map((f, i) => (
+        <span key={f.id}>
+          {i > 0 ? ", " : null}
+          <button
+            type="button"
+            onClick={() => scrollToProductionField(f.id)}
+            className="cursor-pointer text-slate-700 underline decoration-slate-300 underline-offset-2 transition hover:text-slate-900"
+          >
+            {f.label}
+          </button>
+        </span>
+      ))}
+      {fields.length > 3 ? "…" : ""}
+    </div>
+  );
+}
+
 function formatRuDateTime(iso: string): string {
   const d = new Date(iso);
   const day = String(d.getDate()).padStart(2, "0");
@@ -666,9 +1044,12 @@ function formatRuDateTime(iso: string): string {
 function StatusBadge({
   status,
   reason,
+  currentStageLabel,
 }: {
   status: "in_progress" | "completed" | "rejected";
   reason?: string;
+  /** Подпись под «В работе» в журнале (текущий этап). */
+  currentStageLabel?: string;
 }) {
   const style =
     status === "completed"
@@ -691,6 +1072,11 @@ function StatusBadge({
       >
         {label}
       </span>
+      {status === "in_progress" && currentStageLabel ? (
+        <div className="mt-1 line-clamp-2 text-xs text-slate-600">
+          {currentStageLabel}
+        </div>
+      ) : null}
       {status === "rejected" && reason ? (
         <div className="mt-1 line-clamp-2 text-xs text-slate-500">
           {reason}
@@ -718,25 +1104,11 @@ function StageStepper({
         const isCurrent = idx === order.currentStageIndex;
         const tplName = template?.stages[idx]?.name;
         const name = tplName ?? st.name ?? `Этап ${idx + 1}`;
-        const statusLabel =
-          st.status === "completed"
-            ? "Готово"
-            : st.status === "in_progress"
-              ? st.deferred
-                ? "Ожидает"
-                : "В работе"
-              : "Ожидает";
-        const badgeCls =
-          st.status === "completed"
-            ? "bg-slate-100 text-slate-600 ring-slate-500/20"
-            : st.status === "in_progress"
-              ? st.deferred
-                ? "bg-indigo-50 text-indigo-700 ring-indigo-600/20"
-                : "bg-amber-50 text-amber-700 ring-amber-500/20"
-              : "bg-slate-100 text-slate-600 ring-slate-500/20";
+        const showStageWorkBadge =
+          st.status === "in_progress" && !st.deferred;
 
         const pillCls = (() => {
-          if (isCurrent) {
+          if (isCurrent && st.status !== "completed") {
             return isActive
               ? "border-amber-300 bg-amber-100 hover:bg-amber-100"
               : "border-amber-200 bg-amber-50 hover:bg-amber-100";
@@ -763,11 +1135,11 @@ function StageStepper({
               ].join(" ")}
             >
               <span className="font-medium text-slate-800">{name}</span>
-              <span
-                className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${badgeCls}`}
-              >
-                {statusLabel}
-              </span>
+              {showStageWorkBadge ? (
+                <span className="inline-flex shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-500/20">
+                  В работе
+                </span>
+              ) : null}
             </button>
           </li>
         );
@@ -802,11 +1174,66 @@ function StepsStage({
 
   const allStepsCompleted = stepsExec.every((s) => s.status === "completed");
   const showStepsSidebar = stepsTpl.length > 1;
+  const isSingleStepStage = stepsTpl.length <= 1;
+  const sequentialLockEnabled =
+    canEdit && stageExecution.status !== "completed";
   const firstIncompleteIndex = Math.max(
     0,
     stepsExec.findIndex((s) => s.status !== "completed"),
   );
-  const activeStepLocked = activeStepIndex > firstIncompleteIndex;
+  const activeStepLocked =
+    sequentialLockEnabled && activeStepIndex > firstIncompleteIndex;
+  const activeStepTpl = stepsTpl[activeStepIndex];
+  const activeStepExec = stepsExec[activeStepIndex];
+
+  const stepTotal = stepsTpl.length;
+  const completedStepCount = stepsExec.filter(
+    (s) => s.status === "completed",
+  ).length;
+  const stepHeading = (stepIndex: number, name: string) =>
+    `Шаг ${stepIndex + 1} из ${stepTotal}: ${name}`;
+
+  const missingRequiredFields = (() => {
+    if (!activeStepTpl || !activeStepExec) return [];
+    return activeStepTpl.fields.filter((f) => {
+      if (!f.required) return false;
+      if (f.type === "section_header") return false;
+      if (typeof f.refStageIndex === "number" || f.refFieldId) return false;
+      if (f.refDeviations && f.refDeviations.length > 0) return false;
+      if (f.computeRule) return false;
+
+      const raw = activeStepExec.fieldValues[f.id];
+      if (raw === null || raw === undefined) return true;
+
+      switch (f.type) {
+        case "text":
+        case "select":
+        case "date":
+          return typeof raw !== "string" || raw.trim().length === 0;
+        case "number":
+          return (
+            typeof raw !== "number" ||
+            Number.isNaN(raw) ||
+            raw < 0
+          );
+        case "checkbox":
+          return raw !== true;
+        default:
+          return false;
+      }
+    });
+  })();
+  const canCompleteActiveStep =
+    canEdit && !activeStepLocked && activeStepExec?.status !== "completed";
+  const completeDisabled =
+    !canCompleteActiveStep || missingRequiredFields.length > 0;
+  const completeTitle =
+    missingRequiredFields.length > 0
+      ? `Заполните обязательные поля: ${missingRequiredFields
+          .slice(0, 3)
+          .map((f) => f.label)
+          .join(", ")}${missingRequiredFields.length > 3 ? "…" : ""}`
+      : undefined;
 
   return (
     <div
@@ -816,24 +1243,25 @@ function StepsStage({
     >
       {showStepsSidebar ? (
         <aside className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <div className="mb-2 text-xs font-semibold text-slate-600">Шаги</div>
+          <div className="mb-2">
+            <div className="text-xs font-semibold text-slate-600">Шаги</div>
+            <div className="mt-0.5 text-[11px] text-slate-500">
+              Завершено {completedStepCount} из {stepTotal}
+            </div>
+          </div>
           <nav className="flex flex-col gap-1">
             {stepsTpl.map((s, idx) => {
               const exec = stepsExec[idx];
               const isActive = idx === activeStepIndex;
-              const isLocked = idx > firstIncompleteIndex;
+              const isLocked = sequentialLockEnabled && idx > firstIncompleteIndex;
               const state =
                 exec?.status === "completed"
                   ? "completed"
-                  : idx === order.currentStageIndex && idx === 0
+                  : sequentialLockEnabled && idx === firstIncompleteIndex
                     ? "in_progress"
-                    : exec?.status ?? "pending";
-              const badge =
-                exec?.status === "completed"
-                  ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20"
-                  : isLocked
-                    ? "bg-slate-100 text-slate-500 ring-slate-500/20"
-                    : "bg-amber-50 text-amber-700 ring-amber-500/20";
+                    : exec?.status === "in_progress"
+                      ? "in_progress"
+                      : "pending";
               return (
                 <button
                   key={s.id}
@@ -851,18 +1279,21 @@ function StepsStage({
                         : "hover:bg-white/70",
                   ].join(" ")}
                 >
-                  <span className="min-w-0 whitespace-normal text-slate-800 leading-snug">
-                    {s.name}
+                  <span className="min-w-0 flex-1">
+                    <span className="block whitespace-normal text-slate-800 leading-snug">
+                      {stepHeading(idx, s.name)}
+                    </span>
+                    {exec?.status === "completed" && exec.completedBy && exec.completedAt ? (
+                      <span className="mt-1 block text-[11px] leading-snug text-slate-500">
+                        Завершил: {exec.completedBy} · {formatRuDateTime(exec.completedAt)}
+                      </span>
+                    ) : null}
                   </span>
-                  <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${badge}`}
-                  >
-                    {state === "completed"
-                      ? "готово"
-                      : isLocked
-                        ? "ожидает"
-                        : "в работе"}
-                  </span>
+                  {state === "in_progress" ? (
+                    <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-500/20">
+                      в работе
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
@@ -873,18 +1304,23 @@ function StepsStage({
       <section className="min-w-0">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
-            {showStepsSidebar ? (
-              <div className="text-base font-semibold text-slate-900">
-                {stepsTpl[activeStepIndex]?.name ?? "Шаг"}
+            <div className="text-base font-semibold text-slate-900">
+              {stepsTpl[activeStepIndex]
+                ? stepHeading(
+                    activeStepIndex,
+                    stepsTpl[activeStepIndex]!.name,
+                  )
+                : "Шаг"}
+            </div>
+            {!showStepsSidebar ? (
+              <div className="mt-1 text-xs text-slate-500">
+                Завершено {completedStepCount} из {stepTotal}
               </div>
             ) : null}
-            <div className="mt-1 text-sm text-slate-500">
-              {canEdit ? "Заполните поля и завершите шаг." : "Просмотр данных."}
-            </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="space-y-4">
           <FormFields
             order={order}
             stepTemplate={stepsTpl[activeStepIndex]}
@@ -898,18 +1334,32 @@ function StepsStage({
           />
 
           {canEdit ? (
-            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-              {!activeStepLocked &&
-              stepsExec[activeStepIndex]?.status !== "completed" ? (
+            <div className="mt-4 flex flex-col items-end gap-2">
+              {completeDisabled && missingRequiredFields.length > 0 ? (
+                <MissingRequiredFieldsHint fields={missingRequiredFields} />
+              ) : null}
+              <div className="flex flex-wrap items-center justify-end gap-2">
+              {canCompleteActiveStep ? (
                 <button
                   type="button"
-                  onClick={() => onCompleteStep(activeStepIndex)}
-                  className="cursor-pointer rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                  onClick={() => {
+                    if (completeDisabled) return;
+                    onCompleteStep(activeStepIndex);
+                    if (isSingleStepStage) onCompleteStage();
+                  }}
+                  title={completeTitle}
+                  disabled={completeDisabled}
+                  className={[
+                    "rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50",
+                    completeDisabled
+                      ? "cursor-not-allowed opacity-60"
+                      : "cursor-pointer",
+                  ].join(" ")}
                 >
                   Завершить
                 </button>
               ) : null}
-              {allStepsCompleted ? (
+              {!isSingleStepStage && allStepsCompleted ? (
                 <button
                   type="button"
                   onClick={onCompleteStage}
@@ -918,6 +1368,7 @@ function StepsStage({
                   Завершить
                 </button>
               ) : null}
+              </div>
             </div>
           ) : null}
         </div>
@@ -947,22 +1398,37 @@ function QualityControlStage({
   }
 
   const editable = canEdit && stepExecution.status !== "completed";
+  const missingRequired = stepTemplate.fields.filter((f) => {
+    if (!f.required) return false;
+    if (f.type === "section_header") return false;
+    const raw = stepExecution.fieldValues[f.id];
+    if (raw === null || raw === undefined) return true;
+    switch (f.type) {
+      case "text":
+      case "select":
+      case "date":
+        return typeof raw !== "string" || raw.trim().length === 0;
+      case "number":
+        return typeof raw !== "number" || Number.isNaN(raw) || raw < 0;
+      case "checkbox":
+        return raw !== true;
+      default:
+        return false;
+    }
+  });
+  const confirmDisabled = !editable || missingRequired.length > 0;
+  const confirmTitle =
+    missingRequired.length > 0
+      ? `Заполните обязательные поля: ${missingRequired
+          .slice(0, 3)
+          .map((f) => f.label)
+          .join(", ")}${missingRequired.length > 3 ? "…" : ""}`
+      : undefined;
 
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm text-slate-600">
-          {editable ? "Введите показатели и подтвердите результаты." : "Просмотр результатов."}
-        </div>
-        {editable ? (
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
-          >
-            Подтвердить результаты
-          </button>
-        ) : null}
+      <div className="mb-3 text-sm text-slate-600">
+        {editable ? "Введите показатели и подтвердите результаты." : "Просмотр результатов."}
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200">
@@ -980,7 +1446,11 @@ function QualityControlStage({
               .map((f) => {
                 const value = stepExecution.fieldValues[f.id];
                 return (
-                  <tr key={f.id} className="hover:bg-slate-50">
+                  <tr
+                    key={f.id}
+                    data-production-field={f.id}
+                    className="hover:bg-slate-50"
+                  >
                     <td className="px-4 py-2.5 text-slate-700">{f.label}</td>
                     <td className="px-4 py-2.5">
                       <FieldInput
@@ -997,6 +1467,29 @@ function QualityControlStage({
           </tbody>
         </table>
       </div>
+
+      {editable ? (
+        <div className="mt-4 flex flex-col items-end gap-2">
+          {confirmDisabled && missingRequired.length > 0 ? (
+            <MissingRequiredFieldsHint fields={missingRequired} />
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              if (confirmDisabled) return;
+              onConfirm();
+            }}
+            title={confirmTitle}
+            disabled={confirmDisabled}
+            className={[
+              "rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700",
+              confirmDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
+            ].join(" ")}
+          >
+            Подтвердить результаты
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1034,9 +1527,26 @@ function FormFields({
         const st = order.stages[idx];
         if (!st) continue;
         for (const step of st.steps) {
+          const fv = step.fieldValues;
+          const devFlagRaw = fv.devFlag;
+          const devNotesRaw = fv.devNotes;
+          const devFlagYes =
+            devFlagRaw === "Да" ||
+            devFlagRaw === true ||
+            devFlagRaw === "да";
+          const devNotes =
+            typeof devNotesRaw === "string" ? devNotesRaw.trim() : "";
+
           if (step.deviationFlag) {
             const note = step.deviationNotes?.trim();
             items.push(note ? `${st.name}: ${note}` : `${st.name}: отклонение`);
+            continue;
+          }
+
+          if (devFlagYes || devNotes) {
+            items.push(
+              devNotes ? `${st.name}: ${devNotes}` : `${st.name}: отклонение`,
+            );
           }
         }
       }
@@ -1046,14 +1556,31 @@ function FormFields({
     if (field.computeRule === "age_from_date" && field.computedFrom) {
       const raw = stepExecution.fieldValues[field.computedFrom];
       if (typeof raw === "string" && raw) {
-        const dob = new Date(raw);
-        if (!Number.isNaN(dob.getTime())) {
-          const now = new Date();
-          let age = now.getFullYear() - dob.getFullYear();
-          const m = now.getMonth() - dob.getMonth();
-          if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age -= 1;
-          return age;
+        const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return null;
+        const y = Number(m[1]);
+        const mo = Number(m[2]);
+        const d = Number(m[3]);
+        const now = new Date();
+        if (!Number.isFinite(y) || y < 1900 || y > now.getFullYear()) return null;
+        if (!Number.isFinite(mo) || mo < 1 || mo > 12) return null;
+        if (!Number.isFinite(d) || d < 1 || d > 31) return null;
+
+        const dob = new Date(y, mo - 1, d);
+        if (
+          dob.getFullYear() !== y ||
+          dob.getMonth() !== mo - 1 ||
+          dob.getDate() !== d
+        ) {
+          return null;
         }
+
+        let age = now.getFullYear() - y;
+        const nowMonth = now.getMonth() + 1;
+        const nowDay = now.getDate();
+        if (nowMonth < mo || (nowMonth === mo && nowDay < d)) age -= 1;
+        if (age < 0 || age > 130) return null;
+        return age;
       }
       return null;
     }
@@ -1066,10 +1593,13 @@ function FormFields({
         if (field.id === "seq") {
           return null;
         }
+        if (field.id === "executor") {
+          return null;
+        }
         if (field.type === "section_header") {
           return (
             <div key={field.id} className="pt-2">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <div className="text-sm font-semibold text-slate-900">
                   {field.label}
                 </div>
@@ -1080,6 +1610,7 @@ function FormFields({
                     {field.sopFileName ? (
                       <a
                         href={sopDownloadHref}
+                        tabIndex={-1}
                         target="_blank"
                         rel="noreferrer"
                         className="underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
@@ -1105,36 +1636,41 @@ function FormFields({
 
         if (field.type === "checkbox") {
           return (
-            <div
+            <label
               key={field.id}
-              className="flex flex-wrap items-center justify-between gap-3"
+              data-production-field={field.id}
+              className={[
+                "flex items-start gap-3",
+                isReadonly ? "cursor-not-allowed" : "cursor-pointer",
+              ].join(" ")}
             >
-              <div className="text-xs font-medium text-slate-600">
-                {field.label}
-                {field.required ? (
-                  <span className="text-red-500"> *</span>
-                ) : null}
-              </div>
-              <FieldInput
-                field={field}
-                value={value}
+              <input
+                type="checkbox"
+                checked={Boolean(value)}
+                onChange={(e) => onChange(field.id, e.target.checked)}
                 disabled={isReadonly}
-                onChange={(v) => onChange(field.id, v)}
+                className="mt-0.5 size-4 shrink-0 rounded border-slate-300 text-blue-600"
               />
-            </div>
+              <span className="min-w-0 text-xs font-medium text-slate-600">
+                {field.label}
+                {field.required ? <span className="text-red-500"> *</span> : null}
+              </span>
+            </label>
           );
         }
 
         return (
-          <label key={field.id} className="block">
+          <label key={field.id} className="block" data-production-field={field.id}>
             <div className="mb-1 flex items-baseline justify-between gap-2">
               <div className="text-xs font-medium text-slate-600">
                 {field.label}
                 {field.required ? <span className="text-red-500"> *</span> : null}
+                {field.unit ? (
+                  <span className="ml-1 text-[11px] font-normal text-slate-400">
+                    ({field.unit})
+                  </span>
+                ) : null}
               </div>
-              {field.unit ? (
-                <div className="text-[11px] text-slate-400">{field.unit}</div>
-              ) : null}
             </div>
             <FieldInput
               field={field}
@@ -1212,10 +1748,48 @@ function FieldInput({
     return (
       <input
         type="number"
+        inputMode="decimal"
+        min={0}
+        step="any"
         value={typeof value === "number" ? value : value == null ? "" : Number(value)}
-        onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (
+            e.key === "-" ||
+            e.key === "e" ||
+            e.key === "E" ||
+            e.key === "+"
+          ) {
+            e.preventDefault();
+          }
+        }}
+        onChange={(e) => {
+          const t = e.target.value;
+          if (t === "") {
+            onChange(null);
+            return;
+          }
+          const n = Number(t);
+          if (!Number.isFinite(n) || n < 0) return;
+          onChange(n);
+        }}
         disabled={disabled}
         className={common}
+      />
+    );
+  }
+
+  if (field.type === "text" && field.multiline) {
+    return (
+      <textarea
+        rows={4}
+        value={
+          typeof value === "string" ? value : value == null ? "" : String(value)
+        }
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        placeholder={field.placeholder}
+        className={`${common} min-h-[5rem] resize-y`}
       />
     );
   }

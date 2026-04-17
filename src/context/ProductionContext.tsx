@@ -15,6 +15,8 @@ import {
   type ProcessTemplate,
   type ProductionOrder,
   type ProductionOrderStatus,
+  type ProductionRejectionAttachment,
+  type ProductionRejectionPhase,
 } from "../mocks/productionData";
 
 const STORAGE_KEY = "bio-production";
@@ -78,6 +80,8 @@ type ProductionContextValue = {
     orderId: string;
     rejectedBy: string;
     rejectedReason: string;
+    rejectedPhase: ProductionRejectionPhase;
+    rejectedAttachments?: ProductionRejectionAttachment[];
     rejectedStageIndex: number;
     rejectedStepTemplateId?: string;
   }) => void;
@@ -288,6 +292,8 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
             ...stage,
             status: "completed" as ExecutionStatus,
             deferred: false,
+            completedAt: now,
+            completedBy: input.completedBy,
           };
 
           const nextStageIndex = input.stageIndex + 1;
@@ -326,6 +332,8 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
           ...st,
           status: "completed" as ExecutionStatus,
           deferred: false,
+          completedAt: st.completedAt ?? now,
+          completedBy: st.completedBy ?? input.completedBy,
           steps: st.steps.map((s) => ({
             ...s,
             status: "completed" as ExecutionStatus,
@@ -352,6 +360,8 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       orderId: string;
       rejectedBy: string;
       rejectedReason: string;
+      rejectedPhase: ProductionRejectionPhase;
+      rejectedAttachments?: ProductionRejectionAttachment[];
       rejectedStageIndex: number;
       rejectedStepTemplateId?: string;
     }) => {
@@ -366,6 +376,10 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
             rejectedAt: now,
             rejectedBy: input.rejectedBy,
             rejectedReason: input.rejectedReason,
+            rejectedPhase: input.rejectedPhase,
+            rejectedAttachments: input.rejectedAttachments?.length
+              ? input.rejectedAttachments
+              : undefined,
             rejectedStageIndex: input.rejectedStageIndex,
             rejectedStepTemplateId: input.rejectedStepTemplateId,
           };
@@ -431,6 +445,8 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
               rejectedAt: now,
               rejectedBy: input.updatedBy,
               rejectedReason: "—",
+              rejectedPhase: "production" as ProductionRejectionPhase,
+              rejectedAttachments: undefined,
               rejectedStageIndex: o.currentStageIndex,
             };
           }
