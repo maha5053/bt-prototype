@@ -758,7 +758,7 @@ function StageStepper({
               type="button"
               onClick={() => onSelectStage(idx)}
               className={[
-                "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition",
+                "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition",
                 pillCls,
               ].join(" ")}
             >
@@ -873,34 +873,14 @@ function StepsStage({
       <section className="min-w-0">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-base font-semibold text-slate-900">
-              {showStepsSidebar ? stepsTpl[activeStepIndex]?.name ?? "Шаг" : stageTemplate.name}
-            </div>
+            {showStepsSidebar ? (
+              <div className="text-base font-semibold text-slate-900">
+                {stepsTpl[activeStepIndex]?.name ?? "Шаг"}
+              </div>
+            ) : null}
             <div className="mt-1 text-sm text-slate-500">
               {canEdit ? "Заполните поля и завершите шаг." : "Просмотр данных."}
             </div>
-          </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {canEdit &&
-            !activeStepLocked &&
-            stepsExec[activeStepIndex]?.status !== "completed" ? (
-              <button
-                type="button"
-                onClick={() => onCompleteStep(activeStepIndex)}
-                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-              >
-                Завершить шаг
-              </button>
-            ) : null}
-            {canEdit && allStepsCompleted ? (
-              <button
-                type="button"
-                onClick={onCompleteStage}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
-              >
-                Завершить этап
-              </button>
-            ) : null}
           </div>
         </div>
 
@@ -916,6 +896,30 @@ function StepsStage({
             }
             onChange={(fieldId, value) => onChangeField(activeStepIndex, fieldId, value)}
           />
+
+          {canEdit ? (
+            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+              {!activeStepLocked &&
+              stepsExec[activeStepIndex]?.status !== "completed" ? (
+                <button
+                  type="button"
+                  onClick={() => onCompleteStep(activeStepIndex)}
+                  className="cursor-pointer rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+                >
+                  Завершить
+                </button>
+              ) : null}
+              {allStepsCompleted ? (
+                <button
+                  type="button"
+                  onClick={onCompleteStage}
+                  className="cursor-pointer rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
+                >
+                  Завершить
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </section>
     </div>
@@ -1014,6 +1018,8 @@ function FormFields({
     return <div className="text-sm text-slate-500">Нет данных шага.</div>;
   }
 
+  const sopDownloadHref = `${import.meta.env.BASE_URL}mocks/sop/test-sop.pdf`;
+
   const resolveValue = (field: FieldDefinition): FieldValue => {
     // ref field
     if (typeof field.refStageIndex === "number" && field.refFieldId) {
@@ -1057,6 +1063,9 @@ function FormFields({
   return (
     <div className="space-y-3">
       {stepTemplate.fields.map((field) => {
+        if (field.id === "seq") {
+          return null;
+        }
         if (field.type === "section_header") {
           return (
             <div key={field.id} className="pt-2">
@@ -1068,7 +1077,16 @@ function FormFields({
                   <div className="text-xs text-slate-500">
                     {field.sopRef ? <span className="font-medium">{field.sopRef}</span> : null}
                     {field.sopRef && field.sopFileName ? " · " : null}
-                    {field.sopFileName ? <span>{field.sopFileName}</span> : null}
+                    {field.sopFileName ? (
+                      <a
+                        href={sopDownloadHref}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
+                      >
+                        {field.sopFileName}
+                      </a>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
