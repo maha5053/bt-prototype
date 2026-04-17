@@ -89,14 +89,15 @@ export type ProductionRejectionPhase =
   | "quality_control"
   | "logistics";
 
+/** Подписи совпадают с этапами шаблона (registration / production / QC / release). */
 export const PRODUCTION_REJECTION_PHASE_LABELS: Record<
   ProductionRejectionPhase,
   string
 > = {
-  incoming_material: "Входной материал",
+  incoming_material: "Регистрация биоматериала",
   production: "Производство",
-  quality_control: "QC",
-  logistics: "Логистика",
+  quality_control: "Контроль качества",
+  logistics: "Выдача",
 };
 
 export interface ProductionRejectionAttachment {

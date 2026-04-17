@@ -136,8 +136,14 @@ npm run dev -- --host
 
 ## Последняя сессия (end-task)
 
-- **`productionData.ts`**: тип **`FieldReferenceRange`** и поле **`referenceRange`** у полей КК; статические интервалы **`THROMBOGEL_QC_REFS`**; экспорт **`mergeProductionTemplatesWithBaseline`** — подмешивание определений полей/шагов из кода в шаблоны, восстановленные из `localStorage`.
-- **`ProductionContext`**: при старте со **`bio-production`** шаблоны мержатся с **`INITIAL_PROCESS_TEMPLATES`**, результат снова пишется в storage (чтобы появились, например, `referenceRange` у старых сохранений).
-- **`ProductionPages`**: **КК** — колонка «Норма», подсветка **`text-red-600`** вне диапазона, опциональный **`className`** у **`FieldInput`**; **журнал** — **`listSortColumnHint`**: серая ↕ на неактивных сортируемых колонках; **Escape** закрывает модалку «Начать производство»; **брак** — **`resetRejectForm`** / **`requestCloseRejectModal`** (confirm при несохранённом вводе, Escape); **`StepsStage`** — иконка замка, `title`, `aria-disabled`, `aria-describedby` + `sr-only`, `tabIndex={-1}` на заблокированных шагах.
-- **Планы** в корне воркспейса [`tasks/production-ux-plan.md`](../tasks/production-ux-plan.md) расширены бэклогом UX (в коммит `bt-prototype` не входят, только при копировании в репозиторий).
-- **localStorage**: при странном поведении шаблонов после обновления прототипа — по-прежнему сброс **`bio-production`** через dev-tools в журнале.
+- **`ProductionPages.tsx` (модуль «Производство», карточка заказа)**:
+  - **`StageStepper`**: кружки с номером на одной горизонтальной линии с сегментами; без подписи «Этап N»; название этапа и пилл статуса по центру под кружком; статусы через **`getStageStepperColumnStatus`** (в т.ч. «В работе» — янтарный стиль как у бейджа в сайдбаре шагов); ряд линии без горизонтального padding у кнопки (нет щели между колонками); сегменты **`rounded-none`** + 1px overlap (**`-ml-px` / `-mr-px`**, **`w-[calc(100%+1px)]`**) и **`overflow-visible`** на цепочке обёрток — против субпиксельного разрыва линии; **hover** — только лёгкий подъём и тень (**`-translate-y-0.5`**, **`shadow-md`**), без смены фона/бордера; выбранный этап (**`isActive`**) — по-прежнему слегка **`border-slate-200 bg-slate-50`**.
+  - **Выдача**: модалка **`ReleaseIssueConfirmModal`** + **`getReleaseIssueConfirmSummary`** перед финальным завершением этапа.
+  - **Формы / чеклист**: **`parseProductionStepMajor`**, **`buildProductionChecklistSegments`** и группировка подписей «Действие m.n»; **ref-поля** — **`isCrossStageRefField`**, **`refFieldCrossStageBadge`**, sky-обводка у инпутов ссылок на другие этапы.
+  - **Журнал заказов**: поиск по номеру заказа; **`StatusBadge`** без второй строки с причиной под «Брак»; прочие мелкие правки из production UX.
+  - **`StepsStage`**: кламп **`activeStepIndex`**, если у этапа меньше шагов (пустой контент после смены этапа).
+  - **Оборудование**: убрана подпись «Применено» у чекбоксов.
+  - **Брак / фазы**: в модалке согласованы подписи фаз с названиями этапов шаблона.
+- **`productionData.ts`**: **`PRODUCTION_REJECTION_PHASE_LABELS`** — «Регистрация биоматериала», «Контроль качества», «Выдача» (вместо старых коротких формулировок).
+- **Планы** в корне воркспейса [`tasks/production-ux-plan.md`](../tasks/production-ux-plan.md) могли обновляться отдельно (вне этого коммита, если не копировали в репо).
+- **localStorage**: при аномалиях после обновления прототипа — сброс **`bio-production`** через dev-tools в журнале.

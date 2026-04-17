@@ -1,5 +1,11 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ProductionProvider,
   useProduction,
@@ -16,6 +22,7 @@ import {
   type ProductionRejectionAttachment,
   type ProductionRejectionPhase,
   type StageTemplate,
+  type StageType,
   type StepTemplate,
 } from "../mocks/productionData";
 
@@ -40,6 +47,38 @@ const PRODUCTION_LIST_PAGE_SIZE = 15;
 /** Убирает ведущую нумерацию вида «1. » из подписи этапа (пиллы и заголовок). */
 function formatStageLabel(label: string): string {
   return label.replace(/^\d+\.\s*/, "");
+}
+
+/** Ведущий номер из названия шага вида «1. …» для подписей «Действие 1.n». */
+function parseProductionStepMajor(stepName: string): number | null {
+  const m = stepName.trim().match(/^(\d+)\s*[.)]\s*/u);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function isCrossStageRefField(field: FieldDefinition): boolean {
+  return typeof field.refStageIndex === "number" && Boolean(field.refFieldId);
+}
+
+/** Пилл «из этапа …» для ref-полей (выдача: ФИО, ИБ, ID продукта и т.д.). */
+function refFieldCrossStageBadge(
+  order: ProductionOrder,
+  refStageIndex: number,
+): { text: string; title: string } {
+  const st = order.stages[refStageIndex];
+  const name = st?.name?.trim();
+  if (name) {
+    const short = formatStageLabel(name);
+    return {
+      text: `из этапа: ${short}`,
+      title: `Значение из этапа «${short}»`,
+    };
+  }
+  return {
+    text: "из данных этапа",
+    title: "Значение подставлено из другого этапа",
+  };
 }
 
 /** Локализованная подпись статуса заказа на производство. */
@@ -101,6 +140,45 @@ function getRegistrationPatientFields(order: ProductionOrder): {
     if (ib) caseNumber = ib;
   }
   return { patientName, caseNumber };
+}
+
+type ReleaseIssueConfirmSummary = {
+  orderId: string;
+  productName: string;
+  productId: string;
+  patientName: string;
+  caseNumber: string;
+  destination: string;
+  deviations: string;
+  processBy: string;
+  approvedBy: string;
+};
+
+function dashField(v: FieldValue | undefined): string {
+  const s = registrationFieldAsString(v);
+  return s || "—";
+}
+
+/** Данные для модалки финального подтверждения этапа «Выдача». */
+function getReleaseIssueConfirmSummary(
+  order: ProductionOrder,
+  releaseStep?: ProductionOrder["stages"][number]["steps"][number],
+): ReleaseIssueConfirmSummary {
+  const reg = order.stages.find((s) => s.type === "registration");
+  const regFv = reg?.steps[0]?.fieldValues ?? {};
+  const { patientName, caseNumber } = getRegistrationPatientFields(order);
+  const rv = releaseStep?.fieldValues ?? {};
+  return {
+    orderId: order.id,
+    productName: order.templateName,
+    productId: dashField(regFv.productId),
+    patientName: patientName || "—",
+    caseNumber: caseNumber || "—",
+    destination: dashField(rv.where),
+    deviations: dashField(rv.devSummary),
+    processBy: dashField(rv.processDoneBy),
+    approvedBy: dashField(rv.approvedBy),
+  };
 }
 
 function readFileAsDataUrl(file: File): Promise<string> {
@@ -237,7 +315,14 @@ function ProductionListContent() {
       const { patientName, caseNumber } = getRegistrationPatientFields(order);
       const fioQ = patientName.toLowerCase();
       const ibQ = caseNumber.toLowerCase();
-      return fioQ.includes(q) || ibQ.includes(q);
+      const idFull = order.id.toLowerCase();
+      const idShort = order.id.replace(/^po-?/i, "").toLowerCase();
+      return (
+        fioQ.includes(q) ||
+        ibQ.includes(q) ||
+        idFull.includes(q) ||
+        idShort.includes(q)
+      );
     });
   }, [sortedOrders, statusFilter, productFilter, stageFilter, search]);
 
@@ -440,7 +525,7 @@ function ProductionListContent() {
             setPage(1);
             setSearch(e.target.value);
           }}
-          placeholder="Поиск по ФИО и № ИБ…"
+          placeholder="Поиск по номеру заказа, ФИО и № ИБ…"
           className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
         />
         <button
@@ -563,11 +648,6 @@ function ProductionListContent() {
                       key={order.id}
                       onClick={() => handleOpenOrder(order.id)}
                       className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50/80"
-                      title={
-                        order.status === "rejected"
-                          ? order.rejectedReason ?? "Брак"
-                          : ""
-                      }
                     >
                       <td className="px-4 py-3 font-mono text-xs text-slate-600">
                         {order.id.replace(/^po-/, "")}
@@ -585,10 +665,7 @@ function ProductionListContent() {
                         {formatRuDateTime(order.createdAt)}
                       </td>
                       <td className="px-4 py-3">
-                        <StatusBadge
-                          status={order.status}
-                          reason={order.rejectedReason}
-                        />
+                        <StatusBadge status={order.status} />
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {showCurrentStageColumn ? currentStage : ""}
@@ -1133,7 +1210,7 @@ function ProductionOrderContent() {
 
       <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-1 justify-start overflow-visible">
             <StageStepper
               order={order}
               template={template}
@@ -1323,9 +1400,12 @@ function ProductionOrderContent() {
             </div>
 
             <fieldset className="mt-4">
-              <legend className="mb-2 text-xs font-medium text-slate-600">
+              <legend className="mb-1 text-xs font-medium text-slate-600">
                 Этап брака
               </legend>
+              <p className="mb-2 text-xs leading-snug text-slate-500">
+                Названия совпадают с этапами процесса в шаблоне заказа.
+              </p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {REJECTION_PHASE_OPTIONS.map(([value, label]) => (
                   <label
@@ -1672,12 +1752,88 @@ function formatSavedClock(iso: string): string {
   return `${h}:${m}:${s}`;
 }
 
+type StageDotVisual = "done" | "active" | "error" | "pending";
+
+function getStageDotVisual(
+  order: ProductionOrder,
+  st: ProductionOrder["stages"][number],
+  idx: number,
+): StageDotVisual {
+  if (order.status === "rejected" && order.rejectedStageIndex === idx) {
+    return "error";
+  }
+  if (st.status === "completed") return "done";
+  if (st.status === "in_progress") return "active";
+  return "pending";
+}
+
+function stageDotClass(visual: StageDotVisual, isActive: boolean): string {
+  const base =
+    "relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums transition";
+  const byVisual = (() => {
+    switch (visual) {
+      case "done":
+        return "bg-emerald-500 text-white shadow-sm hover:bg-emerald-600";
+      case "active":
+        return isActive
+          ? "bg-amber-400 text-amber-950 shadow-sm ring-2 ring-blue-500 ring-offset-2 hover:bg-amber-300"
+          : "bg-amber-400 text-amber-950 shadow-sm ring-2 ring-amber-500/45 hover:bg-amber-300";
+      case "error":
+        return "bg-red-600 text-white shadow-sm hover:bg-red-700";
+      default:
+        return "bg-white text-slate-500 ring-2 ring-slate-300 hover:bg-slate-50";
+    }
+  })();
+  const activeRing =
+    isActive && visual !== "active"
+      ? " ring-2 ring-blue-500 ring-offset-2"
+      : "";
+  return `${base} ${byVisual}${activeRing}`;
+}
+
+function getStageStepperColumnStatus(
+  order: ProductionOrder,
+  st: ProductionOrder["stages"][number],
+  idx: number,
+): { text: string; pillClass: string } {
+  if (order.status === "rejected" && order.rejectedStageIndex === idx) {
+    return {
+      text: "Брак",
+      pillClass:
+        "bg-red-50 text-red-800 ring-1 ring-inset ring-red-200/90",
+    };
+  }
+  if (st.status === "completed") {
+    return {
+      text: "Завершён",
+      pillClass:
+        "bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200/80",
+    };
+  }
+  if (st.status === "in_progress") {
+    if (st.deferred) {
+      return {
+        text: "Отложено",
+        pillClass:
+          "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200",
+      };
+    }
+    return {
+      text: "В работе",
+      pillClass:
+        "bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-500/20",
+    };
+  }
+  return {
+    text: "Ожидается",
+    pillClass: "bg-white text-slate-600 ring-1 ring-inset ring-slate-200",
+  };
+}
+
 function StatusBadge({
   status,
-  reason,
 }: {
   status: "in_progress" | "completed" | "rejected";
-  reason?: string;
 }) {
   const style =
     status === "completed"
@@ -1689,18 +1845,11 @@ function StatusBadge({
   const label = formatOrderStatus(status);
 
   return (
-    <div className="max-w-[18rem]">
-      <span
-        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${style}`}
-      >
-        {label}
-      </span>
-      {status === "rejected" && reason ? (
-        <div className="mt-1 line-clamp-2 text-xs text-slate-500">
-          {reason}
-        </div>
-      ) : null}
-    </div>
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${style}`}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -1715,56 +1864,103 @@ function StageStepper({
   activeStageIndex: number;
   onSelectStage: (idx: number) => void;
 }) {
+  const stageCount = order.stages.length;
+
+  const lastIdx = stageCount - 1;
+
   return (
-    <ol className="flex flex-wrap gap-2">
-      {order.stages.map((st, idx) => {
-        const isActive = idx === activeStageIndex;
-        const isCurrent = idx === order.currentStageIndex;
-        const tplName = template?.stages[idx]?.name;
-        const name = formatStageLabel(
-          tplName ?? st.name ?? `Этап ${idx + 1}`,
-        );
-        const showStageWorkBadge =
-          st.status === "in_progress" && !st.deferred;
+    <nav
+      aria-label="Прогресс по этапам"
+      className="w-full max-w-full overflow-x-visible overflow-y-visible"
+    >
+      <ol className="flex list-none flex-wrap items-stretch justify-stretch gap-y-3 overflow-visible p-0 sm:flex-nowrap">
+        {order.stages.map((st, idx) => {
+          const tplName = template?.stages[idx]?.name;
+          const name = formatStageLabel(
+            tplName ?? st.name ?? `Этап ${idx + 1}`,
+          );
+          const isActive = idx === activeStageIndex;
+          const visual = getStageDotVisual(order, st, idx);
+          const prevDone =
+            idx > 0 && order.stages[idx - 1]?.status === "completed";
+          const segmentAfterDone = st.status === "completed";
+          const { text: statusText, pillClass: statusPillClass } =
+            getStageStepperColumnStatus(order, st, idx);
 
-        const pillCls = (() => {
-          if (isCurrent && st.status !== "completed") {
-            return isActive
-              ? "border-amber-300 bg-amber-100 hover:bg-amber-100"
-              : "border-amber-200 bg-amber-50 hover:bg-amber-100";
-          }
-          if (st.status === "completed") {
-            return isActive
-              ? "border-emerald-300 bg-emerald-100 hover:bg-emerald-100"
-              : "border-emerald-200 bg-emerald-50 hover:bg-emerald-100";
-          }
-          // pending / not current
-          return isActive
-            ? "border-slate-300 bg-slate-100 hover:bg-slate-100"
-            : "border-slate-200 bg-white hover:bg-slate-50";
-        })();
-
-        return (
-          <li key={`${st.stageTemplateId}-${idx}`}>
-            <button
-              type="button"
-              onClick={() => onSelectStage(idx)}
-              className={[
-                "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition",
-                pillCls,
-              ].join(" ")}
+          return (
+            <li
+              key={`stage-col-${st.stageTemplateId}-${idx}`}
+              className="flex min-w-0 flex-1 basis-[7.5rem] list-none flex-col overflow-visible"
             >
-              <span className="font-medium text-slate-800">{name}</span>
-              {showStageWorkBadge ? (
-                <span className="inline-flex shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-500/20">
-                  В работе
+              <button
+                type="button"
+                onClick={() => onSelectStage(idx)}
+                aria-current={isActive ? "step" : undefined}
+                className={[
+                  "relative z-0 flex h-full w-full min-w-0 cursor-pointer flex-col items-center gap-1 overflow-visible rounded-xl border border-transparent px-0 py-1.5 text-center transition duration-200 ease-out",
+                  // ховер без смены фона/бордера: лёгкий подъём + тень
+                  "hover:z-[1] hover:-translate-y-0.5 hover:shadow-md hover:shadow-slate-900/10 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:shadow-none",
+                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500",
+                  isActive ? "border-slate-200 bg-slate-50/80 shadow-sm" : "",
+                ].join(" ")}
+              >
+                <div className="flex h-9 w-full min-w-0 self-stretch items-center overflow-visible">
+                  <div className="flex min-h-0 min-w-0 flex-1 items-center justify-end overflow-visible">
+                    {idx > 0 ? (
+                      <div
+                        className={[
+                          "h-1 min-w-2 shrink-0 rounded-none",
+                          // квадратные торцы + 1px на стыке колонок (убирает субпиксельный разрыв)
+                          "-ml-px w-[calc(100%+1px)]",
+                          prevDone ? "bg-emerald-400" : "bg-slate-200",
+                        ].join(" ")}
+                      />
+                    ) : (
+                      <div className="h-1 w-full min-w-0" aria-hidden />
+                    )}
+                  </div>
+                  <span
+                    className={stageDotClass(visual, isActive)}
+                    aria-hidden
+                  >
+                    {idx + 1}
+                  </span>
+                  <div className="flex min-h-0 min-w-0 flex-1 items-center justify-start overflow-visible">
+                    {idx < lastIdx ? (
+                      <div
+                        className={[
+                          "h-1 min-w-2 shrink-0 rounded-none",
+                          "-mr-px w-[calc(100%+1px)]",
+                          segmentAfterDone ? "bg-emerald-400" : "bg-slate-200",
+                        ].join(" ")}
+                      />
+                    ) : (
+                      <div className="h-1 w-full min-w-0" aria-hidden />
+                    )}
+                  </div>
+                </div>
+                <div className="flex w-full flex-col items-center gap-1 px-1.5">
+                  <span className="whitespace-nowrap text-center text-sm font-semibold leading-snug text-slate-900">
+                    {name}
+                  </span>
+                  <span
+                    className={[
+                      "mt-0.5 inline-flex justify-center rounded-full px-2.5 py-1 text-center text-xs font-medium",
+                      statusPillClass,
+                    ].join(" ")}
+                  >
+                    {statusText}
+                  </span>
+                </div>
+                <span className="sr-only">
+                  {`Этап ${idx + 1} из ${stageCount}: ${name}, ${statusText}`}
                 </span>
-              ) : null}
-            </button>
-          </li>
-        );
-      })}
-    </ol>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
@@ -1838,6 +2034,112 @@ function IrreversibleConfirmModal({
   );
 }
 
+/** Финальное подтверждение перед фиксацией этапа «Выдача». */
+function ReleaseIssueConfirmModal({
+  open,
+  summary,
+  confirmLabel = "Подтвердить выдачу",
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  summary: ReleaseIssueConfirmSummary;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onCancel]);
+
+  if (!open) return null;
+
+  const row = (term: string, value: string, mono = false) => (
+    <div className="grid grid-cols-[minmax(0,9.5rem)_1fr] gap-x-3 gap-y-1 border-b border-slate-100 py-2 text-sm last:border-b-0 sm:grid-cols-[11rem_1fr]">
+      <dt className="text-slate-500">{term}</dt>
+      <dd
+        className={`min-w-0 break-words text-slate-900 ${mono ? "font-mono text-xs" : ""}`}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 pt-16 pb-8"
+      onClick={onCancel}
+      role="presentation"
+    >
+      <div
+        className="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="release-issue-confirm-title"
+      >
+        <h2
+          id="release-issue-confirm-title"
+          className="text-lg font-semibold text-slate-900"
+        >
+          Подтверждение выдачи
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">
+          Проверьте данные перед фиксацией. После подтверждения этап «Выдача» будет
+          закрыт, правки станут недоступны.
+        </p>
+
+        <div className="mt-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Реквизиты
+          </div>
+          <dl className="mt-1 rounded-lg border border-slate-200 bg-slate-50/60 px-3">
+            {row("Заказ", summary.orderId, true)}
+            {row("Продукт", summary.productName)}
+            {row("ID продукта", summary.productId, true)}
+            {row("ФИО пациента", summary.patientName)}
+            {row("№ ИБ", summary.caseNumber, true)}
+            {row("Куда выдано", summary.destination)}
+          </dl>
+        </div>
+
+        <div className="mt-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Сводка
+          </div>
+          <dl className="mt-1 rounded-lg border border-slate-200 bg-slate-50/60 px-3">
+            {row("Отклонения (сводка)", summary.deviations)}
+            {row("Технологический процесс выполнил", summary.processBy)}
+            {row("Одобрил", summary.approvedBy)}
+          </dl>
+        </div>
+
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StepsStage({
   order,
   stageTemplate,
@@ -1873,6 +2175,21 @@ function StepsStage({
 }) {
   const stepsTpl = stageTemplate.steps;
   const stepsExec = stageExecution.steps;
+
+  /** После этапа с несколькими шагами индекс мог остаться вне диапазона (напр. 1 при одном шаге выдачи). */
+  useEffect(() => {
+    const n = stepsTpl.length;
+    if (n === 0) return;
+    const clamped = Math.max(0, Math.min(activeStepIndex, n - 1));
+    if (clamped !== activeStepIndex) {
+      onSelectStep(clamped);
+    }
+  }, [
+    stageExecution.stageTemplateId,
+    stepsTpl.length,
+    activeStepIndex,
+    onSelectStep,
+  ]);
 
   const stageMarkedComplete = stageExecution.status === "completed";
   const allStepsCompleted =
@@ -1958,6 +2275,32 @@ function StepsStage({
   useEffect(() => {
     setConfirmKind(null);
   }, [allStepsCompleted, activeStepIndex]);
+
+  const isReleaseIssueFinal =
+    stageTemplate.type === "release" &&
+    (confirmKind === "stage" ||
+      (confirmKind === "step" && isSingleStepStage));
+
+  const releaseSummaryStep =
+    confirmKind === "stage"
+      ? stepsExec[stepsExec.length - 1]
+      : stepsExec[activeStepIndex];
+
+  const releaseSummary = getReleaseIssueConfirmSummary(
+    order,
+    releaseSummaryStep,
+  );
+
+  const confirmCompletionAndClose = () => {
+    if (confirmKind === "step") {
+      if (completeDisabled) return;
+      onCompleteStep(activeStepIndex);
+      if (isSingleStepStage) onCompleteStage();
+    } else if (confirmKind === "stage") {
+      onCompleteStage();
+    }
+    setConfirmKind(null);
+  };
 
   return (
     <>
@@ -2098,6 +2441,11 @@ function StepsStage({
             onChangeEquipment={(equipmentId, applied) =>
               onChangeEquipment(activeStepIndex, equipmentId, applied)
             }
+            stageType={stageTemplate.type}
+            productionStepMajor={
+              parseProductionStepMajor(stepsTpl[activeStepIndex]?.name ?? "") ??
+              activeStepIndex + 1
+            }
           />
 
           {canEdit ? (
@@ -2140,32 +2488,32 @@ function StepsStage({
         </div>
       </section>
     </div>
-    <IrreversibleConfirmModal
-      open={confirmKind !== null}
-      title={
-        confirmKind === "stage"
-          ? "Завершить этап?"
-          : "Завершить шаг?"
-      }
-      description={
-        confirmKind === "stage"
-          ? "Этап будет отмечен завершённым. Правки данных этого этапа после этого будут недоступны."
-          : isSingleStepStage
-            ? "Шаг и этап будут завершены. Правки данных этапа после этого будут недоступны."
-            : "Шаг будет отмечен завершённым. Убедитесь, что все данные введены верно."
-      }
-      onCancel={() => setConfirmKind(null)}
-      onConfirm={() => {
-        if (confirmKind === "step") {
-          if (completeDisabled) return;
-          onCompleteStep(activeStepIndex);
-          if (isSingleStepStage) onCompleteStage();
-        } else if (confirmKind === "stage") {
-          onCompleteStage();
+    {confirmKind !== null && isReleaseIssueFinal ? (
+      <ReleaseIssueConfirmModal
+        open
+        summary={releaseSummary}
+        onCancel={() => setConfirmKind(null)}
+        onConfirm={confirmCompletionAndClose}
+      />
+    ) : (
+      <IrreversibleConfirmModal
+        open={confirmKind !== null}
+        title={
+          confirmKind === "stage"
+            ? "Завершить этап?"
+            : "Завершить шаг?"
         }
-        setConfirmKind(null);
-      }}
-    />
+        description={
+          confirmKind === "stage"
+            ? "Этап будет отмечен завершённым. Правки данных этого этапа после этого будут недоступны."
+            : isSingleStepStage
+              ? "Шаг и этап будут завершены. Правки данных этапа после этого будут недоступны."
+              : "Шаг будет отмечен завершённым. Убедитесь, что все данные введены верно."
+        }
+        onCancel={() => setConfirmKind(null)}
+        onConfirm={confirmCompletionAndClose}
+      />
+    )}
     </>
   );
 }
@@ -2388,6 +2736,73 @@ function QualityControlStage({
   );
 }
 
+type ProductionChecklistSegment =
+  | { kind: "section"; field: FieldDefinition }
+  | { kind: "action"; minor: number; fields: FieldDefinition[] }
+  | { kind: "trailing"; fields: FieldDefinition[] };
+
+function isHiddenProductionMetaField(field: FieldDefinition): boolean {
+  return field.id === "seq" || field.id === "executor";
+}
+
+/** Группы «чек-листа»: чекбокс + следующие не-checkbox поля до следующего чекбокса/секции. */
+function buildProductionChecklistSegments(
+  fields: FieldDefinition[],
+): ProductionChecklistSegment[] {
+  const segments: ProductionChecklistSegment[] = [];
+  let minor = 0;
+  let i = 0;
+
+  while (i < fields.length) {
+    const f = fields[i]!;
+    if (isHiddenProductionMetaField(f)) {
+      i++;
+      continue;
+    }
+
+    if (f.type === "section_header") {
+      segments.push({ kind: "section", field: f });
+      i++;
+      continue;
+    }
+
+    if (f.type === "checkbox") {
+      minor += 1;
+      const chunk: FieldDefinition[] = [f];
+      i++;
+      while (i < fields.length) {
+        const nf = fields[i]!;
+        if (isHiddenProductionMetaField(nf)) {
+          i++;
+          continue;
+        }
+        if (nf.type === "section_header" || nf.type === "checkbox") break;
+        chunk.push(nf);
+        i++;
+      }
+      segments.push({ kind: "action", minor, fields: chunk });
+      continue;
+    }
+
+    const chunk: FieldDefinition[] = [];
+    while (i < fields.length) {
+      const nf = fields[i]!;
+      if (isHiddenProductionMetaField(nf)) {
+        i++;
+        continue;
+      }
+      if (nf.type === "section_header" || nf.type === "checkbox") break;
+      chunk.push(nf);
+      i++;
+    }
+    if (chunk.length > 0) {
+      segments.push({ kind: "trailing", fields: chunk });
+    }
+  }
+
+  return segments;
+}
+
 function FormFields({
   order,
   stepTemplate,
@@ -2396,6 +2811,8 @@ function FormFields({
   onChange,
   onChangeConsumableQty,
   onChangeEquipment,
+  stageType,
+  productionStepMajor,
 }: {
   order: ProductionOrder;
   stepTemplate: StepTemplate | undefined;
@@ -2404,6 +2821,8 @@ function FormFields({
   onChange: (fieldId: string, value: FieldValue) => void;
   onChangeConsumableQty: (consumableId: string, qty: number) => void;
   onChangeEquipment: (equipmentId: string, applied: boolean) => void;
+  stageType: StageType;
+  productionStepMajor: number;
 }) {
   if (!stepTemplate || !stepExecution) {
     return <div className="text-sm text-slate-500">Нет данных шага.</div>;
@@ -2485,100 +2904,180 @@ function FormFields({
     return stepExecution.fieldValues[field.id] ?? null;
   };
 
-  return (
-    <div className="space-y-3">
-      {stepTemplate.fields.map((field) => {
-        if (field.id === "seq") {
-          return null;
-        }
-        if (field.id === "executor") {
-          return null;
-        }
-        if (field.type === "section_header") {
-          return (
-            <div key={field.id} className="pt-2">
-              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <div className="text-sm font-semibold text-slate-900">
-                  {field.label}
-                </div>
-                {field.sopRef || field.sopFileName ? (
-                  <div className="text-xs text-slate-500">
-                    {field.sopRef ? <span className="font-medium">{field.sopRef}</span> : null}
-                    {field.sopRef && field.sopFileName ? " · " : null}
-                    {field.sopFileName ? (
-                      <a
-                        href={sopDownloadHref}
-                        tabIndex={-1}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
-                      >
-                        {field.sopFileName}
-                      </a>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-              <div className="mt-2 h-px bg-slate-100" />
-            </div>
-          );
-        }
+  const renderSectionHeader = (field: FieldDefinition) => (
+    <div className="pt-2">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <div className="text-sm font-semibold text-slate-900">{field.label}</div>
+        {field.sopRef || field.sopFileName ? (
+          <div className="text-xs text-slate-500">
+            {field.sopRef ? <span className="font-medium">{field.sopRef}</span> : null}
+            {field.sopRef && field.sopFileName ? " · " : null}
+            {field.sopFileName ? (
+              <a
+                href={sopDownloadHref}
+                tabIndex={-1}
+                target="_blank"
+                rel="noreferrer"
+                className="underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
+              >
+                {field.sopFileName}
+              </a>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-2 h-px bg-slate-100" />
+    </div>
+  );
 
-        const isReadonly =
-          !canEdit ||
-          Boolean(field.refDeviations?.length) ||
-          typeof field.refStageIndex === "number" ||
-          Boolean(field.computeRule);
+  const renderFieldRow = (field: FieldDefinition) => {
+    const isReadonly =
+      !canEdit ||
+      Boolean(field.refDeviations?.length) ||
+      typeof field.refStageIndex === "number" ||
+      Boolean(field.computeRule);
 
-        const value = resolveValue(field);
+    const value = resolveValue(field);
+    const crossRef =
+      isCrossStageRefField(field) && field.refStageIndex !== undefined
+        ? refFieldCrossStageBadge(order, field.refStageIndex)
+        : null;
 
-        if (field.type === "checkbox") {
-          return (
-            <label
-              key={field.id}
-              data-production-field={field.id}
-              className={[
-                "flex items-start gap-3",
-                isReadonly ? "cursor-not-allowed" : "cursor-pointer",
-              ].join(" ")}
-            >
-              <input
-                type="checkbox"
-                checked={Boolean(value)}
-                onChange={(e) => onChange(field.id, e.target.checked)}
-                disabled={isReadonly}
-                className="mt-0.5 size-4 shrink-0 rounded border-slate-300 text-blue-600"
-              />
-              <span className="min-w-0 text-xs font-medium text-slate-600">
-                {field.label}
-                {field.required ? <span className="text-red-500"> *</span> : null}
+    const refBadgeEl = crossRef ? (
+      <span
+        className="inline-flex max-w-full shrink-0 items-center truncate rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-900 ring-1 ring-inset ring-sky-300/60"
+        title={crossRef.title}
+      >
+        {crossRef.text}
+      </span>
+    ) : null;
+
+    if (field.type === "checkbox") {
+      return (
+        <label
+          key={field.id}
+          data-production-field={field.id}
+          className={[
+            "flex items-start gap-3",
+            isReadonly ? "cursor-not-allowed" : "cursor-pointer",
+          ].join(" ")}
+        >
+          <input
+            type="checkbox"
+            checked={Boolean(value)}
+            onChange={(e) => onChange(field.id, e.target.checked)}
+            disabled={isReadonly}
+            className="mt-0.5 size-4 shrink-0 rounded border-slate-300 text-blue-600"
+          />
+          <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="text-xs font-medium text-slate-600">
+              {field.label}
+              {field.required ? <span className="text-red-500"> *</span> : null}
+            </span>
+            {refBadgeEl}
+          </span>
+        </label>
+      );
+    }
+
+    return (
+      <label key={field.id} className="block" data-production-field={field.id}>
+        <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <div className="text-xs font-medium text-slate-600">
+            {field.label}
+            {field.required ? <span className="text-red-500"> *</span> : null}
+            {field.unit ? (
+              <span className="ml-1 text-[11px] font-normal text-slate-400">
+                ({field.unit})
               </span>
-            </label>
-          );
-        }
-
-        return (
-          <label key={field.id} className="block" data-production-field={field.id}>
-            <div className="mb-1 flex items-baseline justify-between gap-2">
-              <div className="text-xs font-medium text-slate-600">
-                {field.label}
-                {field.required ? <span className="text-red-500"> *</span> : null}
-                {field.unit ? (
-                  <span className="ml-1 text-[11px] font-normal text-slate-400">
-                    ({field.unit})
-                  </span>
-                ) : null}
-              </div>
-            </div>
+            ) : null}
+          </div>
+          {refBadgeEl}
+        </div>
+        {crossRef ? (
+          <div className="rounded-lg border border-sky-200/90 bg-sky-50/50 p-2 shadow-sm">
             <FieldInput
               field={field}
               value={value}
               disabled={isReadonly}
               onChange={(v) => onChange(field.id, v)}
             />
-          </label>
-        );
-      })}
+          </div>
+        ) : (
+          <FieldInput
+            field={field}
+            value={value}
+            disabled={isReadonly}
+            onChange={(v) => onChange(field.id, v)}
+          />
+        )}
+      </label>
+    );
+  };
+
+  const checklistSegments =
+    stageType === "production"
+      ? buildProductionChecklistSegments(stepTemplate.fields)
+      : null;
+
+  const fieldsBody =
+    stageType === "production" && checklistSegments ? (
+      <div className="space-y-4">
+        {checklistSegments.map((seg, segIdx) => {
+          if (seg.kind === "section") {
+            return (
+              <div key={seg.field.id}>{renderSectionHeader(seg.field)}</div>
+            );
+          }
+          if (seg.kind === "action") {
+            return (
+              <div
+                key={`action-${seg.minor}-${seg.fields[0]!.id}`}
+                className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 shadow-sm"
+              >
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  Действие {productionStepMajor}.{seg.minor}
+                </div>
+                <div className="space-y-3">
+                  {seg.fields.map((f) => renderFieldRow(f))}
+                </div>
+              </div>
+            );
+          }
+          const precededByAction = checklistSegments
+            .slice(0, segIdx)
+            .some((s) => s.kind === "action");
+          return (
+            <div
+              key={`trail-${seg.fields.map((f) => f.id).join("-")}`}
+              className={
+                precededByAction
+                  ? "space-y-3 border-t border-slate-200 pt-4"
+                  : "space-y-3"
+              }
+            >
+              {seg.fields.map((f) => renderFieldRow(f))}
+            </div>
+          );
+        })}
+      </div>
+    ) : (
+      <div className="space-y-3">
+        {stepTemplate.fields.map((field) => {
+          if (field.id === "seq" || field.id === "executor") {
+            return null;
+          }
+          if (field.type === "section_header") {
+            return <div key={field.id}>{renderSectionHeader(field)}</div>;
+          }
+          return renderFieldRow(field);
+        })}
+      </div>
+    );
+
+  return (
+    <div className="space-y-3">
+      {fieldsBody}
 
       {stepTemplate.consumables.length > 0 ? (
         <div className="pt-4">
@@ -2685,9 +3184,6 @@ function FormFields({
                     />
                     <span className="min-w-0 text-xs font-medium text-slate-600">
                       {eItem.name}
-                      <span className="ml-2 font-normal text-slate-500">
-                        Применено
-                      </span>
                     </span>
                   </label>
                 </li>
