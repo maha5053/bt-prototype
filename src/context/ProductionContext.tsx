@@ -21,6 +21,21 @@ import {
 
 const STORAGE_KEY = "bio-production";
 
+const PO_ORDER_ID_RE = /^po-(\d+)$/i;
+
+/** Next id po-NNN (min 3 digits via padStart); max over existing po-<digits> + 1. */
+function nextProductionOrderId(orders: ProductionOrder[]): string {
+  let max = 0;
+  for (const o of orders) {
+    const m = PO_ORDER_ID_RE.exec(o.id);
+    if (!m) continue;
+    const n = Number.parseInt(m[1], 10);
+    if (Number.isFinite(n)) max = Math.max(max, n);
+  }
+  const next = max + 1;
+  return `po-${String(next).padStart(3, "0")}`;
+}
+
 function loadFromStorage(): { templates: ProcessTemplate[]; orders: ProductionOrder[] } | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -39,19 +54,38 @@ function saveToStorage(state: { templates: ProcessTemplate[]; orders: Production
   }
 }
 
+export type UpdateFieldValueInput =
+  | {
+      orderId: string;
+      stageIndex: number;
+      stepIndex: number;
+      updatedBy: string;
+      fieldId: string;
+      value: FieldValue;
+    }
+  | {
+      orderId: string;
+      stageIndex: number;
+      stepIndex: number;
+      updatedBy: string;
+      consumableId: string;
+      consumableQty: number;
+    }
+  | {
+      orderId: string;
+      stageIndex: number;
+      stepIndex: number;
+      updatedBy: string;
+      equipmentId: string;
+      equipmentApplied: boolean;
+    };
+
 type ProductionContextValue = {
   templates: ProcessTemplate[];
   orders: ProductionOrder[];
   getOrderById: (orderId: string) => ProductionOrder | null;
   createOrder: (templateId: string) => ProductionOrder;
-  updateFieldValue: (input: {
-    orderId: string;
-    stageIndex: number;
-    stepIndex: number;
-    fieldId: string;
-    value: FieldValue;
-    updatedBy: string;
-  }) => void;
+  updateFieldValue: (input: UpdateFieldValueInput) => void;
   saveDraft: (input: {
     orderId: string;
     stageIndex: number;
@@ -119,68 +153,75 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
 
   const createOrder = useCallback(
     (templateId: string): ProductionOrder => {
-      const template = templates.find((t) => t.id === templateId);
-      if (!template) {
-        // Fallback: create from first template to avoid hard crash in demo.
-        const fallback = templates[0];
-        if (!fallback) throw new Error("No production templates available");
-        const newOrder = buildOrderFromTemplate(fallback, { createdBy: DEFAULT_USER });
-        setState((prev) => {
-          const next = { ...prev, orders: [newOrder, ...prev.orders] };
-          saveToStorage(next);
-          return next;
-        });
-        return newOrder;
-      }
+      const template =
+        templates.find((t) => t.id === templateId) ?? templates[0];
+      if (!template) throw new Error("No production templates available");
 
-      const newOrder = buildOrderFromTemplate(template, { createdBy: DEFAULT_USER });
+      let created: ProductionOrder | undefined;
       setState((prev) => {
+        const id = nextProductionOrderId(prev.orders);
+        const newOrder = buildOrderFromTemplate(template, {
+          id,
+          createdBy: DEFAULT_USER,
+        });
+        created = newOrder;
         const next = { ...prev, orders: [newOrder, ...prev.orders] };
         saveToStorage(next);
         return next;
       });
-      return newOrder;
+      if (!created) throw new Error("Failed to create order");
+      return created;
     },
     [templates],
   );
 
-  const updateFieldValue = useCallback(
-    (input: {
-      orderId: string;
-      stageIndex: number;
-      stepIndex: number;
-      fieldId: string;
-      value: FieldValue;
-      updatedBy: string;
-    }) => {
-      const { orderId, stageIndex, stepIndex, fieldId, value, updatedBy } = input;
-      const now = new Date().toISOString();
-      setState((prev) => {
-        const nextOrders = prev.orders.map((o) => {
-          if (o.id !== orderId) return o;
-          if (o.status !== "in_progress") return o;
-          const stage = o.stages[stageIndex];
-          const step = stage?.steps[stepIndex];
-          if (!stage || !step) return o;
+  const updateFieldValue = useCallback((input: UpdateFieldValueInput) => {
+    const { orderId, stageIndex, stepIndex, updatedBy } = input;
+    const now = new Date().toISOString();
+    setState((prev) => {
+      const nextOrders = prev.orders.map((o) => {
+        if (o.id !== orderId) return o;
+        if (o.status !== "in_progress") return o;
+        const stage = o.stages[stageIndex];
+        const step = stage?.steps[stepIndex];
+        if (!stage || !step) return o;
 
-          const nextStages = [...o.stages];
-          const nextSteps = [...stage.steps];
-          const nextStep = { ...step };
-          nextStep.fieldValues = { ...nextStep.fieldValues, [fieldId]: value };
-          nextStep.updatedAt = now;
-          nextStep.updatedBy = updatedBy;
-          nextStep.version = (nextStep.version ?? 1) + 1;
-          nextSteps[stepIndex] = nextStep;
-          nextStages[stageIndex] = { ...stage, steps: nextSteps };
-          return { ...o, stages: nextStages };
-        });
-        const next = { ...prev, orders: nextOrders };
-        saveToStorage(next);
-        return next;
+        const nextStages = [...o.stages];
+        const nextSteps = [...stage.steps];
+        const nextStep = { ...step };
+
+        if ("fieldId" in input) {
+          nextStep.fieldValues = {
+            ...nextStep.fieldValues,
+            [input.fieldId]: input.value,
+          };
+        } else if ("consumableId" in input) {
+          const qty = Number.isFinite(input.consumableQty)
+            ? Math.max(0, Math.floor(input.consumableQty))
+            : 0;
+          nextStep.consumableValues = {
+            ...(nextStep.consumableValues ?? {}),
+            [input.consumableId]: qty,
+          };
+        } else {
+          nextStep.equipmentValues = {
+            ...(nextStep.equipmentValues ?? {}),
+            [input.equipmentId]: input.equipmentApplied,
+          };
+        }
+
+        nextStep.updatedAt = now;
+        nextStep.updatedBy = updatedBy;
+        nextStep.version = (nextStep.version ?? 1) + 1;
+        nextSteps[stepIndex] = nextStep;
+        nextStages[stageIndex] = { ...stage, steps: nextSteps };
+        return { ...o, stages: nextStages };
       });
-    },
-    [],
-  );
+      const next = { ...prev, orders: nextOrders };
+      saveToStorage(next);
+      return next;
+    });
+  }, []);
 
   const saveDraft = useCallback(
     (input: { orderId: string; stageIndex: number; stepIndex: number; updatedBy: string }): { savedAt: string } => {

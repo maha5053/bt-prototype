@@ -204,13 +204,25 @@ export function buildOrderFromTemplate(
   };
 }
 
+function seedRegistrationFioIb(
+  order: ProductionOrder,
+  fio: string,
+  ib: string,
+): void {
+  const reg = order.stages.find((s) => s.type === "registration");
+  const step = reg?.steps[0];
+  if (!step) return;
+  step.fieldValues.fio = fio;
+  step.fieldValues.ib = ib;
+}
+
 export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
   id: "tpl-thrombogel",
   name: "Тромбогель",
   stages: [
     {
       id: "stg-reg",
-      name: "1. Регистрация биоматериала",
+      name: "Регистрация биоматериала",
       type: "registration",
       allowedRoles: [],
       steps: [
@@ -297,7 +309,7 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
     },
     {
       id: "stg-prod",
-      name: "2. Производство",
+      name: "Производство",
       type: "production",
       allowedRoles: [],
       steps: [
@@ -352,7 +364,7 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
     },
     {
       id: "stg-qc",
-      name: "3. Контроль качества",
+      name: "Контроль качества",
       type: "quality_control",
       allowedRoles: [],
       steps: [
@@ -393,7 +405,7 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
     },
     {
       id: "stg-release",
-      name: "4. Выдача",
+      name: "Выдача",
       type: "release",
       allowedRoles: [],
       steps: [
@@ -456,12 +468,14 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {
     createdAt: "2025-03-18T09:10:00.000Z",
     createdBy: "Иванова Е.",
   });
+  seedRegistrationFioIb(inProgress, "Иванов Иван Иванович", "1290047");
 
   const completed = buildOrderFromTemplate(tpl, {
     id: "po-002",
     createdAt: "2025-03-05T08:00:00.000Z",
     createdBy: "Петров С.",
   });
+  seedRegistrationFioIb(completed, "Петрова Анна Николаевна", "5567823");
   completed.status = "completed";
   completed.completedAt = "2025-03-05T16:20:00.000Z";
   completed.currentStageIndex = tpl.stages.length - 1;
@@ -479,6 +493,7 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {
     createdAt: "2025-03-12T10:45:00.000Z",
     createdBy: "Иванова Е.",
   });
+  seedRegistrationFioIb(rejected, "Сидоренко Олег Павлович", "3409128");
   rejected.status = "rejected";
   rejected.rejectedAt = "2025-03-12T11:05:00.000Z";
   rejected.rejectedBy = "Иванова Е.";
@@ -495,9 +510,24 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {
     createdAt: "2025-03-22T07:30:00.000Z",
     createdBy: "Козлова М.",
   });
+  seedRegistrationFioIb(qcDeferred, "Волкова Татьяна Игоревна", "9012345");
   qcDeferred.currentStageIndex = 2;
   qcDeferred.stages[0]!.status = "completed";
+  qcDeferred.stages[0]!.completedAt = "2025-03-22T09:00:00.000Z";
+  qcDeferred.stages[0]!.completedBy = qcDeferred.createdBy;
+  for (const step of qcDeferred.stages[0]!.steps) {
+    step.status = "completed";
+    step.completedAt = qcDeferred.stages[0]!.completedAt;
+    step.completedBy = qcDeferred.createdBy;
+  }
   qcDeferred.stages[1]!.status = "completed";
+  qcDeferred.stages[1]!.completedAt = "2025-03-22T11:30:00.000Z";
+  qcDeferred.stages[1]!.completedBy = "Сидоров В.";
+  for (const step of qcDeferred.stages[1]!.steps) {
+    step.status = "completed";
+    step.completedAt = qcDeferred.stages[1]!.completedAt;
+    step.completedBy = qcDeferred.stages[1]!.completedBy;
+  }
   qcDeferred.stages[2]!.status = "in_progress";
   qcDeferred.stages[2]!.deferred = true;
   qcDeferred.stages[2]!.deferredAt = "2025-03-22T12:00:00.000Z";

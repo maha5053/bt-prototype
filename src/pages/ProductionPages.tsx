@@ -1,12 +1,17 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ProductionProvider, useProduction } from "../context/ProductionContext";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ProductionProvider,
+  useProduction,
+  type UpdateFieldValueInput,
+} from "../context/ProductionContext";
 import {
   PRODUCTION_REJECTION_PHASE_LABELS,
   type FieldDefinition,
   type FieldValue,
   type ProcessTemplate,
   type ProductionOrder,
+  type ProductionOrderStatus,
   type ProductionRejectionAttachment,
   type ProductionRejectionPhase,
   type StageTemplate,
@@ -17,8 +22,85 @@ const REJECTION_PHASE_OPTIONS = Object.entries(
   PRODUCTION_REJECTION_PHASE_LABELS,
 ) as [ProductionRejectionPhase, string][];
 
+/** Типовые причины брака (модалка подтверждения). */
+const REJECTION_TYPICAL_REASON_OPTIONS = [
+  { id: "hemolysis", label: "Гемолиз" },
+  { id: "low_volume", label: "Недостаточный объём" },
+  { id: "contamination", label: "Контаминация" },
+  { id: "expiry", label: "Нарушение срока" },
+  { id: "other", label: "Другое" },
+] as const;
+
 const MAX_REJECT_ATTACHMENTS = 6;
 const MAX_REJECT_FILE_BYTES = 4 * 1024 * 1024;
+
+const PRODUCTION_LIST_PAGE_SIZE = 15;
+
+/** Убирает ведущую нумерацию вида «1. » из подписи этапа (пиллы и заголовок). */
+function formatStageLabel(label: string): string {
+  return label.replace(/^\d+\.\s*/, "");
+}
+
+/** Локализованная подпись статуса заказа на производство. */
+function formatOrderStatus(status: ProductionOrderStatus): string {
+  switch (status) {
+    case "completed":
+      return "Завершён";
+    case "rejected":
+      return "Брак";
+    case "in_progress":
+    default:
+      return "В работе";
+  }
+}
+
+function compareProductionOrderNumbers(
+  a: ProductionOrder,
+  b: ProductionOrder,
+): number {
+  const sa = a.id.replace(/^po-?/i, "");
+  const sb = b.id.replace(/^po-?/i, "");
+  const na = /^\d+$/.test(sa) ? BigInt(sa) : null;
+  const nb = /^\d+$/.test(sb) ? BigInt(sb) : null;
+  if (na !== null && nb !== null) {
+    if (na < nb) return -1;
+    if (na > nb) return 1;
+    return 0;
+  }
+  return sa.localeCompare(sb, "ru", { numeric: true });
+}
+
+type ProductionListSortKey = "number" | "product" | "date";
+
+const REGISTRATION_FIELD_FIO = "fio";
+const REGISTRATION_FIELD_IB = "ib";
+
+function registrationFieldAsString(v: FieldValue | undefined): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "boolean") return v ? "Да" : "Нет";
+  return String(v).trim();
+}
+
+/** ФИО и № ИБ из этапа `registration` (поля шаблона `fio`, `ib`). */
+function getRegistrationPatientFields(order: ProductionOrder): {
+  patientName: string;
+  caseNumber: string;
+} {
+  const reg = order.stages.find((s) => s.type === "registration");
+  if (!reg?.steps?.length) {
+    return { patientName: "", caseNumber: "" };
+  }
+  let patientName = "";
+  let caseNumber = "";
+  for (const step of reg.steps) {
+    const fv = step.fieldValues;
+    const fio = registrationFieldAsString(fv[REGISTRATION_FIELD_FIO]);
+    const ib = registrationFieldAsString(fv[REGISTRATION_FIELD_IB]);
+    if (fio) patientName = fio;
+    if (ib) caseNumber = ib;
+  }
+  return { patientName, caseNumber };
+}
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -49,14 +131,125 @@ function ProductionListContent() {
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [showDevTools, setShowDevTools] = useState(false);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [productFilter, setProductFilter] = useState<string>("all");
+  const [stageFilter, setStageFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [listSortKey, setListSortKey] =
+    useState<ProductionListSortKey>("date");
+  const [listSortDir, setListSortDir] = useState<"asc" | "desc">("desc");
+
+  const toggleListSort = (key: ProductionListSortKey) => {
+    setPage(1);
+    if (listSortKey === key) {
+      setListSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setListSortKey(key);
+      setListSortDir(key === "date" ? "desc" : "asc");
+    }
+  };
 
   const sortedOrders = useMemo(() => {
-    return [...orders].sort((a, b) => {
-      const da = new Date(a.createdAt).getTime();
-      const db = new Date(b.createdAt).getTime();
-      return db - da;
+    const list = [...orders];
+    const dir = listSortDir === "asc" ? 1 : -1;
+    list.sort((a, b) => {
+      let cmp = 0;
+      switch (listSortKey) {
+        case "number":
+          cmp = compareProductionOrderNumbers(a, b);
+          break;
+        case "product":
+          cmp = a.templateName.localeCompare(b.templateName, "ru", {
+            sensitivity: "base",
+          });
+          break;
+        case "date":
+          cmp =
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+      }
+      return cmp * dir;
     });
-  }, [orders]);
+    return list;
+  }, [orders, listSortKey, listSortDir]);
+
+  const productOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const t of templates) {
+      byId.set(t.id, t.name);
+    }
+    for (const o of orders) {
+      if (!byId.has(o.templateId)) {
+        byId.set(o.templateId, o.templateName);
+      }
+    }
+    return [...byId.entries()]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "ru"));
+  }, [templates, orders]);
+
+  const stageOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const t of templates) {
+      for (const s of t.stages) {
+        names.add(formatStageLabel(s.name));
+      }
+    }
+    if (names.size === 0) {
+      for (const o of orders) {
+        const raw = o.stages[o.currentStageIndex]?.name;
+        if (raw) names.add(formatStageLabel(raw));
+      }
+    }
+    return [...names].sort((a, b) => a.localeCompare(b, "ru"));
+  }, [templates, orders]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return sortedOrders.filter((order) => {
+      if (statusFilter !== "all" && order.status !== statusFilter) {
+        return false;
+      }
+      if (productFilter !== "all" && order.templateId !== productFilter) {
+        return false;
+      }
+      if (stageFilter !== "all") {
+        const raw = order.stages[order.currentStageIndex]?.name ?? "";
+        const stageLabel = raw ? formatStageLabel(raw) : "";
+        if (stageLabel !== stageFilter) return false;
+      }
+      if (!q) return true;
+      const { patientName, caseNumber } = getRegistrationPatientFields(order);
+      const fioQ = patientName.toLowerCase();
+      const ibQ = caseNumber.toLowerCase();
+      return fioQ.includes(q) || ibQ.includes(q);
+    });
+  }, [sortedOrders, statusFilter, productFilter, stageFilter, search]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filtered.length / PRODUCTION_LIST_PAGE_SIZE),
+  );
+  const safePage = Math.min(page, totalPages);
+  const shown = filtered.slice(
+    (safePage - 1) * PRODUCTION_LIST_PAGE_SIZE,
+    safePage * PRODUCTION_LIST_PAGE_SIZE,
+  );
+
+  const hasActiveFilters =
+    statusFilter !== "all" ||
+    productFilter !== "all" ||
+    stageFilter !== "all";
+
+  const resetFilters = () => {
+    setStatusFilter("all");
+    setProductFilter("all");
+    setStageFilter("all");
+    setSearch("");
+    setPage(1);
+  };
 
   const handleOpenOrder = (orderId: string) => {
     navigate(`/proizvodstvo/${orderId}`);
@@ -84,7 +277,130 @@ function ProductionListContent() {
   };
 
   return (
-    <div className="p-6 md:p-8">
+    <div className="p-6 md:p-8 relative">
+      {filtersOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 pt-16"
+          onClick={() => setFiltersOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Фильтры журнала производства"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">Фильтры</h2>
+              <button
+                type="button"
+                onClick={() => setFiltersOpen(false)}
+                className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label="Закрыть"
+              >
+                <svg
+                  className="size-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="grid gap-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Статус
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setPage(1);
+                    setStatusFilter(e.target.value);
+                  }}
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="all">Все</option>
+                  <option value="in_progress">
+                    {formatOrderStatus("in_progress")}
+                  </option>
+                  <option value="completed">
+                    {formatOrderStatus("completed")}
+                  </option>
+                  <option value="rejected">
+                    {formatOrderStatus("rejected")}
+                  </option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Продукт
+                </label>
+                <select
+                  value={productFilter}
+                  onChange={(e) => {
+                    setPage(1);
+                    setProductFilter(e.target.value);
+                  }}
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="all">Все</option>
+                  {productOptions.map(({ id, name }) => (
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Текущий этап
+                </label>
+                <select
+                  value={stageFilter}
+                  onChange={(e) => {
+                    setPage(1);
+                    setStageFilter(e.target.value);
+                  }}
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                >
+                  <option value="all">Все</option>
+                  {stageOptions.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-between border-t border-slate-200 pt-4">
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="text-sm font-medium text-slate-600 underline decoration-slate-300 underline-offset-2 hover:text-slate-900"
+              >
+                Сбросить фильтры
+              </button>
+              <button
+                type="button"
+                onClick={() => setFiltersOpen(false)}
+                className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white shadow hover:bg-slate-700"
+              >
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-800">Производство</h1>
@@ -92,10 +408,23 @@ function ProductionListContent() {
             Журнал заказов на производство.
           </p>
         </div>
+      </div>
+
+      <div className="mb-4 flex items-center gap-3">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => {
+            setPage(1);
+            setSearch(e.target.value);
+          }}
+          placeholder="Поиск по ФИО и № ИБ…"
+          className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+        />
         <button
           type="button"
           onClick={() => setShowCreate(true)}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+          className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
         >
           Начать производство
         </button>
@@ -106,13 +435,88 @@ function ProductionListContent() {
           <table className="w-full border-collapse text-left text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                <th className="px-4 py-3 font-medium">Номер</th>
-                <th className="px-4 py-3 font-medium">Продукт</th>
-                <th className="px-4 py-3 font-medium">Дата начала</th>
-                <th className="px-4 py-3 font-medium">Текущий этап</th>
+                <th
+                  className="px-4 py-3 font-medium"
+                  scope="col"
+                  aria-sort={
+                    listSortKey === "number"
+                      ? listSortDir === "asc"
+                        ? "ascending"
+                        : "descending"
+                      : "none"
+                  }
+                >
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 font-medium text-slate-600 hover:text-slate-900"
+                    onClick={() => toggleListSort("number")}
+                  >
+                    Номер
+                    {listSortKey === "number" ? (
+                      <span className="tabular-nums text-slate-400" aria-hidden>
+                        {listSortDir === "asc" ? "↑" : "↓"}
+                      </span>
+                    ) : null}
+                  </button>
+                </th>
+                <th
+                  className="px-4 py-3 font-medium"
+                  scope="col"
+                  aria-sort={
+                    listSortKey === "product"
+                      ? listSortDir === "asc"
+                        ? "ascending"
+                        : "descending"
+                      : "none"
+                  }
+                >
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 font-medium text-slate-600 hover:text-slate-900"
+                    onClick={() => toggleListSort("product")}
+                  >
+                    Продукт
+                    {listSortKey === "product" ? (
+                      <span className="tabular-nums text-slate-400" aria-hidden>
+                        {listSortDir === "asc" ? "↑" : "↓"}
+                      </span>
+                    ) : null}
+                  </button>
+                </th>
+                <th className="px-4 py-3 font-medium" scope="col">
+                  ФИО пациента
+                </th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap" scope="col">
+                  № ИБ
+                </th>
+                <th
+                  className="px-4 py-3 font-medium"
+                  scope="col"
+                  aria-sort={
+                    listSortKey === "date"
+                      ? listSortDir === "asc"
+                        ? "ascending"
+                        : "descending"
+                      : "none"
+                  }
+                >
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 font-medium text-slate-600 hover:text-slate-900"
+                    onClick={() => toggleListSort("date")}
+                  >
+                    Дата регистрации
+                    {listSortKey === "date" ? (
+                      <span className="tabular-nums text-slate-400" aria-hidden>
+                        {listSortDir === "asc" ? "↑" : "↓"}
+                      </span>
+                    ) : null}
+                  </button>
+                </th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap">
                   Статус
                 </th>
+                <th className="px-4 py-3 font-medium">Текущий этап</th>
                 <th className="px-4 py-3 font-medium">Создатель</th>
               </tr>
             </thead>
@@ -120,16 +524,30 @@ function ProductionListContent() {
               {sortedOrders.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={8}
                     className="px-4 py-12 text-center text-slate-500"
                   >
                     Нет заказов на производство.
                   </td>
                 </tr>
+              ) : shown.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="px-4 py-12 text-center text-slate-500"
+                  >
+                    Нет записей по фильтрам.
+                  </td>
+                </tr>
               ) : (
-                sortedOrders.map((order) => {
-                  const currentStage =
+                shown.map((order) => {
+                  const showCurrentStageColumn = order.status === "in_progress";
+                  const rawStage =
                     order.stages[order.currentStageIndex]?.name ?? "—";
+                  const currentStage =
+                    rawStage === "—" ? "—" : formatStageLabel(rawStage);
+                  const { patientName, caseNumber } =
+                    getRegistrationPatientFields(order);
                   return (
                     <tr
                       key={order.id}
@@ -147,22 +565,23 @@ function ProductionListContent() {
                       <td className="px-4 py-3 text-slate-800 font-medium">
                         {order.templateName}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {formatRuDateTime(order.createdAt)}
+                      <td className="max-w-[12rem] truncate px-4 py-3 text-slate-700">
+                        {patientName || "—"}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600">
+                        {caseNumber || "—"}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
-                        {currentStage}
+                        {formatRuDateTime(order.createdAt)}
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge
                           status={order.status}
                           reason={order.rejectedReason}
-                          currentStageLabel={
-                            order.status === "in_progress"
-                              ? currentStage
-                              : undefined
-                          }
                         />
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {showCurrentStageColumn ? currentStage : ""}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {order.createdBy}
@@ -174,6 +593,74 @@ function ProductionListContent() {
             </tbody>
           </table>
         </div>
+
+        {sortedOrders.length > 0 ? (
+          <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setFiltersOpen(true)}
+                className={`relative rounded-md border border-slate-300 bg-white p-2 shadow-sm hover:bg-slate-50 ${hasActiveFilters ? "border-slate-400 bg-slate-100 ring-2 ring-slate-200" : ""}`}
+                aria-label="Открыть фильтры"
+                title="Фильтры"
+              >
+                <svg
+                  className="size-4 text-slate-600"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+                </svg>
+                {hasActiveFilters ? (
+                  <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full border-2 border-white bg-emerald-500" />
+                ) : null}
+              </button>
+              <span>
+                Показано{" "}
+                <strong className="font-medium text-slate-800">
+                  {filtered.length === 0
+                    ? 0
+                    : (safePage - 1) * PRODUCTION_LIST_PAGE_SIZE + 1}
+                  –
+                  {Math.min(
+                    safePage * PRODUCTION_LIST_PAGE_SIZE,
+                    filtered.length,
+                  )}
+                </strong>{" "}
+                из{" "}
+                <strong className="font-medium text-slate-800">
+                  {filtered.length}
+                </strong>
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                ← Назад
+              </button>
+              <span className="tabular-nums text-slate-700">
+                Стр. {safePage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Вперёд →
+              </button>
+            </div>
+          </footer>
+        ) : null}
       </div>
 
       {showCreate && (
@@ -370,6 +857,7 @@ function ProductionOrderContent() {
   const [activeStageIndex, setActiveStageIndex] = useState<number | null>(null);
   const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
   const [showReject, setShowReject] = useState(false);
+  const [rejectTypicalReason, setRejectTypicalReason] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [rejectTouched, setRejectTouched] = useState(false);
   const [rejectPhase, setRejectPhase] =
@@ -381,9 +869,22 @@ function ProductionOrderContent() {
     null,
   );
   const rejectFileRef = useRef<HTMLInputElement>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
 
   const effectiveActiveStageIndex =
     activeStageIndex ?? (order ? order.currentStageIndex : 0);
+
+  useEffect(() => {
+    setLastSavedAt(null);
+  }, [orderId]);
+
+  const patchUpdateFieldValue = useCallback(
+    (input: UpdateFieldValueInput) => {
+      updateFieldValue(input);
+      setLastSavedAt(new Date().toISOString());
+    },
+    [updateFieldValue],
+  );
 
   if (!order) {
     return (
@@ -407,8 +908,9 @@ function ProductionOrderContent() {
     template?.stages[effectiveActiveStageIndex] ?? null;
 
   const stageExecution = order.stages[effectiveActiveStageIndex] ?? null;
-  const stageTitle =
-    stageTemplate?.name ?? stageExecution?.name ?? "Этап";
+  const stageTitle = formatStageLabel(
+    stageTemplate?.name ?? stageExecution?.name ?? "Этап",
+  );
 
   const isOrderReadonly = order.status !== "in_progress";
   const canEditStage =
@@ -468,10 +970,13 @@ function ProductionOrderContent() {
     return null;
   })();
 
-  const rejectError =
-    rejectTouched && !rejectReason.trim()
-      ? "Укажите причину брака."
-      : null;
+  const rejectError = rejectTouched
+    ? !rejectTypicalReason
+      ? "Выберите типовую причину."
+      : rejectTypicalReason === "other" && !rejectReason.trim()
+        ? "Укажите причину брака."
+        : null
+    : null;
 
   return (
     <div className="p-6 md:p-8">
@@ -498,12 +1003,14 @@ function ProductionOrderContent() {
           </Link>
           <h1 className="text-xl font-semibold text-slate-800">
             Заказ {order.id}
+            <span className="ml-2 text-base font-normal text-slate-500">
+              · {formatOrderStatus(order.status)}
+            </span>
           </h1>
         </div>
         <p className="mt-1 text-sm text-slate-500">
-          {order.templateName} · Создал: {order.createdBy} · Начало:{" "}
-          {formatRuDateTime(order.createdAt)} · Статус:{" "}
-          <span className="font-medium">{order.status}</span>
+          {order.templateName} · Создал: {order.createdBy} · Дата регистрации:{" "}
+          {formatRuDateTime(order.createdAt)}
         </p>
       </div>
 
@@ -591,6 +1098,7 @@ function ProductionOrderContent() {
           {!isOrderReadonly ? (
             <StageActionsMenu
               onReject={() => {
+                setRejectTypicalReason("");
                 setRejectReason("");
                 setRejectTouched(false);
                 setRejectPhase("incoming_material");
@@ -618,6 +1126,14 @@ function ProductionOrderContent() {
                 </div>
               ) : null}
             </div>
+            {canEditStage && lastSavedAt ? (
+              <span
+                className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-900 ring-1 ring-emerald-600/20"
+                title="Локальное автосохранение черновика"
+              >
+                Сохранено {formatSavedClock(lastSavedAt)}
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -629,7 +1145,7 @@ function ProductionOrderContent() {
                 stageExecution={stageExecution}
                 canEdit={canEditStage}
                 onChangeField={(stepIndex, fieldId, value) =>
-                  updateFieldValue({
+                  patchUpdateFieldValue({
                     orderId: order.id,
                     stageIndex: effectiveActiveStageIndex,
                     stepIndex,
@@ -663,12 +1179,32 @@ function ProductionOrderContent() {
                 onSelectStep={setActiveStepIndex}
                 canEdit={canEditStage}
                 onChangeField={(stepIndex, fieldId, value) =>
-                  updateFieldValue({
+                  patchUpdateFieldValue({
                     orderId: order.id,
                     stageIndex: effectiveActiveStageIndex,
                     stepIndex,
                     fieldId,
                     value,
+                    updatedBy: "Смирнова А.",
+                  })
+                }
+                onChangeConsumableQty={(stepIndex, consumableId, consumableQty) =>
+                  patchUpdateFieldValue({
+                    orderId: order.id,
+                    stageIndex: effectiveActiveStageIndex,
+                    stepIndex,
+                    consumableId,
+                    consumableQty,
+                    updatedBy: "Смирнова А.",
+                  })
+                }
+                onChangeEquipment={(stepIndex, equipmentId, equipmentApplied) =>
+                  patchUpdateFieldValue({
+                    orderId: order.id,
+                    stageIndex: effectiveActiveStageIndex,
+                    stepIndex,
+                    equipmentId,
+                    equipmentApplied,
                     updatedBy: "Смирнова А.",
                   })
                 }
@@ -772,24 +1308,55 @@ function ProductionOrderContent() {
 
             <label className="mt-4 block">
               <div className="mb-1 text-xs font-medium text-slate-600">
-                Причина (обязательно)
+                Типовая причина
               </div>
-              <textarea
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
+              <select
+                value={rejectTypicalReason}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setRejectTypicalReason(v);
+                  if (v !== "other") setRejectReason("");
+                }}
                 onBlur={() => setRejectTouched(true)}
-                rows={4}
-                className={`w-full resize-none rounded-lg border px-3 py-2 text-sm outline-none transition ${
-                  rejectError
-                    ? "border-red-300 bg-red-50 focus:border-red-400"
+                className={`w-full rounded-lg border bg-white px-3 py-2 text-sm outline-none transition ${
+                  rejectTouched && !rejectTypicalReason
+                    ? "border-red-300 focus:border-red-400"
                     : "border-slate-200 focus:border-blue-400"
                 }`}
-                placeholder="Опишите причину брака…"
-              />
-              {rejectError ? (
-                <div className="mt-1 text-xs text-red-600">{rejectError}</div>
-              ) : null}
+              >
+                <option value="">Выберите…</option>
+                {REJECTION_TYPICAL_REASON_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </label>
+
+            {rejectTypicalReason === "other" ? (
+              <label className="mt-4 block">
+                <div className="mb-1 text-xs font-medium text-slate-600">
+                  Уточнение (обязательно)
+                </div>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  onBlur={() => setRejectTouched(true)}
+                  rows={4}
+                  className={`w-full resize-none rounded-lg border px-3 py-2 text-sm outline-none transition ${
+                    rejectTouched &&
+                    rejectTypicalReason === "other" &&
+                    !rejectReason.trim()
+                      ? "border-red-300 bg-red-50 focus:border-red-400"
+                      : "border-slate-200 focus:border-blue-400"
+                  }`}
+                  placeholder="Опишите причину брака…"
+                />
+              </label>
+            ) : null}
+            {rejectError ? (
+              <div className="mt-2 text-xs text-red-600">{rejectError}</div>
+            ) : null}
 
             <div className="mt-4">
               <div className="mb-1 text-xs font-medium text-slate-600">
@@ -903,11 +1470,22 @@ function ProductionOrderContent() {
                 type="button"
                 onClick={() => {
                   setRejectTouched(true);
-                  if (!rejectReason.trim()) return;
+                  if (!rejectTypicalReason) return;
+                  const preset = REJECTION_TYPICAL_REASON_OPTIONS.find(
+                    (o) => o.id === rejectTypicalReason,
+                  );
+                  let finalReason = "";
+                  if (rejectTypicalReason === "other") {
+                    if (!rejectReason.trim()) return;
+                    finalReason = rejectReason.trim();
+                  } else {
+                    finalReason = preset?.label ?? "";
+                  }
+                  if (!finalReason) return;
                   rejectOrder({
                     orderId: order.id,
                     rejectedBy: "Смирнова А.",
-                    rejectedReason: rejectReason.trim(),
+                    rejectedReason: finalReason,
                     rejectedPhase: rejectPhase,
                     rejectedAttachments:
                       rejectAttachments.length > 0
@@ -1041,15 +1619,21 @@ function formatRuDateTime(iso: string): string {
   return `${day}.${month}.${year} ${hours}:${mins}`;
 }
 
+/** Время автосохранения для бейджа (локальные часы). */
+function formatSavedClock(iso: string): string {
+  const d = new Date(iso);
+  const h = String(d.getHours()).padStart(2, "0");
+  const m = String(d.getMinutes()).padStart(2, "0");
+  const s = String(d.getSeconds()).padStart(2, "0");
+  return `${h}:${m}:${s}`;
+}
+
 function StatusBadge({
   status,
   reason,
-  currentStageLabel,
 }: {
   status: "in_progress" | "completed" | "rejected";
   reason?: string;
-  /** Подпись под «В работе» в журнале (текущий этап). */
-  currentStageLabel?: string;
 }) {
   const style =
     status === "completed"
@@ -1058,12 +1642,7 @@ function StatusBadge({
         ? "bg-red-50 text-red-700 ring-red-600/20"
         : "bg-amber-50 text-amber-700 ring-amber-500/20";
 
-  const label =
-    status === "completed"
-      ? "Завершён"
-      : status === "rejected"
-        ? "Брак"
-        : "В работе";
+  const label = formatOrderStatus(status);
 
   return (
     <div className="max-w-[18rem]">
@@ -1072,11 +1651,6 @@ function StatusBadge({
       >
         {label}
       </span>
-      {status === "in_progress" && currentStageLabel ? (
-        <div className="mt-1 line-clamp-2 text-xs text-slate-600">
-          {currentStageLabel}
-        </div>
-      ) : null}
       {status === "rejected" && reason ? (
         <div className="mt-1 line-clamp-2 text-xs text-slate-500">
           {reason}
@@ -1103,7 +1677,9 @@ function StageStepper({
         const isActive = idx === activeStageIndex;
         const isCurrent = idx === order.currentStageIndex;
         const tplName = template?.stages[idx]?.name;
-        const name = tplName ?? st.name ?? `Этап ${idx + 1}`;
+        const name = formatStageLabel(
+          tplName ?? st.name ?? `Этап ${idx + 1}`,
+        );
         const showStageWorkBadge =
           st.status === "in_progress" && !st.deferred;
 
@@ -1148,6 +1724,76 @@ function StageStepper({
   );
 }
 
+/** Подтверждение необратимого действия (завершение шага / этапа / КК). */
+function IrreversibleConfirmModal({
+  open,
+  title,
+  description,
+  confirmLabel = "Да, завершить",
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onCancel]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 pt-16 pb-8"
+      onClick={onCancel}
+      role="presentation"
+    >
+      <div
+        className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="irreversible-confirm-title"
+      >
+        <h2
+          id="irreversible-confirm-title"
+          className="text-lg font-semibold text-slate-900"
+        >
+          {title}
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">
+          {description}
+        </p>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StepsStage({
   order,
   stageTemplate,
@@ -1156,6 +1802,8 @@ function StepsStage({
   onSelectStep,
   canEdit,
   onChangeField,
+  onChangeConsumableQty,
+  onChangeEquipment,
   onCompleteStep,
   onCompleteStage,
 }: {
@@ -1166,13 +1814,26 @@ function StepsStage({
   onSelectStep: (idx: number) => void;
   canEdit: boolean;
   onChangeField: (stepIndex: number, fieldId: string, value: FieldValue) => void;
+  onChangeConsumableQty: (
+    stepIndex: number,
+    consumableId: string,
+    qty: number,
+  ) => void;
+  onChangeEquipment: (
+    stepIndex: number,
+    equipmentId: string,
+    applied: boolean,
+  ) => void;
   onCompleteStep: (stepIndex: number) => void;
   onCompleteStage: () => void;
 }) {
   const stepsTpl = stageTemplate.steps;
   const stepsExec = stageExecution.steps;
 
-  const allStepsCompleted = stepsExec.every((s) => s.status === "completed");
+  const stageMarkedComplete = stageExecution.status === "completed";
+  const allStepsCompleted =
+    stageMarkedComplete ||
+    stepsExec.every((s) => s.status === "completed");
   const showStepsSidebar = stepsTpl.length > 1;
   const isSingleStepStage = stepsTpl.length <= 1;
   const sequentialLockEnabled =
@@ -1187,11 +1848,11 @@ function StepsStage({
   const activeStepExec = stepsExec[activeStepIndex];
 
   const stepTotal = stepsTpl.length;
-  const completedStepCount = stepsExec.filter(
-    (s) => s.status === "completed",
-  ).length;
+  const completedStepCount = stageMarkedComplete
+    ? stepTotal
+    : stepsExec.filter((s) => s.status === "completed").length;
   const stepHeading = (stepIndex: number, name: string) =>
-    `Шаг ${stepIndex + 1} из ${stepTotal}: ${name}`;
+    `Шаг ${stepIndex + 1} из ${stepTotal}: ${formatStageLabel(name)}`;
 
   const missingRequiredFields = (() => {
     if (!activeStepTpl || !activeStepExec) return [];
@@ -1224,7 +1885,10 @@ function StepsStage({
     });
   })();
   const canCompleteActiveStep =
-    canEdit && !activeStepLocked && activeStepExec?.status !== "completed";
+    canEdit &&
+    !activeStepLocked &&
+    !stageMarkedComplete &&
+    activeStepExec?.status !== "completed";
   const completeDisabled =
     !canCompleteActiveStep || missingRequiredFields.length > 0;
   const completeTitle =
@@ -1235,7 +1899,24 @@ function StepsStage({
           .join(", ")}${missingRequiredFields.length > 3 ? "…" : ""}`
       : undefined;
 
+  const [confirmKind, setConfirmKind] = useState<null | "step" | "stage">(
+    null,
+  );
+
+  useEffect(() => {
+    setConfirmKind(null);
+  }, [activeStepIndex]);
+
+  useEffect(() => {
+    setConfirmKind(null);
+  }, [completeDisabled]);
+
+  useEffect(() => {
+    setConfirmKind(null);
+  }, [allStepsCompleted, activeStepIndex]);
+
   return (
+    <>
     <div
       className={
         showStepsSidebar ? "grid gap-4 lg:grid-cols-[260px_1fr]" : "grid gap-4"
@@ -1254,14 +1935,15 @@ function StepsStage({
               const exec = stepsExec[idx];
               const isActive = idx === activeStepIndex;
               const isLocked = sequentialLockEnabled && idx > firstIncompleteIndex;
-              const state =
-                exec?.status === "completed"
-                  ? "completed"
-                  : sequentialLockEnabled && idx === firstIncompleteIndex
+              const stepDone =
+                stageMarkedComplete || exec?.status === "completed";
+              const state = stepDone
+                ? "completed"
+                : sequentialLockEnabled && idx === firstIncompleteIndex
+                  ? "in_progress"
+                  : exec?.status === "in_progress"
                     ? "in_progress"
-                    : exec?.status === "in_progress"
-                      ? "in_progress"
-                      : "pending";
+                    : "pending";
               return (
                 <button
                   key={s.id}
@@ -1283,9 +1965,15 @@ function StepsStage({
                     <span className="block whitespace-normal text-slate-800 leading-snug">
                       {stepHeading(idx, s.name)}
                     </span>
-                    {exec?.status === "completed" && exec.completedBy && exec.completedAt ? (
+                    {stepDone &&
+                    (exec?.completedBy || stageExecution.completedBy) &&
+                    (exec?.completedAt || stageExecution.completedAt) ? (
                       <span className="mt-1 block text-[11px] leading-snug text-slate-500">
-                        Завершил: {exec.completedBy} · {formatRuDateTime(exec.completedAt)}
+                        Завершил:{" "}
+                        {exec?.completedBy ?? stageExecution.completedBy} ·{" "}
+                        {formatRuDateTime(
+                          exec?.completedAt ?? stageExecution.completedAt!,
+                        )}
                       </span>
                     ) : null}
                   </span>
@@ -1328,9 +2016,16 @@ function StepsStage({
             canEdit={
               canEdit &&
               !activeStepLocked &&
+              !stageMarkedComplete &&
               stepsExec[activeStepIndex]?.status !== "completed"
             }
             onChange={(fieldId, value) => onChangeField(activeStepIndex, fieldId, value)}
+            onChangeConsumableQty={(consumableId, qty) =>
+              onChangeConsumableQty(activeStepIndex, consumableId, qty)
+            }
+            onChangeEquipment={(equipmentId, applied) =>
+              onChangeEquipment(activeStepIndex, equipmentId, applied)
+            }
           />
 
           {canEdit ? (
@@ -1339,41 +2034,67 @@ function StepsStage({
                 <MissingRequiredFieldsHint fields={missingRequiredFields} />
               ) : null}
               <div className="flex flex-wrap items-center justify-end gap-2">
-              {canCompleteActiveStep ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (completeDisabled) return;
-                    onCompleteStep(activeStepIndex);
-                    if (isSingleStepStage) onCompleteStage();
-                  }}
-                  title={completeTitle}
-                  disabled={completeDisabled}
-                  className={[
-                    "rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50",
-                    completeDisabled
-                      ? "cursor-not-allowed opacity-60"
-                      : "cursor-pointer",
-                  ].join(" ")}
-                >
-                  Завершить
-                </button>
-              ) : null}
-              {!isSingleStepStage && allStepsCompleted ? (
-                <button
-                  type="button"
-                  onClick={onCompleteStage}
-                  className="cursor-pointer rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
-                >
-                  Завершить
-                </button>
-              ) : null}
+                {canCompleteActiveStep ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (completeDisabled) return;
+                      setConfirmKind("step");
+                    }}
+                    title={completeTitle}
+                    disabled={completeDisabled}
+                    className={[
+                      "rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50",
+                      completeDisabled
+                        ? "cursor-not-allowed opacity-60"
+                        : "cursor-pointer",
+                    ].join(" ")}
+                  >
+                    Завершить
+                  </button>
+                ) : null}
+                {!isSingleStepStage && allStepsCompleted ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmKind("stage")}
+                    className="cursor-pointer rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
+                  >
+                    Завершить
+                  </button>
+                ) : null}
               </div>
             </div>
           ) : null}
         </div>
       </section>
     </div>
+    <IrreversibleConfirmModal
+      open={confirmKind !== null}
+      title={
+        confirmKind === "stage"
+          ? "Завершить этап?"
+          : "Завершить шаг?"
+      }
+      description={
+        confirmKind === "stage"
+          ? "Этап будет отмечен завершённым. Правки данных этого этапа после этого будут недоступны."
+          : isSingleStepStage
+            ? "Шаг и этап будут завершены. Правки данных этапа после этого будут недоступны."
+            : "Шаг будет отмечен завершённым. Убедитесь, что все данные введены верно."
+      }
+      onCancel={() => setConfirmKind(null)}
+      onConfirm={() => {
+        if (confirmKind === "step") {
+          if (completeDisabled) return;
+          onCompleteStep(activeStepIndex);
+          if (isSingleStepStage) onCompleteStage();
+        } else if (confirmKind === "stage") {
+          onCompleteStage();
+        }
+        setConfirmKind(null);
+      }}
+    />
+    </>
   );
 }
 
@@ -1392,30 +2113,37 @@ function QualityControlStage({
 }) {
   const stepTemplate = stageTemplate.steps[0];
   const stepExecution = stageExecution.steps[0];
+  const [qcConfirmOpen, setQcConfirmOpen] = useState(false);
 
-  if (!stepTemplate || !stepExecution) {
-    return <div className="text-sm text-slate-500">Нет данных этапа КК.</div>;
-  }
+  const editable = Boolean(
+    stepTemplate &&
+      stepExecution &&
+      canEdit &&
+      stepExecution.status !== "completed",
+  );
 
-  const editable = canEdit && stepExecution.status !== "completed";
-  const missingRequired = stepTemplate.fields.filter((f) => {
-    if (!f.required) return false;
-    if (f.type === "section_header") return false;
-    const raw = stepExecution.fieldValues[f.id];
-    if (raw === null || raw === undefined) return true;
-    switch (f.type) {
-      case "text":
-      case "select":
-      case "date":
-        return typeof raw !== "string" || raw.trim().length === 0;
-      case "number":
-        return typeof raw !== "number" || Number.isNaN(raw) || raw < 0;
-      case "checkbox":
-        return raw !== true;
-      default:
-        return false;
-    }
-  });
+  const missingRequired =
+    stepTemplate && stepExecution
+      ? stepTemplate.fields.filter((f) => {
+          if (!f.required) return false;
+          if (f.type === "section_header") return false;
+          const raw = stepExecution.fieldValues[f.id];
+          if (raw === null || raw === undefined) return true;
+          switch (f.type) {
+            case "text":
+            case "select":
+            case "date":
+              return typeof raw !== "string" || raw.trim().length === 0;
+            case "number":
+              return typeof raw !== "number" || Number.isNaN(raw) || raw < 0;
+            case "checkbox":
+              return raw !== true;
+            default:
+              return false;
+          }
+        })
+      : [];
+
   const confirmDisabled = !editable || missingRequired.length > 0;
   const confirmTitle =
     missingRequired.length > 0
@@ -1425,7 +2153,26 @@ function QualityControlStage({
           .join(", ")}${missingRequired.length > 3 ? "…" : ""}`
       : undefined;
 
+  useEffect(() => {
+    setQcConfirmOpen(false);
+  }, [confirmDisabled]);
+
+  if (!stepTemplate || !stepExecution) {
+    return <div className="text-sm text-slate-500">Нет данных этапа КК.</div>;
+  }
+
+  const qcTableFields = stepTemplate.fields.filter(
+    (f) =>
+      f.type !== "section_header" && !(f.type === "text" && f.multiline),
+  );
+  const qcMultilineFields = stepTemplate.fields.filter(
+    (f) => f.type === "text" && f.multiline,
+  );
+  const qcTextareaCls =
+    "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-400 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600 min-h-[6rem] resize-y";
+
   return (
+    <>
     <div>
       <div className="mb-3 text-sm text-slate-600">
         {editable ? "Введите показатели и подтвердите результаты." : "Просмотр результатов."}
@@ -1441,32 +2188,64 @@ function QualityControlStage({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {stepTemplate.fields
-              .filter((f) => f.type !== "section_header")
-              .map((f) => {
-                const value = stepExecution.fieldValues[f.id];
-                return (
-                  <tr
-                    key={f.id}
-                    data-production-field={f.id}
-                    className="hover:bg-slate-50"
-                  >
-                    <td className="px-4 py-2.5 text-slate-700">{f.label}</td>
-                    <td className="px-4 py-2.5">
-                      <FieldInput
-                        field={f}
-                        value={value}
-                        disabled={!editable}
-                        onChange={(v) => onChangeField(0, f.id, v)}
-                      />
-                    </td>
-                    <td className="px-4 py-2.5 text-slate-500">{f.unit ?? "—"}</td>
-                  </tr>
-                );
-              })}
+            {qcTableFields.map((f) => {
+              const value = stepExecution.fieldValues[f.id];
+              return (
+                <tr
+                  key={f.id}
+                  data-production-field={f.id}
+                  className="hover:bg-slate-50"
+                >
+                  <td className="px-4 py-2.5 text-slate-700">{f.label}</td>
+                  <td className="px-4 py-2.5">
+                    <FieldInput
+                      field={f}
+                      value={value}
+                      disabled={!editable}
+                      onChange={(v) => onChangeField(0, f.id, v)}
+                    />
+                  </td>
+                  <td className="px-4 py-2.5 text-slate-500">{f.unit ?? "—"}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+
+      {qcMultilineFields.length > 0 ? (
+        <div className="mt-4 space-y-4">
+          {qcMultilineFields.map((f) => {
+            const value = stepExecution.fieldValues[f.id];
+            const str =
+              typeof value === "string"
+                ? value
+                : value == null
+                  ? ""
+                  : String(value);
+            return (
+              <label key={f.id} className="block" data-production-field={f.id}>
+                <div className="mb-1 text-sm font-semibold text-slate-900">
+                  {f.label}
+                </div>
+                <textarea
+                  rows={4}
+                  value={str}
+                  onChange={(e) => onChangeField(0, f.id, e.target.value)}
+                  readOnly={!editable}
+                  disabled={false}
+                  placeholder={f.placeholder}
+                  className={[
+                    qcTextareaCls,
+                    !editable ? "border-slate-100 bg-slate-50" : "",
+                  ].join(" ")}
+                  aria-label={f.label}
+                />
+              </label>
+            );
+          })}
+        </div>
+      ) : null}
 
       {editable ? (
         <div className="mt-4 flex flex-col items-end gap-2">
@@ -1477,7 +2256,7 @@ function QualityControlStage({
             type="button"
             onClick={() => {
               if (confirmDisabled) return;
-              onConfirm();
+              setQcConfirmOpen(true);
             }}
             title={confirmTitle}
             disabled={confirmDisabled}
@@ -1491,6 +2270,19 @@ function QualityControlStage({
         </div>
       ) : null}
     </div>
+    <IrreversibleConfirmModal
+      open={qcConfirmOpen}
+      title="Подтвердить результаты?"
+      description="Результаты контроля качества будут зафиксированы, этап завершён. Изменение показателей после этого будет недоступно."
+      confirmLabel="Да, подтвердить"
+      onCancel={() => setQcConfirmOpen(false)}
+      onConfirm={() => {
+        if (confirmDisabled) return;
+        onConfirm();
+        setQcConfirmOpen(false);
+      }}
+    />
+    </>
   );
 }
 
@@ -1500,12 +2292,16 @@ function FormFields({
   stepExecution,
   canEdit,
   onChange,
+  onChangeConsumableQty,
+  onChangeEquipment,
 }: {
   order: ProductionOrder;
   stepTemplate: StepTemplate | undefined;
   stepExecution: ProductionOrder["stages"][number]["steps"][number] | undefined;
   canEdit: boolean;
   onChange: (fieldId: string, value: FieldValue) => void;
+  onChangeConsumableQty: (consumableId: string, qty: number) => void;
+  onChangeEquipment: (equipmentId: string, applied: boolean) => void;
 }) {
   if (!stepTemplate || !stepExecution) {
     return <div className="text-sm text-slate-500">Нет данных шага.</div>;
@@ -1681,6 +2477,123 @@ function FormFields({
           </label>
         );
       })}
+
+      {stepTemplate.consumables.length > 0 ? (
+        <div className="pt-4">
+          <div className="mb-2 text-sm font-semibold text-slate-900">
+            Расходные материалы
+          </div>
+          <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-max max-w-full border-collapse text-left text-sm">
+              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-4 py-2.5 font-medium">Наименование</th>
+                  <th className="px-4 py-2.5 font-medium">Кол-во</th>
+                  <th className="px-4 py-2.5 font-medium">Ед.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {stepTemplate.consumables.map((c) => {
+                  const rawQty = stepExecution.consumableValues?.[c.id];
+                  const qty =
+                    typeof rawQty === "number" && Number.isFinite(rawQty)
+                      ? Math.max(0, rawQty)
+                      : 0;
+                  const rowDisabled = !canEdit;
+                  const inputCls =
+                    "w-24 rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm outline-none transition focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500";
+                  return (
+                    <tr key={c.id} className="hover:bg-slate-50/80">
+                      <td className="max-w-md whitespace-normal px-4 py-2.5 text-slate-700">
+                        {c.name}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 align-middle">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          step={1}
+                          value={qty}
+                          onKeyDown={(e) => {
+                            if (rowDisabled) return;
+                            if (
+                              e.key === "-" ||
+                              e.key === "e" ||
+                              e.key === "E" ||
+                              e.key === "+"
+                            ) {
+                              e.preventDefault();
+                            }
+                          }}
+                          onChange={(e) => {
+                            if (rowDisabled) return;
+                            const t = e.target.value;
+                            if (t === "") {
+                              onChangeConsumableQty(c.id, 0);
+                              return;
+                            }
+                            const n = Number(t);
+                            if (!Number.isFinite(n) || n < 0) return;
+                            onChangeConsumableQty(c.id, Math.floor(n));
+                          }}
+                          disabled={rowDisabled}
+                          className={inputCls}
+                          aria-label={`Количество: ${c.name}`}
+                        />
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-2.5 align-middle text-xs tabular-nums text-slate-500">
+                        {c.unit}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {stepTemplate.equipment.length > 0 ? (
+        <div className="pt-4">
+          <div className="mb-2 text-sm font-semibold text-slate-900">
+            Оборудование
+          </div>
+          <ul className="space-y-2">
+            {stepTemplate.equipment.map((eItem) => {
+              const applied = Boolean(
+                stepExecution.equipmentValues?.[eItem.id],
+              );
+              const rowDisabled = !canEdit;
+              return (
+                <li key={eItem.id}>
+                  <label
+                    className={[
+                      "flex items-start gap-3",
+                      rowDisabled ? "cursor-not-allowed" : "cursor-pointer",
+                    ].join(" ")}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={applied}
+                      onChange={(ev) =>
+                        onChangeEquipment(eItem.id, ev.target.checked)
+                      }
+                      disabled={rowDisabled}
+                      className="mt-0.5 size-4 shrink-0 rounded border-slate-300 text-blue-600"
+                    />
+                    <span className="min-w-0 text-xs font-medium text-slate-600">
+                      {eItem.name}
+                      <span className="ml-2 font-normal text-slate-500">
+                        Применено
+                      </span>
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }
