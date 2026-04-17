@@ -8,6 +8,7 @@ import {
 import {
   PRODUCTION_REJECTION_PHASE_LABELS,
   type FieldDefinition,
+  type FieldReferenceRange,
   type FieldValue,
   type ProcessTemplate,
   type ProductionOrder,
@@ -151,6 +152,18 @@ function ProductionListContent() {
     }
   };
 
+  /** Активная колонка — ↑/↓; остальные — серая ↕ («можно сортировать»). */
+  const listSortColumnHint = (key: ProductionListSortKey) =>
+    listSortKey === key ? (
+      <span className="tabular-nums text-slate-500" aria-hidden>
+        {listSortDir === "asc" ? "↑" : "↓"}
+      </span>
+    ) : (
+      <span className="tabular-nums text-slate-400" aria-hidden>
+        ↕
+      </span>
+    );
+
   const sortedOrders = useMemo(() => {
     const list = [...orders];
     const dir = listSortDir === "asc" ? 1 : -1;
@@ -264,6 +277,15 @@ function ProductionListContent() {
     setSelectedTemplateId("");
     navigate(`/proizvodstvo/${order.id}`);
   };
+
+  useEffect(() => {
+    if (!showCreate) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowCreate(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showCreate]);
 
   const STORAGE_KEY = "bio-production";
 
@@ -452,11 +474,7 @@ function ProductionListContent() {
                     onClick={() => toggleListSort("number")}
                   >
                     Номер
-                    {listSortKey === "number" ? (
-                      <span className="tabular-nums text-slate-400" aria-hidden>
-                        {listSortDir === "asc" ? "↑" : "↓"}
-                      </span>
-                    ) : null}
+                    {listSortColumnHint("number")}
                   </button>
                 </th>
                 <th
@@ -476,11 +494,7 @@ function ProductionListContent() {
                     onClick={() => toggleListSort("product")}
                   >
                     Продукт
-                    {listSortKey === "product" ? (
-                      <span className="tabular-nums text-slate-400" aria-hidden>
-                        {listSortDir === "asc" ? "↑" : "↓"}
-                      </span>
-                    ) : null}
+                    {listSortColumnHint("product")}
                   </button>
                 </th>
                 <th className="px-4 py-3 font-medium" scope="col">
@@ -506,11 +520,7 @@ function ProductionListContent() {
                     onClick={() => toggleListSort("date")}
                   >
                     Дата регистрации
-                    {listSortKey === "date" ? (
-                      <span className="tabular-nums text-slate-400" aria-hidden>
-                        {listSortDir === "asc" ? "↑" : "↓"}
-                      </span>
-                    ) : null}
+                    {listSortColumnHint("date")}
                   </button>
                 </th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap">
@@ -871,6 +881,45 @@ function ProductionOrderContent() {
   const rejectFileRef = useRef<HTMLInputElement>(null);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
 
+  const resetRejectForm = useCallback(() => {
+    setRejectTypicalReason("");
+    setRejectReason("");
+    setRejectTouched(false);
+    setRejectPhase("incoming_material");
+    setRejectAttachments([]);
+    setRejectAttachError(null);
+    if (rejectFileRef.current) rejectFileRef.current.value = "";
+  }, []);
+
+  const requestCloseRejectModal = useCallback(() => {
+    const dirty =
+      rejectTypicalReason !== "" ||
+      rejectReason.trim() !== "" ||
+      rejectAttachments.length > 0 ||
+      rejectPhase !== "incoming_material";
+    if (dirty && !confirm("Отменить, данные будут потеряны?")) return;
+    resetRejectForm();
+    setShowReject(false);
+  }, [
+    rejectTypicalReason,
+    rejectReason,
+    rejectAttachments.length,
+    rejectPhase,
+    resetRejectForm,
+  ]);
+
+  useEffect(() => {
+    if (!showReject) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        requestCloseRejectModal();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showReject, requestCloseRejectModal]);
+
   const effectiveActiveStageIndex =
     activeStageIndex ?? (order ? order.currentStageIndex : 0);
 
@@ -1098,13 +1147,7 @@ function ProductionOrderContent() {
           {!isOrderReadonly ? (
             <StageActionsMenu
               onReject={() => {
-                setRejectTypicalReason("");
-                setRejectReason("");
-                setRejectTouched(false);
-                setRejectPhase("incoming_material");
-                setRejectAttachments([]);
-                setRejectAttachError(null);
-                if (rejectFileRef.current) rejectFileRef.current.value = "";
+                resetRejectForm();
                 setShowReject(true);
               }}
             />
@@ -1238,7 +1281,7 @@ function ProductionOrderContent() {
       {showReject && (
         <div
           className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 pt-16"
-          onClick={() => setShowReject(false)}
+          onClick={() => requestCloseRejectModal()}
         >
           <div
             className="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
@@ -1259,7 +1302,7 @@ function ProductionOrderContent() {
               </div>
               <button
                 type="button"
-                onClick={() => setShowReject(false)}
+                onClick={() => requestCloseRejectModal()}
                 className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                 aria-label="Закрыть"
               >
@@ -1461,7 +1504,7 @@ function ProductionOrderContent() {
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setShowReject(false)}
+                onClick={() => requestCloseRejectModal()}
                 className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-50"
               >
                 Отмена
@@ -1494,6 +1537,7 @@ function ProductionOrderContent() {
                     rejectedStageIndex: order.currentStageIndex,
                     rejectedStepTemplateId: stepTpl?.id,
                   });
+                  resetRejectForm();
                   setShowReject(false);
                 }}
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700"
@@ -1944,6 +1988,9 @@ function StepsStage({
                   : exec?.status === "in_progress"
                     ? "in_progress"
                     : "pending";
+              const blockStepNum = firstIncompleteIndex + 1;
+              const lockHint = `Завершите шаг ${blockStepNum}, чтобы перейти к этому`;
+              const lockHintId = `production-step-lock-hint-${s.id}`;
               return (
                 <button
                   key={s.id}
@@ -1952,12 +1999,16 @@ function StepsStage({
                     if (isLocked) return;
                     onSelectStep(idx);
                   }}
+                  aria-disabled={isLocked}
+                  aria-describedby={isLocked ? lockHintId : undefined}
+                  title={isLocked ? lockHint : undefined}
+                  tabIndex={isLocked ? -1 : undefined}
                   className={[
                     "flex items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition",
                     isActive
                       ? "bg-white shadow-sm ring-1 ring-slate-200"
                       : isLocked
-                        ? "opacity-70"
+                        ? "cursor-not-allowed opacity-70"
                         : "hover:bg-white/70",
                   ].join(" ")}
                 >
@@ -1977,11 +2028,32 @@ function StepsStage({
                       </span>
                     ) : null}
                   </span>
-                  {state === "in_progress" ? (
-                    <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-500/20">
-                      в работе
-                    </span>
-                  ) : null}
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {isLocked ? (
+                      <>
+                        <span id={lockHintId} className="sr-only">
+                          {lockHint}
+                        </span>
+                        <svg
+                          className="size-4 shrink-0 text-slate-400"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={1.5}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden
+                        >
+                          <path d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75M6.75 10.5h10.5a2.25 2.25 0 012.25 2.25v6.75a2.25 2.25 0 01-2.25 2.25H6.75a2.25 2.25 0 01-2.25-2.25v-6.75a2.25 2.25 0 012.25-2.25z" />
+                        </svg>
+                      </>
+                    ) : null}
+                    {state === "in_progress" ? (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-500/20">
+                        в работе
+                      </span>
+                    ) : null}
+                  </span>
                 </button>
               );
             })}
@@ -2098,6 +2170,26 @@ function StepsStage({
   );
 }
 
+function formatQcReferenceCell(range: FieldReferenceRange | undefined): string {
+  if (!range) return "—";
+  const { min, max } = range;
+  if (min !== undefined && max !== undefined) return `${min}–${max}`;
+  if (min !== undefined) return `≥ ${min}`;
+  if (max !== undefined) return `≤ ${max}`;
+  return "—";
+}
+
+function qcValueOutOfRange(
+  value: FieldValue,
+  range: FieldReferenceRange | undefined,
+): boolean {
+  if (!range) return false;
+  if (typeof value !== "number" || Number.isNaN(value)) return false;
+  if (range.min !== undefined && value < range.min) return true;
+  if (range.max !== undefined && value > range.max) return true;
+  return false;
+}
+
 function QualityControlStage({
   stageTemplate,
   stageExecution,
@@ -2183,6 +2275,7 @@ function QualityControlStage({
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
             <tr>
               <th className="px-4 py-2.5 font-medium">Показатель</th>
+              <th className="px-4 py-2.5 font-medium">Норма</th>
               <th className="px-4 py-2.5 font-medium">Значение</th>
               <th className="px-4 py-2.5 font-medium">Ед.</th>
             </tr>
@@ -2190,6 +2283,7 @@ function QualityControlStage({
           <tbody className="divide-y divide-slate-100">
             {qcTableFields.map((f) => {
               const value = stepExecution.fieldValues[f.id];
+              const out = qcValueOutOfRange(value, f.referenceRange);
               return (
                 <tr
                   key={f.id}
@@ -2197,12 +2291,20 @@ function QualityControlStage({
                   className="hover:bg-slate-50"
                 >
                   <td className="px-4 py-2.5 text-slate-700">{f.label}</td>
+                  <td className="whitespace-nowrap px-4 py-2.5 text-slate-600 tabular-nums">
+                    {formatQcReferenceCell(f.referenceRange)}
+                  </td>
                   <td className="px-4 py-2.5">
                     <FieldInput
                       field={f}
                       value={value}
                       disabled={!editable}
                       onChange={(v) => onChangeField(0, f.id, v)}
+                      className={
+                        out
+                          ? "font-medium text-red-600 disabled:text-red-600"
+                          : undefined
+                      }
                     />
                   </td>
                   <td className="px-4 py-2.5 text-slate-500">{f.unit ?? "—"}</td>
@@ -2603,14 +2705,18 @@ function FieldInput({
   value,
   disabled,
   onChange,
+  className,
 }: {
   field: FieldDefinition;
   value: FieldValue;
   disabled: boolean;
   onChange: (v: FieldValue) => void;
+  /** Дополнительные классы для поля ввода (например подсветка отклонения от нормы). */
+  className?: string;
 }) {
   const common =
     "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500";
+  const controlCls = className ? `${common} ${className}` : common;
 
   if (field.type === "checkbox") {
     return (
@@ -2633,7 +2739,7 @@ function FieldInput({
         value={typeof value === "string" ? value : value == null ? "" : String(value)}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className={common}
+        className={controlCls}
       >
         <option value="">Выберите…</option>
         {(field.options ?? []).map((opt) => (
@@ -2652,7 +2758,7 @@ function FieldInput({
         value={typeof value === "string" ? value : ""}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className={common}
+        className={controlCls}
       />
     );
   }
@@ -2687,7 +2793,7 @@ function FieldInput({
           onChange(n);
         }}
         disabled={disabled}
-        className={common}
+        className={controlCls}
       />
     );
   }
@@ -2702,7 +2808,7 @@ function FieldInput({
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         placeholder={field.placeholder}
-        className={`${common} min-h-[5rem] resize-y`}
+        className={`${controlCls} min-h-[5rem] resize-y`}
       />
     );
   }
@@ -2714,7 +2820,7 @@ function FieldInput({
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
       placeholder={field.placeholder}
-      className={common}
+      className={controlCls}
     />
   );
 }

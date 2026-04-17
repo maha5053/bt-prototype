@@ -29,6 +29,12 @@ export interface EquipmentItem {
   name: string;
 }
 
+/** Допустимый диапазон для числового показателя (например КК). */
+export interface FieldReferenceRange {
+  min?: number;
+  max?: number;
+}
+
 export interface FieldDefinition {
   id: string;
   label: string;
@@ -39,6 +45,8 @@ export interface FieldDefinition {
   placeholder?: string;
   /** Многострочное поле (textarea) для типа text. */
   multiline?: boolean;
+  /** Для `number`: референсный интервал (подсветка отклонений в UI КК). */
+  referenceRange?: FieldReferenceRange;
   computedFrom?: string;
   computeRule?: ComputeRule;
   refStageIndex?: number;
@@ -216,6 +224,27 @@ function seedRegistrationFioIb(
   step.fieldValues.ib = ib;
 }
 
+/** Фиксированные референсы для числовых полей КК (шаблон «Тромбогель»). */
+const THROMBOGEL_QC_REFS: {
+  pltWhole: FieldReferenceRange;
+  wbcWhole: FieldReferenceRange;
+  rbcWhole: FieldReferenceRange;
+  hbWhole: FieldReferenceRange;
+  pltPrp: FieldReferenceRange;
+  wbcPrp: FieldReferenceRange;
+  rbcPrp: FieldReferenceRange;
+  hbPrp: FieldReferenceRange;
+} = {
+  pltWhole: { min: 150, max: 450 },
+  wbcWhole: { min: 4.0, max: 10.0 },
+  rbcWhole: { min: 3.8, max: 5.5 },
+  hbWhole: { min: 120, max: 160 },
+  pltPrp: { min: 800, max: 1800 },
+  wbcPrp: { min: 0.5, max: 8.0 },
+  rbcPrp: { min: 0, max: 0.5 },
+  hbPrp: { min: 0, max: 8 },
+};
+
 export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
   id: "tpl-thrombogel",
   name: "Тромбогель",
@@ -375,14 +404,70 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
           consumables: [],
           equipment: [],
           fields: [
-            { id: "pltWhole", label: "Кол-во Тц в цельной крови", type: "number", unit: "10^9/л", required: false },
-            { id: "wbcWhole", label: "Кол-во Лц в цельной крови", type: "number", unit: "10^9/л", required: false },
-            { id: "rbcWhole", label: "Кол-во Эр в цельной крови", type: "number", unit: "10^12/л", required: false },
-            { id: "hbWhole", label: "Hb в цельной крови", type: "number", unit: "г/л", required: false },
-            { id: "pltPrp", label: "Кол-во Тц в PRP", type: "number", unit: "10^9/л", required: false },
-            { id: "wbcPrp", label: "Кол-во Лц в PRP", type: "number", unit: "10^9/л", required: false },
-            { id: "rbcPrp", label: "Кол-во Эр в PRP", type: "number", unit: "10^12/л", required: false },
-            { id: "hbPrp", label: "Hb в PRP", type: "number", unit: "г/л", required: false },
+            {
+              id: "pltWhole",
+              label: "Кол-во Тц в цельной крови",
+              type: "number",
+              unit: "10^9/л",
+              required: false,
+              referenceRange: THROMBOGEL_QC_REFS.pltWhole,
+            },
+            {
+              id: "wbcWhole",
+              label: "Кол-во Лц в цельной крови",
+              type: "number",
+              unit: "10^9/л",
+              required: false,
+              referenceRange: THROMBOGEL_QC_REFS.wbcWhole,
+            },
+            {
+              id: "rbcWhole",
+              label: "Кол-во Эр в цельной крови",
+              type: "number",
+              unit: "10^12/л",
+              required: false,
+              referenceRange: THROMBOGEL_QC_REFS.rbcWhole,
+            },
+            {
+              id: "hbWhole",
+              label: "Hb в цельной крови",
+              type: "number",
+              unit: "г/л",
+              required: false,
+              referenceRange: THROMBOGEL_QC_REFS.hbWhole,
+            },
+            {
+              id: "pltPrp",
+              label: "Кол-во Тц в PRP",
+              type: "number",
+              unit: "10^9/л",
+              required: false,
+              referenceRange: THROMBOGEL_QC_REFS.pltPrp,
+            },
+            {
+              id: "wbcPrp",
+              label: "Кол-во Лц в PRP",
+              type: "number",
+              unit: "10^9/л",
+              required: false,
+              referenceRange: THROMBOGEL_QC_REFS.wbcPrp,
+            },
+            {
+              id: "rbcPrp",
+              label: "Кол-во Эр в PRP",
+              type: "number",
+              unit: "10^12/л",
+              required: false,
+              referenceRange: THROMBOGEL_QC_REFS.rbcPrp,
+            },
+            {
+              id: "hbPrp",
+              label: "Hb в PRP",
+              type: "number",
+              unit: "г/л",
+              required: false,
+              referenceRange: THROMBOGEL_QC_REFS.hbPrp,
+            },
             {
               id: "sterility",
               label: "Посев на стерильность",
@@ -458,6 +543,74 @@ export const INITIAL_PROCESS_TEMPLATES: ProcessTemplate[] = [THROMBOGEL_TEMPLATE
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function mergeFieldDefinitions(
+  storedFields: FieldDefinition[],
+  baselineFields: FieldDefinition[],
+): FieldDefinition[] {
+  const merged = baselineFields.map((bf) => {
+    const sf = storedFields.find((f) => f.id === bf.id);
+    return sf ? ({ ...sf, ...bf } as FieldDefinition) : clone(bf);
+  });
+  const extra = storedFields.filter(
+    (f) => !baselineFields.some((b) => b.id === f.id),
+  );
+  return [...merged, ...extra];
+}
+
+function mergeProductionSteps(
+  storedSteps: StepTemplate[],
+  baselineSteps: StepTemplate[],
+): StepTemplate[] {
+  return baselineSteps.map((bstep) => {
+    const sstep = storedSteps.find((s) => s.id === bstep.id);
+    if (!sstep) return clone(bstep);
+    return {
+      ...sstep,
+      name: bstep.name,
+      hasDeviations: bstep.hasDeviations,
+      consumables: bstep.consumables,
+      equipment: bstep.equipment,
+      fields: mergeFieldDefinitions(sstep.fields, bstep.fields),
+    };
+  });
+}
+
+function mergeProductionStages(
+  storedStages: StageTemplate[],
+  baselineStages: StageTemplate[],
+): StageTemplate[] {
+  return baselineStages.map((bs) => {
+    const ss = storedStages.find((s) => s.id === bs.id);
+    if (!ss) return clone(bs);
+    return {
+      ...ss,
+      name: bs.name,
+      type: bs.type,
+      allowedRoles: bs.allowedRoles,
+      steps: mergeProductionSteps(ss.steps, bs.steps),
+    };
+  });
+}
+
+/**
+ * Подмешивает актуальные определения полей из кода в шаблоны из localStorage
+ * (новые свойства вроде `referenceRange` не пропадают после обновления прототипа).
+ */
+export function mergeProductionTemplatesWithBaseline(
+  storedList: ProcessTemplate[],
+  baselineList: ProcessTemplate[],
+): ProcessTemplate[] {
+  return baselineList.map((bt) => {
+    const st = storedList.find((t) => t.id === bt.id);
+    if (!st) return clone(bt);
+    return {
+      ...st,
+      name: bt.name,
+      stages: mergeProductionStages(st.stages, bt.stages),
+    };
+  });
 }
 
 export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {

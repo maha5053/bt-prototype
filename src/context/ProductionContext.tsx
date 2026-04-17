@@ -10,6 +10,7 @@ import {
   INITIAL_PROCESS_TEMPLATES,
   INITIAL_PRODUCTION_ORDERS,
   buildOrderFromTemplate,
+  mergeProductionTemplatesWithBaseline,
   type ExecutionStatus,
   type FieldValue,
   type ProcessTemplate,
@@ -143,7 +144,21 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
     orders: ProductionOrder[];
   }>(() => {
     const stored = loadFromStorage();
-    return stored ?? { templates: [...INITIAL_PROCESS_TEMPLATES], orders: [...INITIAL_PRODUCTION_ORDERS] };
+    if (!stored) {
+      return {
+        templates: [...INITIAL_PROCESS_TEMPLATES],
+        orders: [...INITIAL_PRODUCTION_ORDERS],
+      };
+    }
+    const merged = {
+      templates: mergeProductionTemplatesWithBaseline(
+        stored.templates,
+        INITIAL_PROCESS_TEMPLATES,
+      ),
+      orders: stored.orders,
+    };
+    saveToStorage(merged);
+    return merged;
   });
 
   const getOrderById = useCallback(

@@ -134,10 +134,10 @@ npm run dev -- --host
 **Где продолжать дальше:**
 - Реализация 7.5 (отложенные результаты КК: черновик + defer) и 7.6 (исправление регистрации без смены текущего этапа + версионирование в UI).
 
-## Последняя сессия (2026-04-17, end-task)
+## Последняя сессия (end-task)
 
-- **`ProductionContext`**: новые заказы с id **`po-NNN`** (счётчик `max` по существующим + 1, `padStart(3)`); **`updateFieldValue`** принимает также расходники/оборудование (`UpdateFieldValueInput`).
-- **`ProductionPages`**: секции **расходники** (таблица) и **оборудование** на шагах производства; модалка брака — **типовая причина** + текст при «Другое»; бейдж **«Сохранено HH:MM:SS»** (`lastSavedAt` + `patchUpdateFieldValue`); завершение шага/этапа/КК через **`IrreversibleConfirmModal`**; **`formatOrderStatus`** (журнал, фильтр, `h1`); дубль статуса убран из мета-строки; подписи шагов без ведущего **`N.`** (`formatStageLabel` в `stepHeading`); **КК**: `multiline` поля (в т.ч. комментарий) под таблицей показателей; **`StepsStage`**: если этап `status === "completed"`, счётчик «Завершено», сайдбар и read-only согласованы с этапом.
-- **`productionData.ts`**: у **`po-004`** для завершённых этапов 0–1 проставлены **`completed*` на шагах** (раньше был только `stage.status`, из‑за этого «0 из 1»).
-- **Планы** в корне воркспейса [`tasks/production-ux-plan.md`](../tasks/production-ux-plan.md) синхронизированы по выполненным пунктам (в коммит репозитория не входят).
-- **localStorage**: после обновлений при расхождении данных — сброс **`bio-production`** через dev-tools в журнале.
+- **`productionData.ts`**: тип **`FieldReferenceRange`** и поле **`referenceRange`** у полей КК; статические интервалы **`THROMBOGEL_QC_REFS`**; экспорт **`mergeProductionTemplatesWithBaseline`** — подмешивание определений полей/шагов из кода в шаблоны, восстановленные из `localStorage`.
+- **`ProductionContext`**: при старте со **`bio-production`** шаблоны мержатся с **`INITIAL_PROCESS_TEMPLATES`**, результат снова пишется в storage (чтобы появились, например, `referenceRange` у старых сохранений).
+- **`ProductionPages`**: **КК** — колонка «Норма», подсветка **`text-red-600`** вне диапазона, опциональный **`className`** у **`FieldInput`**; **журнал** — **`listSortColumnHint`**: серая ↕ на неактивных сортируемых колонках; **Escape** закрывает модалку «Начать производство»; **брак** — **`resetRejectForm`** / **`requestCloseRejectModal`** (confirm при несохранённом вводе, Escape); **`StepsStage`** — иконка замка, `title`, `aria-disabled`, `aria-describedby` + `sr-only`, `tabIndex={-1}` на заблокированных шагах.
+- **Планы** в корне воркспейса [`tasks/production-ux-plan.md`](../tasks/production-ux-plan.md) расширены бэклогом UX (в коммит `bt-prototype` не входят, только при копировании в репозиторий).
+- **localStorage**: при странном поведении шаблонов после обновления прототипа — по-прежнему сброс **`bio-production`** через dev-tools в журнале.
