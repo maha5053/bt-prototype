@@ -444,7 +444,7 @@ function ProductionOrderContent() {
               }}
             />
           </div>
-          {!isOrderReadonly && isCurrentStage ? (
+          {!isOrderReadonly ? (
             <button
               type="button"
               onClick={() => {
