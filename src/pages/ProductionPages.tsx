@@ -25,6 +25,12 @@ import {
   type StageType,
   type StepTemplate,
 } from "../mocks/productionData";
+import {
+  getRegistrationPatientFields,
+  getReleaseIssueConfirmSummary,
+  isReleaseStageCompleted,
+  type ReleaseIssueConfirmSummary,
+} from "../lib/productionReleaseAct";
 
 const REJECTION_PHASE_OPTIONS = Object.entries(
   PRODUCTION_REJECTION_PHASE_LABELS,
@@ -111,75 +117,6 @@ function compareProductionOrderNumbers(
 }
 
 type ProductionListSortKey = "number" | "product" | "date";
-
-const REGISTRATION_FIELD_FIO = "fio";
-const REGISTRATION_FIELD_IB = "ib";
-
-function registrationFieldAsString(v: FieldValue | undefined): string {
-  if (v === null || v === undefined) return "";
-  if (typeof v === "boolean") return v ? "Да" : "Нет";
-  return String(v).trim();
-}
-
-/** ФИО и № ИБ из этапа `registration` (поля шаблона `fio`, `ib`). */
-function getRegistrationPatientFields(order: ProductionOrder): {
-  patientName: string;
-  caseNumber: string;
-} {
-  const reg = order.stages.find((s) => s.type === "registration");
-  if (!reg?.steps?.length) {
-    return { patientName: "", caseNumber: "" };
-  }
-  let patientName = "";
-  let caseNumber = "";
-  for (const step of reg.steps) {
-    const fv = step.fieldValues;
-    const fio = registrationFieldAsString(fv[REGISTRATION_FIELD_FIO]);
-    const ib = registrationFieldAsString(fv[REGISTRATION_FIELD_IB]);
-    if (fio) patientName = fio;
-    if (ib) caseNumber = ib;
-  }
-  return { patientName, caseNumber };
-}
-
-type ReleaseIssueConfirmSummary = {
-  orderId: string;
-  productName: string;
-  productId: string;
-  patientName: string;
-  caseNumber: string;
-  destination: string;
-  deviations: string;
-  processBy: string;
-  approvedBy: string;
-};
-
-function dashField(v: FieldValue | undefined): string {
-  const s = registrationFieldAsString(v);
-  return s || "—";
-}
-
-/** Данные для модалки финального подтверждения этапа «Выдача». */
-function getReleaseIssueConfirmSummary(
-  order: ProductionOrder,
-  releaseStep?: ProductionOrder["stages"][number]["steps"][number],
-): ReleaseIssueConfirmSummary {
-  const reg = order.stages.find((s) => s.type === "registration");
-  const regFv = reg?.steps[0]?.fieldValues ?? {};
-  const { patientName, caseNumber } = getRegistrationPatientFields(order);
-  const rv = releaseStep?.fieldValues ?? {};
-  return {
-    orderId: order.id,
-    productName: order.templateName,
-    productId: dashField(regFv.productId),
-    patientName: patientName || "—",
-    caseNumber: caseNumber || "—",
-    destination: dashField(rv.where),
-    deviations: dashField(rv.devSummary),
-    processBy: dashField(rv.processDoneBy),
-    approvedBy: dashField(rv.approvedBy),
-  };
-}
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -1104,6 +1041,21 @@ function ProductionOrderContent() {
         : null
     : null;
 
+  const releasePrintHref = `${import.meta.env.BASE_URL}proizvodstvo/${encodeURIComponent(order.id)}/print`;
+  const printActEnabled =
+    order.status !== "rejected" && isReleaseStageCompleted(order);
+  const rejectFromMenuEnabled = order.status === "in_progress";
+  const printMenuTitle = printActEnabled
+    ? "Открыть печатную форму в новой вкладке"
+    : order.status === "rejected"
+      ? "Недоступно для забракованного заказа"
+      : "Доступно после завершения этапа «Выдача»";
+  const rejectMenuTitle = rejectFromMenuEnabled
+    ? undefined
+    : order.status === "rejected"
+      ? "Заказ уже забракован"
+      : "Недоступно после завершения этапа «Выдача»";
+
   return (
     <div className="p-6 md:p-8">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
@@ -1139,14 +1091,17 @@ function ProductionOrderContent() {
             {order.templateName} · Создал: {order.createdBy} · Дата регистрации:{" "}
             {formatRuDateTime(order.createdAt)}
           </p>
-          {!isOrderReadonly ? (
-            <StageActionsMenu
-              onReject={() => {
-                resetRejectForm();
-                setShowReject(true);
-              }}
-            />
-          ) : null}
+          <StageActionsMenu
+            releasePrintHref={releasePrintHref}
+            printEnabled={printActEnabled}
+            printTitle={printMenuTitle}
+            rejectEnabled={rejectFromMenuEnabled}
+            rejectTitle={rejectMenuTitle}
+            onReject={() => {
+              resetRejectForm();
+              setShowReject(true);
+            }}
+          />
         </div>
       </div>
 
@@ -1632,7 +1587,21 @@ function ProductionOrderContent() {
   );
 }
 
-function StageActionsMenu({ onReject }: { onReject: () => void }) {
+function StageActionsMenu({
+  onReject,
+  releasePrintHref,
+  printEnabled,
+  printTitle,
+  rejectEnabled,
+  rejectTitle,
+}: {
+  onReject: () => void;
+  releasePrintHref: string;
+  printEnabled: boolean;
+  printTitle?: string;
+  rejectEnabled: boolean;
+  rejectTitle?: string;
+}) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -1661,7 +1630,7 @@ function StageActionsMenu({ onReject }: { onReject: () => void }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
+        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Действия"
@@ -1672,13 +1641,41 @@ function StageActionsMenu({ onReject }: { onReject: () => void }) {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-2 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+          className="absolute right-0 z-20 mt-2 min-w-[13.5rem] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
         >
           <button
             type="button"
             role="menuitem"
-            className="w-full px-3 py-2 text-left text-sm text-red-700 transition hover:bg-red-50"
+            disabled={!printEnabled}
+            title={printTitle}
+            className={[
+              "w-full cursor-pointer px-3 py-2 text-left text-sm transition disabled:cursor-pointer",
+              printEnabled
+                ? "text-slate-800 hover:bg-slate-50"
+                : "text-slate-400",
+            ].join(" ")}
             onClick={() => {
+              if (!printEnabled) return;
+              setOpen(false);
+              window.open(releasePrintHref, "_blank", "noopener,noreferrer");
+            }}
+          >
+            Печать акта выдачи
+          </button>
+          <div className="my-0.5 border-t border-slate-100" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!rejectEnabled}
+            title={rejectTitle}
+            className={[
+              "w-full cursor-pointer px-3 py-2 text-left text-sm transition disabled:cursor-pointer",
+              rejectEnabled
+                ? "text-red-700 hover:bg-red-50"
+                : "text-slate-400",
+            ].join(" ")}
+            onClick={() => {
+              if (!rejectEnabled) return;
               setOpen(false);
               onReject();
             }}
@@ -1815,7 +1812,7 @@ function stageDotClass(visual: StageDotVisual, isActive: boolean): string {
       case "error":
         return " ring-2 ring-red-500 ring-offset-2 ring-offset-white";
       default:
-        return " ring-2 ring-amber-400 ring-offset-2 ring-offset-white";
+        return " ring-2 ring-slate-400 ring-offset-2 ring-offset-white";
     }
   })();
   return `${base} ${body}${ring}`;
@@ -3067,23 +3064,13 @@ function FormFields({
           </div>
           {refBadgeEl}
         </div>
-        {crossRef ? (
-          <div className="rounded-lg border border-sky-200/90 bg-sky-50/50 p-2 shadow-sm">
-            <FieldInput
-              field={field}
-              value={value}
-              disabled={isReadonly}
-              onChange={(v) => onChange(field.id, v)}
-            />
-          </div>
-        ) : (
-          <FieldInput
-            field={field}
-            value={value}
-            disabled={isReadonly}
-            onChange={(v) => onChange(field.id, v)}
-          />
-        )}
+        <FieldInput
+          field={field}
+          value={value}
+          disabled={isReadonly}
+          onChange={(v) => onChange(field.id, v)}
+          tone={crossRef ? "crossStageRef" : "default"}
+        />
       </label>
     );
   };
@@ -3275,6 +3262,7 @@ function FieldInput({
   disabled,
   onChange,
   className,
+  tone = "default",
 }: {
   field: FieldDefinition;
   value: FieldValue;
@@ -3282,9 +3270,15 @@ function FieldInput({
   onChange: (v: FieldValue) => void;
   /** Дополнительные классы для поля ввода (например подсветка отклонения от нормы). */
   className?: string;
+  /** Подсветка значения с другого этапа — один контур, без вложенного блока. */
+  tone?: "default" | "crossStageRef";
 }) {
-  const common =
+  const commonDefault =
     "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500";
+  const commonCrossRef =
+    "w-full rounded-lg border border-sky-400 bg-sky-50/60 px-3 py-2 text-sm text-slate-800 outline-none shadow-sm transition focus:border-sky-500 focus:ring-2 focus:ring-sky-400/25 disabled:bg-slate-50 disabled:text-slate-500";
+  const common =
+    tone === "crossStageRef" ? commonCrossRef : commonDefault;
   const controlCls = className ? `${common} ${className}` : common;
 
   if (field.type === "checkbox") {

@@ -25,6 +25,7 @@ import {
   ProductionListPage,
   ProductionOrderPage,
 } from "./pages/ProductionPages";
+import { ProductionReleasePrintPage } from "./pages/ProductionReleasePrintPage";
 import {
   ConstructorEditorPage,
   ConstructorListPage,
@@ -136,6 +137,10 @@ const router = createBrowserRouter(
     {
       path: "sklad/spisaniya/:sessionId/print",
       element: <WriteOffPrintPage />,
+    },
+    {
+      path: "proizvodstvo/:orderId/print",
+      element: <ProductionReleasePrintPage />,
     },
   ],
   { basename: import.meta.env.BASE_URL },
