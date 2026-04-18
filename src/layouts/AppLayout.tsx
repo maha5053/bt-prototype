@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { BioTrackLogo } from "../components/BioTrackLogo";
 import { PrototypeDisclaimer } from "../components/PrototypeDisclaimer";
@@ -16,6 +16,7 @@ import {
   formatProductionAccessSummary,
   getPermissionsForUser,
 } from "../mocks/usersMock";
+import { appHeaderClasses } from "./appLayoutHeaderStyles";
 
 const navClassName = ({ isActive }: { isActive: boolean }) =>
   [
@@ -55,9 +56,11 @@ export function AppLayout() {
   const reserveDisclaimerPad = usePrototypeDisclaimerBottomPad();
 
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [userPickerOpen, setUserPickerOpen] = useState(false);
   const [mobileOpenSections, setMobileOpenSections] = useState<
     Record<TopSectionKey, boolean>
   >(() => initialMobileOpenSections(pathname));
+  const userPickerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setMobileSidebarOpen(false);
@@ -77,6 +80,26 @@ export function AppLayout() {
       document.body.style.overflow = prevOverflow;
     };
   }, [mobileSidebarOpen]);
+
+  useEffect(() => {
+    if (!userPickerOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!userPickerRef.current) return;
+      const target = event.target as Node;
+      if (!userPickerRef.current.contains(target)) {
+        setUserPickerOpen(false);
+      }
+    };
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setUserPickerOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onEscape);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onEscape);
+    };
+  }, [userPickerOpen]);
 
   const closeMobileSidebar = () => setMobileSidebarOpen(false);
 
@@ -167,98 +190,108 @@ export function AppLayout() {
 
   return (
     <div className="flex min-h-screen max-md:h-[100dvh] max-md:max-h-[100dvh] flex-col overflow-hidden bg-slate-100 md:max-h-none md:overflow-visible">
-      <header className="sticky top-0 z-50 flex h-14 w-full min-w-0 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 shadow-sm md:gap-4 md:px-4">
-        <button
-          type="button"
-          className="flex size-10 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 md:hidden"
-          aria-expanded={mobileSidebarOpen}
-          aria-controls="app-sidebar"
-          aria-label={
-            mobileSidebarOpen
-              ? "Закрыть меню навигации"
-              : "Открыть меню навигации"
-          }
-          onClick={() => setMobileSidebarOpen((open) => !open)}
-        >
-          <svg
-            className="size-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
+      <header className={appHeaderClasses.root}>
+        <div className={appHeaderClasses.leftBlock}>
+          <button
+            type="button"
+            className={appHeaderClasses.burgerButton}
+            aria-expanded={mobileSidebarOpen}
+            aria-controls="app-sidebar"
+            aria-label={
+              mobileSidebarOpen
+                ? "Закрыть меню навигации"
+                : "Открыть меню навигации"
+            }
+            onClick={() => setMobileSidebarOpen((open) => !open)}
           >
-            {mobileSidebarOpen ? (
-              <>
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </>
-            ) : (
-              <>
-                <line x1="4" y1="6" x2="20" y2="6" />
-                <line x1="4" y1="12" x2="20" y2="12" />
-                <line x1="4" y1="18" x2="20" y2="18" />
-              </>
-            )}
-          </svg>
-        </button>
-        {/* На узкой ширине заполняет строку между гамбургером и блоком пользователя. */}
-        <div className="min-w-0 flex-1 md:hidden" aria-hidden />
-        <BioTrackLogo className="hidden min-w-0 md:flex md:shrink-0" />
-        <nav
-          className="hidden min-w-0 flex-1 flex-wrap items-center gap-0.5 md:flex md:gap-1"
-          aria-label="Основное меню"
-        >
-          {TOP_NAV.map((item) => (
-            <NavLink key={item.key} to={item.basePath} className={navClassName}>
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+            <svg
+              className={appHeaderClasses.burgerIcon}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              {mobileSidebarOpen ? (
+                <>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </>
+              ) : (
+                <>
+                  <line x1="4" y1="6" x2="20" y2="6" />
+                  <line x1="4" y1="12" x2="20" y2="12" />
+                  <line x1="4" y1="18" x2="20" y2="18" />
+                </>
+              )}
+            </svg>
+          </button>
+          <BioTrackLogo className="hidden min-w-0 shrink-0 md:flex" />
+          <nav className={appHeaderClasses.topNav} aria-label="Основное меню">
+            {TOP_NAV.map((item) => (
+              <NavLink key={item.key} to={item.basePath} className={navClassName}>
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
+
         <div
-          className="flex min-w-0 shrink-0 items-center gap-2 border-slate-200 border-l-0 pl-0 md:border-l md:pl-4 md:gap-3"
+          className={appHeaderClasses.rightBlock}
           role="group"
           aria-label="Текущий пользователь"
         >
-          <label className="min-w-0 max-w-[min(100%,14rem)] md:max-w-[min(100%,26rem)]">
-            <span className="sr-only">Сменить пользователя</span>
-            <select
-              value={currentUserId}
-              onChange={(e) => setCurrentUserId(e.target.value)}
-              className="w-full max-w-full truncate rounded-md border border-slate-200 bg-white py-1.5 pl-2 pr-7 text-xs font-medium text-slate-800 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 md:text-sm"
+          <div ref={userPickerRef} className={appHeaderClasses.userPickerWrap}>
+            {userPickerOpen ? (
+              <div className={appHeaderClasses.userPickerMenu}>
+                <p className="mb-1.5 text-xs font-semibold text-slate-600">
+                  Выберите пользователя
+                </p>
+                <label className="block min-w-0">
+                  <span className="sr-only">Сменить пользователя</span>
+                  <select
+                    value={currentUserId}
+                    onChange={(e) => setCurrentUserId(e.target.value)}
+                    className={appHeaderClasses.userSelect}
+                  >
+                    {MOCK_USERS.map((u) => {
+                      const access = formatProductionAccessSummary(
+                        getPermissionsForUser(u.id, permissionOverrides),
+                      );
+                      const label = `${u.displayName} (${access})`;
+                      return (
+                        <option key={u.id} value={u.id} title={label}>
+                          {label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </label>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className={appHeaderClasses.initialsButton}
+              aria-label="Выбрать пользователя"
+              aria-expanded={userPickerOpen}
+              onClick={() => setUserPickerOpen((open) => !open)}
             >
-              {MOCK_USERS.map((u) => {
-                const access = formatProductionAccessSummary(
-                  getPermissionsForUser(u.id, permissionOverrides),
-                );
-                const label = `${u.displayName} (${access})`;
-                return (
-                  <option key={u.id} value={u.id} title={label}>
-                    {label}
-                  </option>
-                );
-              })}
-            </select>
-          </label>
-          <span
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-xs font-semibold text-white shadow ring-2 ring-white"
-            aria-hidden
-          >
-            {currentUser.initials}
-          </span>
+              {currentUser.initials}
+            </button>
+          </div>
           <button
             type="button"
             aria-label="Выйти"
             title="Выйти"
-            className="flex size-9 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 shadow-sm hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+            className={appHeaderClasses.logoutButton}
             onClick={() => {
               window.alert("Выход (макет)");
             }}
           >
             <svg
-              className="size-5"
+              className={appHeaderClasses.logoutIcon}
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
