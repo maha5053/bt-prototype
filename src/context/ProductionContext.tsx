@@ -85,7 +85,7 @@ type ProductionContextValue = {
   templates: ProcessTemplate[];
   orders: ProductionOrder[];
   getOrderById: (orderId: string) => ProductionOrder | null;
-  createOrder: (templateId: string) => ProductionOrder;
+  createOrder: (templateId: string, createdBy: string) => ProductionOrder;
   updateFieldValue: (input: UpdateFieldValueInput) => void;
   saveDraft: (input: {
     orderId: string;
@@ -136,8 +136,6 @@ type ProductionContextValue = {
 
 const ProductionContext = createContext<ProductionContextValue | null>(null);
 
-const DEFAULT_USER = "Смирнова А.";
-
 export function ProductionProvider({ children }: { children: ReactNode }) {
   const [{ templates, orders }, setState] = useState<{
     templates: ProcessTemplate[];
@@ -167,7 +165,7 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
   );
 
   const createOrder = useCallback(
-    (templateId: string): ProductionOrder => {
+    (templateId: string, createdBy: string): ProductionOrder => {
       const template =
         templates.find((t) => t.id === templateId) ?? templates[0];
       if (!template) throw new Error("No production templates available");
@@ -177,7 +175,7 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
         const id = nextProductionOrderId(prev.orders);
         const newOrder = buildOrderFromTemplate(template, {
           id,
-          createdBy: DEFAULT_USER,
+          createdBy,
         });
         created = newOrder;
         const next = { ...prev, orders: [newOrder, ...prev.orders] };

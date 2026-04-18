@@ -31,6 +31,7 @@ import {
   ConstructorListPage,
 } from "./pages/ConstructorPages";
 import { TemplateListPage } from "./pages/TemplateListPage";
+import { UsersAdminPage } from "./pages/UsersAdminPage";
 
 const router = createBrowserRouter(
   [
@@ -114,7 +115,7 @@ const router = createBrowserRouter(
             { index: true, element: <Navigate to="polzovateli" replace /> },
             {
               path: "polzovateli",
-              element: <SectionPage title="Пользователи" />,
+              element: <UsersAdminPage />,
             },
             { path: "konstruktor", element: <ConstructorListPage /> },
             { path: "konstruktor/novyy", element: <ConstructorEditorPage /> },

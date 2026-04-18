@@ -7,6 +7,9 @@ import {
   MOCK_STOCK_LINES,
   type NomenclatureGroup,
 } from "./balancesData";
+import { USERS } from "./usersMock";
+
+export { USERS };
 
 export type WriteOffStatus = "draft" | "completed";
 
@@ -62,14 +65,6 @@ export interface WriteOffSession {
   action: string;
   lines: WriteOffLine[];
 }
-
-export const USERS: string[] = [
-  "Смирнова А.",
-  "Иванова Е.",
-  "Петров С.",
-  "Козлова М.",
-  "Сидоров В.",
-];
 
 const CURRENT_USER = "Смирнова А.";
 

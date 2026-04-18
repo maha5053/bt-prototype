@@ -11,6 +11,8 @@ import {
   useProduction,
   type UpdateFieldValueInput,
 } from "../context/ProductionContext";
+import { useCurrentUser } from "../context/CurrentUserContext";
+import { userHasStageEditPermission } from "../mocks/usersMock";
 import {
   PRODUCTION_REJECTION_PHASE_LABELS,
   type FieldDefinition,
@@ -143,6 +145,7 @@ export function ProductionListPage() {
 
 function ProductionListContent() {
   const { orders, templates, createOrder } = useProduction();
+  const { currentUserId } = useCurrentUser();
   const navigate = useNavigate();
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
@@ -294,7 +297,7 @@ function ProductionListContent() {
     const templateId =
       selectedTemplateId || (templates[0] ? templates[0].id : "");
     if (!templateId) return;
-    const order = createOrder(templateId);
+    const order = createOrder(templateId, currentUserId);
     setShowCreate(false);
     setSelectedTemplateId("");
     navigate(`/proizvodstvo/${order.id}`);
@@ -869,6 +872,8 @@ export function ProductionOrderPage() {
 
 function ProductionOrderContent() {
   const { orderId } = useParams<{ orderId: string }>();
+  const { permissions, currentUser } = useCurrentUser();
+  const auditUserId = currentUser.id;
   const {
     getOrderById,
     templates,
@@ -976,9 +981,14 @@ function ProductionOrderContent() {
   );
 
   const isOrderReadonly = order.status !== "in_progress";
+  const stageEditAllowed = stageTemplate
+    ? userHasStageEditPermission(permissions, stageTemplate.type)
+    : false;
   const canEditStage =
     !isOrderReadonly &&
-    effectiveActiveStageIndex === order.currentStageIndex;
+    effectiveActiveStageIndex === order.currentStageIndex &&
+    stageEditAllowed;
+  const canEditApprovalField = permissions.approval;
 
   const stepsTpl: StepTemplate[] = stageTemplate?.steps ?? [];
   const stepTpl = stepsTpl[activeStepIndex] ?? null;
@@ -1044,7 +1054,13 @@ function ProductionOrderContent() {
   const releasePrintHref = `${import.meta.env.BASE_URL}proizvodstvo/${encodeURIComponent(order.id)}/print`;
   const printActEnabled =
     order.status !== "rejected" && isReleaseStageCompleted(order);
-  const rejectFromMenuEnabled = order.status === "in_progress";
+  const currentWorkflowStage = order.stages[order.currentStageIndex];
+  const canRejectByCurrentStagePermission = Boolean(
+    currentWorkflowStage &&
+      userHasStageEditPermission(permissions, currentWorkflowStage.type),
+  );
+  const rejectFromMenuEnabled =
+    order.status === "in_progress" && canRejectByCurrentStagePermission;
   const printMenuTitle = printActEnabled
     ? "Открыть печатную форму в новой вкладке"
     : order.status === "rejected"
@@ -1054,7 +1070,9 @@ function ProductionOrderContent() {
     ? undefined
     : order.status === "rejected"
       ? "Заказ уже забракован"
-      : "Недоступно после завершения этапа «Выдача»";
+      : order.status === "in_progress" && !canRejectByCurrentStagePermission
+        ? "Нет права на редактирование текущего этапа"
+        : "Недоступно после завершения этапа «Выдача»";
 
   return (
     <div className="p-6 md:p-8">
@@ -1224,7 +1242,7 @@ function ProductionOrderContent() {
                     stepIndex,
                     fieldId,
                     value,
-                    updatedBy: "Смирнова А.",
+                    updatedBy: auditUserId,
                   })
                 }
                 onConfirm={() => {
@@ -1234,12 +1252,12 @@ function ProductionOrderContent() {
                     orderId: order.id,
                     stageIndex: effectiveActiveStageIndex,
                     stepIndex,
-                    completedBy: "Смирнова А.",
+                    completedBy: auditUserId,
                   });
                   completeStage({
                     orderId: order.id,
                     stageIndex: effectiveActiveStageIndex,
-                    completedBy: "Смирнова А.",
+                    completedBy: auditUserId,
                   });
                   scrollProductionOrderMainToTop();
                 }}
@@ -1252,6 +1270,7 @@ function ProductionOrderContent() {
                 activeStepIndex={activeStepIndex}
                 onSelectStep={setActiveStepIndex}
                 canEdit={canEditStage}
+                canEditApprovalField={canEditApprovalField}
                 onChangeField={(stepIndex, fieldId, value) =>
                   patchUpdateFieldValue({
                     orderId: order.id,
@@ -1259,7 +1278,7 @@ function ProductionOrderContent() {
                     stepIndex,
                     fieldId,
                     value,
-                    updatedBy: "Смирнова А.",
+                    updatedBy: auditUserId,
                   })
                 }
                 onChangeConsumableQty={(stepIndex, consumableId, consumableQty) =>
@@ -1269,7 +1288,7 @@ function ProductionOrderContent() {
                     stepIndex,
                     consumableId,
                     consumableQty,
-                    updatedBy: "Смирнова А.",
+                    updatedBy: auditUserId,
                   })
                 }
                 onChangeEquipment={(stepIndex, equipmentId, equipmentApplied) =>
@@ -1279,7 +1298,7 @@ function ProductionOrderContent() {
                     stepIndex,
                     equipmentId,
                     equipmentApplied,
-                    updatedBy: "Смирнова А.",
+                    updatedBy: auditUserId,
                   })
                 }
                 onCompleteStep={(stepIndex) => {
@@ -1288,7 +1307,7 @@ function ProductionOrderContent() {
                     orderId: order.id,
                     stageIndex: effectiveActiveStageIndex,
                     stepIndex,
-                    completedBy: "Смирнова А.",
+                    completedBy: auditUserId,
                   });
                 }}
                 onCompleteStage={() => {
@@ -1296,7 +1315,7 @@ function ProductionOrderContent() {
                   completeStage({
                     orderId: order.id,
                     stageIndex: effectiveActiveStageIndex,
-                    completedBy: "Смирнова А.",
+                    completedBy: auditUserId,
                   });
                   scrollProductionOrderMainToTop();
                 }}
@@ -1562,7 +1581,7 @@ function ProductionOrderContent() {
                   if (!finalReason) return;
                   rejectOrder({
                     orderId: order.id,
-                    rejectedBy: "Смирнова А.",
+                    rejectedBy: auditUserId,
                     rejectedReason: finalReason,
                     rejectedPhase: rejectPhase,
                     rejectedAttachments:
@@ -2192,6 +2211,7 @@ function StepsStage({
   activeStepIndex,
   onSelectStep,
   canEdit,
+  canEditApprovalField,
   onChangeField,
   onChangeConsumableQty,
   onChangeEquipment,
@@ -2204,6 +2224,8 @@ function StepsStage({
   activeStepIndex: number;
   onSelectStep: (idx: number) => void;
   canEdit: boolean;
+  /** Поле «Одобрил» на этапе выдачи (при наличии права на этап). */
+  canEditApprovalField: boolean;
   onChangeField: (stepIndex: number, fieldId: string, value: FieldValue) => void;
   onChangeConsumableQty: (
     stepIndex: number,
@@ -2242,8 +2264,11 @@ function StepsStage({
     stepsExec.every((s) => s.status === "completed");
   const showStepsSidebar = stepsTpl.length > 1;
   const isSingleStepStage = stepsTpl.length <= 1;
+  /** Пока не все шаги завершены — нельзя открывать следующие до текущего; когда все шаги done, навигация для просмотра свободна до нажатия «завершить этап». */
   const sequentialLockEnabled =
-    canEdit && stageExecution.status !== "completed";
+    canEdit &&
+    stageExecution.status !== "completed" &&
+    !allStepsCompleted;
   const firstIncompleteIndex = Math.max(
     0,
     stepsExec.findIndex((s) => s.status !== "completed"),
@@ -2482,6 +2507,7 @@ function StepsStage({
               !stageMarkedComplete &&
               stepsExec[activeStepIndex]?.status !== "completed"
             }
+            canEditApprovalField={canEditApprovalField}
             onChange={(fieldId, value) => onChangeField(activeStepIndex, fieldId, value)}
             onChangeConsumableQty={(consumableId, qty) =>
               onChangeConsumableQty(activeStepIndex, consumableId, qty)
@@ -2518,7 +2544,7 @@ function StepsStage({
                         : "cursor-pointer",
                     ].join(" ")}
                   >
-                    Завершить
+                    Завершить шаг
                   </button>
                 ) : null}
                 {!isSingleStepStage && allStepsCompleted ? (
@@ -2527,7 +2553,7 @@ function StepsStage({
                     onClick={() => setConfirmKind("stage")}
                     className="cursor-pointer rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700"
                   >
-                    Завершить
+                    Завершить этап
                   </button>
                 ) : null}
               </div>
@@ -2892,6 +2918,7 @@ function FormFields({
   stepTemplate,
   stepExecution,
   canEdit,
+  canEditApprovalField = true,
   onChange,
   onChangeConsumableQty,
   onChangeEquipment,
@@ -2902,6 +2929,7 @@ function FormFields({
   stepTemplate: StepTemplate | undefined;
   stepExecution: ProductionOrder["stages"][number]["steps"][number] | undefined;
   canEdit: boolean;
+  canEditApprovalField?: boolean;
   onChange: (fieldId: string, value: FieldValue) => void;
   onChangeConsumableQty: (consumableId: string, qty: number) => void;
   onChangeEquipment: (equipmentId: string, applied: boolean) => void;
@@ -3001,8 +3029,13 @@ function FormFields({
   );
 
   const renderFieldRow = (field: FieldDefinition) => {
+    const approvalFieldLocked =
+      stageType === "release" &&
+      field.id === "approvedBy" &&
+      !canEditApprovalField;
     const isReadonly =
       !canEdit ||
+      approvalFieldLocked ||
       Boolean(field.refDeviations?.length) ||
       typeof field.refStageIndex === "number" ||
       Boolean(field.computeRule);

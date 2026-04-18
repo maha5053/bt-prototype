@@ -9,8 +9,12 @@ import {
   TOP_NAV,
   topSectionFromPath,
 } from "../config/navigation";
-
-const MOCK_USER = { name: "Анна Смирнова", initials: "АС" };
+import { useCurrentUser } from "../context/CurrentUserContext";
+import {
+  MOCK_USERS,
+  formatProductionAccessSummary,
+  getPermissionsForUser,
+} from "../mocks/usersMock";
 
 const navClassName = ({ isActive }: { isActive: boolean }) =>
   [
@@ -30,6 +34,8 @@ const sidebarLinkClass = ({ isActive }: { isActive: boolean }) =>
 
 export function AppLayout() {
   const { pathname } = useLocation();
+  const { currentUser, currentUserId, setCurrentUserId, permissionOverrides } =
+    useCurrentUser();
   const section = topSectionFromPath(pathname);
   const sidebarItems = section ? SIDEBAR_BY_SECTION[section] : [];
 
@@ -138,18 +144,35 @@ export function AppLayout() {
           ))}
         </nav>
         <div
-          className="flex shrink-0 items-center gap-2 border-l border-slate-200 pl-3 md:gap-3 md:pl-4"
+          className="flex min-w-0 shrink-0 items-center gap-2 border-l border-slate-200 pl-3 md:gap-3 md:pl-4"
           role="group"
           aria-label="Текущий пользователь"
         >
-          <span className="hidden max-w-[9rem] truncate text-sm font-medium text-slate-800 md:inline md:max-w-[14rem]">
-            {MOCK_USER.name}
-          </span>
+          <label className="min-w-0 max-w-[min(100%,14rem)] md:max-w-[min(100%,26rem)]">
+            <span className="sr-only">Сменить пользователя</span>
+            <select
+              value={currentUserId}
+              onChange={(e) => setCurrentUserId(e.target.value)}
+              className="w-full max-w-full truncate rounded-md border border-slate-200 bg-white py-1.5 pl-2 pr-7 text-xs font-medium text-slate-800 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400 md:text-sm"
+            >
+              {MOCK_USERS.map((u) => {
+                const access = formatProductionAccessSummary(
+                  getPermissionsForUser(u.id, permissionOverrides),
+                );
+                const label = `${u.displayName} (${access})`;
+                return (
+                  <option key={u.id} value={u.id} title={label}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
           <span
             className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 text-xs font-semibold text-white shadow ring-2 ring-white"
             aria-hidden
           >
-            {MOCK_USER.initials}
+            {currentUser.initials}
           </span>
           <button
             type="button"

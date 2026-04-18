@@ -3,7 +3,6 @@ type SectionPageProps = {
 };
 
 const UNDER_CONSTRUCTION = new Set([
-  "Пользователи",
   "Расходники и материалы",
   "Помещения",
   "Оборудования",
