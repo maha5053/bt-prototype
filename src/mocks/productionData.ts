@@ -121,6 +121,9 @@ export interface StepExecution {
   equipmentValues: Record<string, boolean>;
   deviationFlag: boolean | null;
   deviationNotes: string;
+  /** Этап «Выдача»: одобрение технологического процесса (кнопка, ФИО из профиля). */
+  techProcessApprovedAt?: string;
+  techProcessApprovedBy?: string;
   completedAt?: string;
   completedBy?: string;
   updatedAt?: string;
@@ -133,10 +136,6 @@ export interface StageExecution {
   name: string;
   type: StageType;
   status: ExecutionStatus;
-  deferred?: boolean;
-  deferredAt?: string;
-  deferredBy?: string;
-  deferredReason?: string;
   completedAt?: string;
   completedBy?: string;
   steps: StepExecution[];
@@ -541,20 +540,6 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
               required: false,
               refDeviations: [0],
             },
-            {
-              id: "processDoneBy",
-              label: "Технологический процесс выполнил",
-              type: "select",
-              required: false,
-              options: [CURRENT_USER, "Иванова Е.", "Петров С.", "Козлова М."],
-            },
-            {
-              id: "approvedBy",
-              label: "Одобрил",
-              type: "select",
-              required: false,
-              options: [CURRENT_USER, "Иванова Е.", "Петров С.", "Козлова М."],
-            },
           ],
         },
       ],
@@ -683,35 +668,31 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {
   rejected.currentStageIndex = 0;
   rejected.stages[0]!.status = "in_progress";
 
-  const qcDeferred = buildOrderFromTemplate(tpl, {
+  const atQualityControl = buildOrderFromTemplate(tpl, {
     id: "po-004",
     createdAt: "2025-03-22T07:30:00.000Z",
     createdBy: "Козлова М.",
   });
-  seedRegistrationFioIb(qcDeferred, "Волкова Татьяна Игоревна", "9012345");
-  qcDeferred.currentStageIndex = 2;
-  qcDeferred.stages[0]!.status = "completed";
-  qcDeferred.stages[0]!.completedAt = "2025-03-22T09:00:00.000Z";
-  qcDeferred.stages[0]!.completedBy = qcDeferred.createdBy;
-  for (const step of qcDeferred.stages[0]!.steps) {
+  seedRegistrationFioIb(atQualityControl, "Волкова Татьяна Игоревна", "9012345");
+  atQualityControl.currentStageIndex = 2;
+  atQualityControl.stages[0]!.status = "completed";
+  atQualityControl.stages[0]!.completedAt = "2025-03-22T09:00:00.000Z";
+  atQualityControl.stages[0]!.completedBy = atQualityControl.createdBy;
+  for (const step of atQualityControl.stages[0]!.steps) {
     step.status = "completed";
-    step.completedAt = qcDeferred.stages[0]!.completedAt;
-    step.completedBy = qcDeferred.createdBy;
+    step.completedAt = atQualityControl.stages[0]!.completedAt;
+    step.completedBy = atQualityControl.createdBy;
   }
-  qcDeferred.stages[1]!.status = "completed";
-  qcDeferred.stages[1]!.completedAt = "2025-03-22T11:30:00.000Z";
-  qcDeferred.stages[1]!.completedBy = "Сидоров В.";
-  for (const step of qcDeferred.stages[1]!.steps) {
+  atQualityControl.stages[1]!.status = "completed";
+  atQualityControl.stages[1]!.completedAt = "2025-03-22T11:30:00.000Z";
+  atQualityControl.stages[1]!.completedBy = "Сидоров В.";
+  for (const step of atQualityControl.stages[1]!.steps) {
     step.status = "completed";
-    step.completedAt = qcDeferred.stages[1]!.completedAt;
-    step.completedBy = qcDeferred.stages[1]!.completedBy;
+    step.completedAt = atQualityControl.stages[1]!.completedAt;
+    step.completedBy = atQualityControl.stages[1]!.completedBy;
   }
-  qcDeferred.stages[2]!.status = "in_progress";
-  qcDeferred.stages[2]!.deferred = true;
-  qcDeferred.stages[2]!.deferredAt = "2025-03-22T12:00:00.000Z";
-  qcDeferred.stages[2]!.deferredBy = "Сидоров В.";
-  qcDeferred.stages[2]!.deferredReason = "Ожидание результатов посева";
+  atQualityControl.stages[2]!.status = "in_progress";
 
-  return [inProgress, completed, rejected, qcDeferred].map(clone);
+  return [inProgress, completed, rejected, atQualityControl].map(clone);
 })();
 

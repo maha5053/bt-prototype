@@ -28,9 +28,11 @@ import {
   type StepTemplate,
 } from "../mocks/productionData";
 import {
+  getProductionStageCompletersDisplay,
   getRegistrationPatientFields,
   getReleaseIssueConfirmSummary,
   isReleaseStageCompleted,
+  isReleaseTechProcessApproved,
   type ReleaseIssueConfirmSummary,
 } from "../lib/productionReleaseAct";
 
@@ -88,6 +90,46 @@ function refFieldCrossStageBadge(
     title: "Значение подставлено из другого этапа",
   };
 }
+
+/**
+ * Поля подписей на выдаче, которые раньше жили в шаблоне шага, а теперь
+ * заполняются отдельным блоком (производство + кнопка одобрения).
+ * Остаются в merged-шаблоне из localStorage — не показываем и не валидируем.
+ */
+function isReleaseSupersededSignerField(field: FieldDefinition): boolean {
+  const legacyIds = new Set([
+    "processDoneBy",
+    "approvedBy",
+    "techProcessDoneBy",
+    "techProcessExecutor",
+    "releaseProcessDoneBy",
+    "releaseApprovedBy",
+  ]);
+  if (legacyIds.has(field.id)) return true;
+  const t = field.label.trim();
+  return (
+    t === "Технологический процесс выполнил" ||
+    t === "Одобрил" ||
+    t === "Технологический процесс одобрил"
+  );
+}
+
+/** Бейдж «из этапа: …» для строки «Технологический процесс выполнил» на выдаче. */
+function productionCompletersSourceBadge(
+  order: ProductionOrder,
+): { text: string; title: string } | null {
+  const idx = order.stages.findIndex((s) => s.type === "production");
+  if (idx < 0) return null;
+  const b = refFieldCrossStageBadge(order, idx);
+  return {
+    text: b.text,
+    title: `${b.title}. Список формируется по завершённым шагам этапа.`,
+  };
+}
+
+/** Как у ref-полей (ИБ и т.д.): голубая рамка и фон. */
+const CROSS_STAGE_READONLY_INPUT_CLS =
+  "w-full cursor-default rounded-lg border border-sky-400 bg-sky-50/60 px-3 py-2 text-sm text-slate-800 outline-none shadow-sm";
 
 /** Локализованная подпись статуса заказа на производство. */
 function formatOrderStatus(status: ProductionOrderStatus): string {
@@ -878,6 +920,7 @@ function ProductionOrderContent() {
     getOrderById,
     templates,
     updateFieldValue,
+    approveReleaseTechProcess,
     completeStep,
     completeStage,
     rejectOrder,
@@ -988,7 +1031,6 @@ function ProductionOrderContent() {
     !isOrderReadonly &&
     effectiveActiveStageIndex === order.currentStageIndex &&
     stageEditAllowed;
-  const canEditApprovalField = permissions.approval;
 
   const stepsTpl: StepTemplate[] = stageTemplate?.steps ?? [];
   const stepTpl = stepsTpl[activeStepIndex] ?? null;
@@ -1003,6 +1045,19 @@ function ProductionOrderContent() {
               )
         ]
       : null;
+
+  const releaseStepForAction =
+    stageTemplate?.type === "release" ? viewedStepExecution : undefined;
+  const canApproveReleaseTechProcess =
+    permissions.approval &&
+    order.status === "in_progress" &&
+    effectiveActiveStageIndex === order.currentStageIndex &&
+    stageTemplate?.type === "release" &&
+    stageExecution?.status !== "completed" &&
+    Boolean(releaseStepForAction) &&
+    releaseStepForAction!.status !== "completed" &&
+    !releaseStepForAction!.techProcessApprovedAt;
+
   const viewedStepCompletion = (() => {
     const isMultiStepStage =
       Boolean(stageTemplate) &&
@@ -1270,7 +1325,22 @@ function ProductionOrderContent() {
                 activeStepIndex={activeStepIndex}
                 onSelectStep={setActiveStepIndex}
                 canEdit={canEditStage}
-                canEditApprovalField={canEditApprovalField}
+                hasApprovalPermission={permissions.approval}
+                canApproveReleaseTechProcess={canApproveReleaseTechProcess}
+                onApproveReleaseTechProcess={() => {
+                  const n = stageTemplate.steps.length;
+                  const stepIdx =
+                    n > 0
+                      ? Math.min(activeStepIndex, Math.max(0, n - 1))
+                      : 0;
+                  approveReleaseTechProcess({
+                    orderId: order.id,
+                    stageIndex: effectiveActiveStageIndex,
+                    stepIndex: stepIdx,
+                    approvedByDisplayName: currentUser.displayName,
+                    updatedBy: auditUserId,
+                  });
+                }}
                 onChangeField={(stepIndex, fieldId, value) =>
                   patchUpdateFieldValue({
                     orderId: order.id,
@@ -1871,13 +1941,6 @@ function getStageStepperColumnStatus(
     };
   }
   if (st.status === "in_progress") {
-    if (st.deferred) {
-      return {
-        text: "Отложено",
-        pillClass:
-          "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200",
-      };
-    }
     return {
       text: "В работе",
       pillClass:
@@ -2179,7 +2242,7 @@ function ReleaseIssueConfirmModal({
           <dl className="mt-1 rounded-lg border border-slate-200 bg-slate-50/60 px-3">
             {row("Отклонения (сводка)", summary.deviations)}
             {row("Технологический процесс выполнил", summary.processBy)}
-            {row("Одобрил", summary.approvedBy)}
+            {row("Технологический процесс одобрил", summary.approvedBy)}
           </dl>
         </div>
 
@@ -2211,7 +2274,9 @@ function StepsStage({
   activeStepIndex,
   onSelectStep,
   canEdit,
-  canEditApprovalField,
+  hasApprovalPermission,
+  canApproveReleaseTechProcess,
+  onApproveReleaseTechProcess,
   onChangeField,
   onChangeConsumableQty,
   onChangeEquipment,
@@ -2224,8 +2289,9 @@ function StepsStage({
   activeStepIndex: number;
   onSelectStep: (idx: number) => void;
   canEdit: boolean;
-  /** Поле «Одобрил» на этапе выдачи (при наличии права на этап). */
-  canEditApprovalField: boolean;
+  hasApprovalPermission: boolean;
+  canApproveReleaseTechProcess: boolean;
+  onApproveReleaseTechProcess: () => void;
   onChangeField: (stepIndex: number, fieldId: string, value: FieldValue) => void;
   onChangeConsumableQty: (
     stepIndex: number,
@@ -2290,6 +2356,12 @@ function StepsStage({
     return activeStepTpl.fields.filter((f) => {
       if (!f.required) return false;
       if (f.type === "section_header") return false;
+      if (
+        stageTemplate.type === "release" &&
+        isReleaseSupersededSignerField(f)
+      ) {
+        return false;
+      }
       if (typeof f.refStageIndex === "number" || f.refFieldId) return false;
       if (f.refDeviations && f.refDeviations.length > 0) return false;
       if (f.computeRule) return false;
@@ -2320,15 +2392,22 @@ function StepsStage({
     !activeStepLocked &&
     !stageMarkedComplete &&
     activeStepExec?.status !== "completed";
+  const releaseNeedsTechApproval =
+    stageTemplate.type === "release" &&
+    !isReleaseTechProcessApproved(activeStepExec);
   const completeDisabled =
-    !canCompleteActiveStep || missingRequiredFields.length > 0;
+    !canCompleteActiveStep ||
+    missingRequiredFields.length > 0 ||
+    releaseNeedsTechApproval;
   const completeTitle =
     missingRequiredFields.length > 0
       ? `Заполните обязательные поля: ${missingRequiredFields
           .slice(0, 3)
           .map((f) => f.label)
           .join(", ")}${missingRequiredFields.length > 3 ? "…" : ""}`
-      : undefined;
+      : releaseNeedsTechApproval
+        ? "Сначала одобрите технологический процесс."
+        : undefined;
 
   const [confirmKind, setConfirmKind] = useState<null | "step" | "stage">(
     null,
@@ -2507,7 +2586,6 @@ function StepsStage({
               !stageMarkedComplete &&
               stepsExec[activeStepIndex]?.status !== "completed"
             }
-            canEditApprovalField={canEditApprovalField}
             onChange={(fieldId, value) => onChangeField(activeStepIndex, fieldId, value)}
             onChangeConsumableQty={(consumableId, qty) =>
               onChangeConsumableQty(activeStepIndex, consumableId, qty)
@@ -2522,10 +2600,61 @@ function StepsStage({
             }
           />
 
+          {stageTemplate.type === "release" && activeStepExec ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+              <div className="text-sm font-semibold text-slate-900">
+                Одобрение технологического процесса
+              </div>
+              {activeStepExec.techProcessApprovedBy ? (
+                <div className="mt-2 space-y-1 text-sm text-slate-800">
+                  <p>
+                    <span className="text-slate-500">Одобрил:</span>{" "}
+                    <span className="font-medium text-slate-900">
+                      {activeStepExec.techProcessApprovedBy}
+                    </span>
+                  </p>
+                  {activeStepExec.techProcessApprovedAt ? (
+                    <p className="text-xs text-slate-500">
+                      {formatRuDateTime(activeStepExec.techProcessApprovedAt)}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-slate-600">
+                  Технологический процесс пока не одобрён. Без одобрения
+                  завершить шаг нельзя.
+                </p>
+              )}
+              {canApproveReleaseTechProcess ? (
+                <button
+                  type="button"
+                  onClick={onApproveReleaseTechProcess}
+                  className="mt-3 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
+                >
+                  Одобрить технологический процесс
+                </button>
+              ) : null}
+              {canEdit &&
+              releaseNeedsTechApproval &&
+              !hasApprovalPermission ? (
+                <p className="mt-2 text-xs text-slate-600">
+                  Одобрение может выполнить пользователь с правом «Одобрение».
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           {canEdit ? (
             <div className="mt-4 flex flex-col items-end gap-2">
               {completeDisabled && missingRequiredFields.length > 0 ? (
                 <MissingRequiredFieldsHint fields={missingRequiredFields} />
+              ) : null}
+              {completeDisabled &&
+              releaseNeedsTechApproval &&
+              missingRequiredFields.length === 0 ? (
+                <p className="max-w-md text-right text-sm text-amber-800">
+                  Сначала одобрите технологический процесс (блок выше).
+                </p>
               ) : null}
               <div className="flex flex-wrap items-center justify-end gap-2">
                 {canCompleteActiveStep ? (
@@ -2918,7 +3047,6 @@ function FormFields({
   stepTemplate,
   stepExecution,
   canEdit,
-  canEditApprovalField = true,
   onChange,
   onChangeConsumableQty,
   onChangeEquipment,
@@ -2929,7 +3057,6 @@ function FormFields({
   stepTemplate: StepTemplate | undefined;
   stepExecution: ProductionOrder["stages"][number]["steps"][number] | undefined;
   canEdit: boolean;
-  canEditApprovalField?: boolean;
   onChange: (fieldId: string, value: FieldValue) => void;
   onChangeConsumableQty: (consumableId: string, qty: number) => void;
   onChangeEquipment: (equipmentId: string, applied: boolean) => void;
@@ -3029,13 +3156,8 @@ function FormFields({
   );
 
   const renderFieldRow = (field: FieldDefinition) => {
-    const approvalFieldLocked =
-      stageType === "release" &&
-      field.id === "approvedBy" &&
-      !canEditApprovalField;
     const isReadonly =
       !canEdit ||
-      approvalFieldLocked ||
       Boolean(field.refDeviations?.length) ||
       typeof field.refStageIndex === "number" ||
       Boolean(field.computeRule);
@@ -3160,6 +3282,12 @@ function FormFields({
           if (field.id === "seq" || field.id === "executor") {
             return null;
           }
+          if (
+            stageType === "release" &&
+            isReleaseSupersededSignerField(field)
+          ) {
+            return null;
+          }
           if (field.type === "section_header") {
             return <div key={field.id}>{renderSectionHeader(field)}</div>;
           }
@@ -3168,9 +3296,57 @@ function FormFields({
       </div>
     );
 
+  const releaseReadonlyInputCls =
+    "w-full cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800";
+
+  const productionCompletersBadge = productionCompletersSourceBadge(order);
+
   return (
     <div className="space-y-3">
       {fieldsBody}
+
+      {stageType === "release" ? (
+        <div className="space-y-3 border-t border-slate-100 pt-3">
+          <div className="block">
+            <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <div className="text-xs font-medium text-slate-600">
+                Технологический процесс выполнил
+              </div>
+              {productionCompletersBadge ? (
+                <span
+                  className="inline-flex max-w-full shrink-0 items-center truncate rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-900 ring-1 ring-inset ring-sky-300/60"
+                  title={productionCompletersBadge.title}
+                >
+                  {productionCompletersBadge.text}
+                </span>
+              ) : null}
+            </div>
+            <input
+              type="text"
+              readOnly
+              tabIndex={-1}
+              value={getProductionStageCompletersDisplay(order)}
+              className={CROSS_STAGE_READONLY_INPUT_CLS}
+              aria-label="Технологический процесс выполнил"
+            />
+          </div>
+          <div className="block">
+            <div className="mb-1 text-xs font-medium text-slate-600">
+              Одобрил
+            </div>
+            <input
+              type="text"
+              readOnly
+              tabIndex={-1}
+              value={
+                stepExecution.techProcessApprovedBy?.trim() || "—"
+              }
+              className={releaseReadonlyInputCls}
+              aria-label="Одобрил"
+            />
+          </div>
+        </div>
+      ) : null}
 
       {stepTemplate.consumables.length > 0 ? (
         <div className="pt-4">

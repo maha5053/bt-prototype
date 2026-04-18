@@ -16,6 +16,13 @@ export const MOCK_USERS: MockUser[] = [
 
 export const USERS: string[] = MOCK_USERS.map((u) => u.id);
 
+/** Полное ФИО из мока или исходная строка, если пользователь не из справочника. */
+export function displayNameForUserId(id: string): string {
+  const t = id.trim();
+  if (!t) return t;
+  return MOCK_USERS.find((u) => u.id === t)?.displayName ?? t;
+}
+
 export type ProductionPermissions = {
   registration: boolean;
   production: boolean;

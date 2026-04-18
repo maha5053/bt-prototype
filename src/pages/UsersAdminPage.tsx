@@ -15,7 +15,8 @@ export function UsersAdminPage() {
       </h1>
       <p className="mt-2 max-w-3xl text-sm text-slate-600">
         Права применяются к карточке заказа в производстве: без отметки —
-        только просмотр соответствующего этапа (или поля «Одобрил» на выдаче).
+        только просмотр соответствующего этапа; «Одобрение» — кнопка одобрения
+        технологического процесса на выдаче.
       </p>
 
       <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">

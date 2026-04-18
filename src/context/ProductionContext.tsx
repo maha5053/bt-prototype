@@ -19,6 +19,7 @@ import {
   type ProductionRejectionAttachment,
   type ProductionRejectionPhase,
 } from "../mocks/productionData";
+import { isReleaseTechProcessApproved } from "../lib/productionReleaseAct";
 
 const STORAGE_KEY = "bio-production";
 
@@ -87,18 +88,19 @@ type ProductionContextValue = {
   getOrderById: (orderId: string) => ProductionOrder | null;
   createOrder: (templateId: string, createdBy: string) => ProductionOrder;
   updateFieldValue: (input: UpdateFieldValueInput) => void;
+  approveReleaseTechProcess: (input: {
+    orderId: string;
+    stageIndex: number;
+    stepIndex: number;
+    approvedByDisplayName: string;
+    updatedBy: string;
+  }) => void;
   saveDraft: (input: {
     orderId: string;
     stageIndex: number;
     stepIndex: number;
     updatedBy: string;
   }) => { savedAt: string };
-  deferQualityControl: (input: {
-    orderId: string;
-    stageIndex: number;
-    deferredBy: string;
-    deferredReason?: string;
-  }) => void;
   completeStep: (input: {
     orderId: string;
     stageIndex: number;
@@ -236,6 +238,47 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const approveReleaseTechProcess = useCallback(
+    (input: {
+      orderId: string;
+      stageIndex: number;
+      stepIndex: number;
+      approvedByDisplayName: string;
+      updatedBy: string;
+    }) => {
+      const now = new Date().toISOString();
+      const name = input.approvedByDisplayName.trim();
+      if (!name) return;
+      setState((prev) => {
+        const nextOrders = prev.orders.map((o) => {
+          if (o.id !== input.orderId) return o;
+          if (o.status !== "in_progress") return o;
+          const stage = o.stages[input.stageIndex];
+          const step = stage?.steps[input.stepIndex];
+          if (!stage || stage.type !== "release" || !step) return o;
+          if (step.techProcessApprovedAt) return o;
+
+          const nextStages = [...o.stages];
+          const nextSteps = [...stage.steps];
+          nextSteps[input.stepIndex] = {
+            ...step,
+            techProcessApprovedAt: now,
+            techProcessApprovedBy: name,
+            updatedAt: now,
+            updatedBy: input.updatedBy,
+            version: (step.version ?? 1) + 1,
+          };
+          nextStages[input.stageIndex] = { ...stage, steps: nextSteps };
+          return { ...o, stages: nextStages };
+        });
+        const next = { ...prev, orders: nextOrders };
+        saveToStorage(next);
+        return next;
+      });
+    },
+    [],
+  );
+
   const saveDraft = useCallback(
     (input: { orderId: string; stageIndex: number; stepIndex: number; updatedBy: string }): { savedAt: string } => {
       const savedAt = new Date().toISOString();
@@ -266,38 +309,6 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const deferQualityControl = useCallback(
-    (input: {
-      orderId: string;
-      stageIndex: number;
-      deferredBy: string;
-      deferredReason?: string;
-    }) => {
-      const now = new Date().toISOString();
-      setState((prev) => {
-        const nextOrders = prev.orders.map((o) => {
-          if (o.id !== input.orderId) return o;
-          if (o.status !== "in_progress") return o;
-          const stage = o.stages[input.stageIndex];
-          if (!stage) return o;
-          const nextStages = [...o.stages];
-          nextStages[input.stageIndex] = {
-            ...stage,
-            deferred: true,
-            deferredAt: now,
-            deferredBy: input.deferredBy,
-            deferredReason: input.deferredReason,
-          };
-          return { ...o, stages: nextStages };
-        });
-        const next = { ...prev, orders: nextOrders };
-        saveToStorage(next);
-        return next;
-      });
-    },
-    [],
-  );
-
   const completeStep = useCallback(
     (input: { orderId: string; stageIndex: number; stepIndex: number; completedBy: string }) => {
       const now = new Date().toISOString();
@@ -308,6 +319,12 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
           const stage = o.stages[input.stageIndex];
           const step = stage?.steps[input.stepIndex];
           if (!stage || !step) return o;
+          if (
+            stage.type === "release" &&
+            !isReleaseTechProcessApproved(step)
+          ) {
+            return o;
+          }
 
           const nextStages = [...o.stages];
           const nextSteps = [...stage.steps];
@@ -340,12 +357,17 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
 
           const allStepsCompleted = stage.steps.every((s) => s.status === "completed");
           if (!allStepsCompleted) return o;
+          if (
+            stage.type === "release" &&
+            !stage.steps.every((s) => isReleaseTechProcessApproved(s))
+          ) {
+            return o;
+          }
 
           const nextStages = [...o.stages];
           nextStages[input.stageIndex] = {
             ...stage,
             status: "completed" as ExecutionStatus,
-            deferred: false,
             completedAt: now,
             completedBy: input.completedBy,
           };
@@ -385,7 +407,6 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
         const nextStages = o.stages.map((st) => ({
           ...st,
           status: "completed" as ExecutionStatus,
-          deferred: false,
           completedAt: st.completedAt ?? now,
           completedBy: st.completedBy ?? input.completedBy,
           steps: st.steps.map((s) => ({
@@ -529,8 +550,8 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       getOrderById,
       createOrder,
       updateFieldValue,
+      approveReleaseTechProcess,
       saveDraft,
-      deferQualityControl,
       completeStep,
       completeStage,
       completeOrder,
@@ -544,8 +565,8 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       getOrderById,
       createOrder,
       updateFieldValue,
+      approveReleaseTechProcess,
       saveDraft,
-      deferQualityControl,
       completeStep,
       completeStage,
       completeOrder,

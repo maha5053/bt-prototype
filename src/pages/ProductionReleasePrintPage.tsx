@@ -143,7 +143,9 @@ function ProductionReleasePrintContent() {
               <td className="border border-black px-3 py-2">{summary.processBy}</td>
             </tr>
             <tr>
-              <th className="border border-black px-3 py-2 font-normal">Одобрил</th>
+              <th className="border border-black px-3 py-2 font-normal">
+                Технологический процесс одобрил
+              </th>
               <td className="border border-black px-3 py-2">{summary.approvedBy}</td>
             </tr>
             <tr>

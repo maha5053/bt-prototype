@@ -1,4 +1,5 @@
 import type { FieldValue, ProductionOrder } from "../mocks/productionData";
+import { displayNameForUserId } from "../mocks/usersMock";
 
 const REGISTRATION_FIELD_FIO = "fio";
 const REGISTRATION_FIELD_IB = "ib";
@@ -44,8 +45,35 @@ export type ReleaseIssueConfirmSummary = {
   destination: string;
   deviations: string;
   processBy: string;
+  /** ФИО того, кто одобрил технологический процесс (кнопка на этапе выдачи). */
   approvedBy: string;
 };
+
+export function isReleaseTechProcessApproved(
+  step: ProductionOrder["stages"][number]["steps"][number] | undefined,
+): boolean {
+  return Boolean(
+    step?.techProcessApprovedBy?.trim() && step?.techProcessApprovedAt,
+  );
+}
+
+/** ФИО исполнителей завершённых шагов этапа «Производство» (по порядку шагов, без повторов). */
+export function getProductionStageCompletersDisplay(
+  order: ProductionOrder,
+): string {
+  const prod = order.stages.find((s) => s.type === "production");
+  if (!prod?.steps?.length) return "—";
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const step of prod.steps) {
+    if (step.status !== "completed") continue;
+    const by = step.completedBy?.trim();
+    if (!by || seen.has(by)) continue;
+    seen.add(by);
+    parts.push(displayNameForUserId(by));
+  }
+  return parts.length ? parts.join(", ") : "—";
+}
 
 /** Данные для модалки подтверждения и печати акта выдачи. */
 export function getReleaseIssueConfirmSummary(
@@ -56,6 +84,7 @@ export function getReleaseIssueConfirmSummary(
   const regFv = reg?.steps[0]?.fieldValues ?? {};
   const { patientName, caseNumber } = getRegistrationPatientFields(order);
   const rv = releaseStep?.fieldValues ?? {};
+  const techApprovedBy = releaseStep?.techProcessApprovedBy?.trim();
   return {
     orderId: order.id,
     productName: order.templateName,
@@ -64,8 +93,8 @@ export function getReleaseIssueConfirmSummary(
     caseNumber: caseNumber || "—",
     destination: dashField(rv.where),
     deviations: dashField(rv.devSummary),
-    processBy: dashField(rv.processDoneBy),
-    approvedBy: dashField(rv.approvedBy),
+    processBy: getProductionStageCompletersDisplay(order),
+    approvedBy: techApprovedBy || dashField(rv.approvedBy as FieldValue),
   };
 }
 
