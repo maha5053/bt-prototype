@@ -1107,7 +1107,7 @@ function ProductionOrderContent() {
   return (
     <div className="p-6 md:p-8">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <Link
             to="/proizvodstvo"
             className="text-sm text-slate-500 transition hover:text-slate-700"
@@ -1134,10 +1134,20 @@ function ProductionOrderContent() {
             </span>
           </h1>
         </div>
-        <p className="mt-1 text-sm text-slate-500">
-          {order.templateName} · Создал: {order.createdBy} · Дата регистрации:{" "}
-          {formatRuDateTime(order.createdAt)}
-        </p>
+        <div className="flex max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 sm:max-w-[min(100%,42rem)]">
+          <p className="text-right text-sm leading-snug text-slate-500">
+            {order.templateName} · Создал: {order.createdBy} · Дата регистрации:{" "}
+            {formatRuDateTime(order.createdAt)}
+          </p>
+          {!isOrderReadonly ? (
+            <StageActionsMenu
+              onReject={() => {
+                resetRejectForm();
+                setShowReject(true);
+              }}
+            />
+          ) : null}
+        </div>
       </div>
 
       {order.status === "rejected" ? (
@@ -1209,27 +1219,15 @@ function ProductionOrderContent() {
       ) : null}
 
       <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex min-w-0 flex-1 justify-start overflow-visible">
-            <StageStepper
-              order={order}
-              template={template}
-              activeStageIndex={effectiveActiveStageIndex}
-              onSelectStage={(idx) => {
-                setActiveStageIndex(idx);
-                setActiveStepIndex(0);
-              }}
-            />
-          </div>
-          {!isOrderReadonly ? (
-            <StageActionsMenu
-              onReject={() => {
-                resetRejectForm();
-                setShowReject(true);
-              }}
-            />
-          ) : null}
-        </div>
+        <StageStepper
+          order={order}
+          template={template}
+          activeStageIndex={effectiveActiveStageIndex}
+          onSelectStage={(idx) => {
+            setActiveStageIndex(idx);
+            setActiveStepIndex(0);
+          }}
+        />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -1288,6 +1286,7 @@ function ProductionOrderContent() {
                     stageIndex: effectiveActiveStageIndex,
                     completedBy: "Смирнова А.",
                   });
+                  scrollProductionOrderMainToTop();
                 }}
               />
             ) : (
@@ -1344,6 +1343,7 @@ function ProductionOrderContent() {
                     stageIndex: effectiveActiveStageIndex,
                     completedBy: "Смирнова А.",
                   });
+                  scrollProductionOrderMainToTop();
                 }}
               />
             )}
@@ -1707,6 +1707,23 @@ function scrollToProductionField(fieldId: string) {
   }, 250);
 }
 
+/** Прокрутка области контента приложения (`main` в AppLayout) к началу после смены этапа. */
+function scrollProductionOrderMainToTop() {
+  const run = () => {
+    const main = document.querySelector("main");
+    if (!main) return;
+    const ae = document.activeElement;
+    if (ae instanceof HTMLElement && main.contains(ae)) {
+      ae.blur();
+    }
+    main.scrollTo({ top: 0, behavior: "auto" });
+  };
+  // После закрытия модалки фокус часто возвращается на кнопку внизу страницы и снова
+  // прокручивает main — откладываем и повторяем, чтобы оказаться вверху.
+  window.setTimeout(run, 0);
+  window.setTimeout(run, 100);
+}
+
 function MissingRequiredFieldsHint({
   fields,
 }: {
@@ -1769,26 +1786,53 @@ function getStageDotVisual(
 
 function stageDotClass(visual: StageDotVisual, isActive: boolean): string {
   const base =
-    "relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums transition";
-  const byVisual = (() => {
+    "relative z-10 flex h-9 w-9 shrink-0 origin-center items-center justify-center rounded-full text-sm font-semibold tabular-nums transition duration-200 ease-out group-hover:scale-[1.12] motion-reduce:group-hover:scale-100";
+  const body = (() => {
     switch (visual) {
       case "done":
-        return "bg-emerald-500 text-white shadow-sm hover:bg-emerald-600";
+        return "bg-emerald-500 text-white shadow-sm group-hover:bg-emerald-600";
       case "active":
-        return isActive
-          ? "bg-amber-400 text-amber-950 shadow-sm ring-2 ring-blue-500 ring-offset-2 hover:bg-amber-300"
-          : "bg-amber-400 text-amber-950 shadow-sm ring-2 ring-amber-500/45 hover:bg-amber-300";
+        if (isActive)
+          return "bg-amber-400 text-amber-950 shadow-sm group-hover:bg-amber-300";
+        return "bg-amber-400 text-amber-950 shadow-sm ring-2 ring-amber-500/45 group-hover:bg-amber-300";
       case "error":
-        return "bg-red-600 text-white shadow-sm hover:bg-red-700";
+        return "bg-red-600 text-white shadow-sm group-hover:bg-red-700";
       default:
-        return "bg-white text-slate-500 ring-2 ring-slate-300 hover:bg-slate-50";
+        return "bg-white text-slate-500 group-hover:bg-slate-50";
     }
   })();
-  const activeRing =
-    isActive && visual !== "active"
-      ? " ring-2 ring-blue-500 ring-offset-2"
-      : "";
-  return `${base} ${byVisual}${activeRing}`;
+  const ring = (() => {
+    if (visual === "active" && !isActive) return "";
+    if (!isActive) {
+      if (visual === "pending") return " ring-2 ring-slate-300";
+      return "";
+    }
+    switch (visual) {
+      case "done":
+        return " ring-2 ring-emerald-500 ring-offset-2 ring-offset-white";
+      case "active":
+        return " ring-2 ring-amber-500 ring-offset-2 ring-offset-white";
+      case "error":
+        return " ring-2 ring-red-500 ring-offset-2 ring-offset-white";
+      default:
+        return " ring-2 ring-amber-400 ring-offset-2 ring-offset-white";
+    }
+  })();
+  return `${base} ${body}${ring}`;
+}
+
+/** Цвет названия этапа при ховере — в тон состоянию (как кружок и бейдж). */
+function stageStepperTitleHoverClass(visual: StageDotVisual): string {
+  switch (visual) {
+    case "done":
+      return "group-hover:text-emerald-800";
+    case "active":
+      return "group-hover:text-amber-900";
+    case "error":
+      return "group-hover:text-red-800";
+    default:
+      return "group-hover:text-slate-600";
+  }
 }
 
 function getStageStepperColumnStatus(
@@ -1897,11 +1941,9 @@ function StageStepper({
                 onClick={() => onSelectStage(idx)}
                 aria-current={isActive ? "step" : undefined}
                 className={[
-                  "relative z-0 flex h-full w-full min-w-0 cursor-pointer flex-col items-center gap-1 overflow-visible rounded-xl border border-transparent px-0 py-1.5 text-center transition duration-200 ease-out",
-                  // ховер без смены фона/бордера: лёгкий подъём + тень
-                  "hover:z-[1] hover:-translate-y-0.5 hover:shadow-md hover:shadow-slate-900/10 motion-reduce:transition-none motion-reduce:hover:translate-y-0 motion-reduce:hover:shadow-none",
+                  "group relative z-0 flex h-full w-full min-w-0 cursor-pointer flex-col items-center gap-1 overflow-visible rounded-xl border border-transparent px-0 py-1.5 text-center transition duration-200 ease-out",
+                  "hover:z-[1]",
                   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500",
-                  isActive ? "border-slate-200 bg-slate-50/80 shadow-sm" : "",
                 ].join(" ")}
               >
                 <div className="flex h-9 w-full min-w-0 self-stretch items-center overflow-visible">
@@ -1940,7 +1982,13 @@ function StageStepper({
                   </div>
                 </div>
                 <div className="flex w-full flex-col items-center gap-1 px-1.5">
-                  <span className="whitespace-nowrap text-center text-sm font-semibold leading-snug text-slate-900">
+                  <span
+                    className={[
+                      "whitespace-nowrap text-center text-sm font-semibold leading-snug text-slate-900",
+                      "transition-colors duration-200 ease-out",
+                      stageStepperTitleHoverClass(visual),
+                    ].join(" ")}
+                  >
                     {name}
                   </span>
                   <span
@@ -2406,14 +2454,17 @@ function StepsStage({
 
       <section className="min-w-0">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-base font-semibold text-slate-900">
-              {stepsTpl[activeStepIndex]
-                ? stepHeading(
-                    activeStepIndex,
-                    stepsTpl[activeStepIndex]!.name,
-                  )
-                : "Шаг"}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <div className="text-base font-semibold text-slate-900">
+                {activeStepTpl
+                  ? stepHeading(activeStepIndex, activeStepTpl.name)
+                  : "Шаг"}
+              </div>
+              <SopAttachmentLink
+                sopRef={activeStepTpl?.sopRef}
+                sopFileName={activeStepTpl?.sopFileName}
+              />
             </div>
             {!showStepsSidebar ? (
               <div className="mt-1 text-xs text-slate-500">
@@ -2803,6 +2854,42 @@ function buildProductionChecklistSegments(
   return segments;
 }
 
+function sopMockDocumentHref(): string {
+  return `${import.meta.env.BASE_URL}mocks/sop/test-sop.pdf`;
+}
+
+/** СОП / файл: как на регистрации — ссылка открывает моковый PDF в новой вкладке. */
+function SopAttachmentLink({
+  sopRef,
+  sopFileName,
+  tabIndex,
+}: {
+  sopRef?: string;
+  sopFileName?: string;
+  /** Для вложенных подписей формы — не забирать фокус с клавиатуры (как у section_header). */
+  tabIndex?: number;
+}) {
+  if (!sopRef && !sopFileName) return null;
+  const href = sopMockDocumentHref();
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs text-slate-500">
+      {sopRef ? <span className="font-medium text-slate-600">{sopRef}</span> : null}
+      {sopRef && sopFileName ? <span className="text-slate-300">·</span> : null}
+      {sopFileName ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          tabIndex={tabIndex}
+          className="underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
+        >
+          {sopFileName}
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
 function FormFields({
   order,
   stepTemplate,
@@ -2827,8 +2914,6 @@ function FormFields({
   if (!stepTemplate || !stepExecution) {
     return <div className="text-sm text-slate-500">Нет данных шага.</div>;
   }
-
-  const sopDownloadHref = `${import.meta.env.BASE_URL}mocks/sop/test-sop.pdf`;
 
   const resolveValue = (field: FieldDefinition): FieldValue => {
     // ref field
@@ -2908,23 +2993,11 @@ function FormFields({
     <div className="pt-2">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <div className="text-sm font-semibold text-slate-900">{field.label}</div>
-        {field.sopRef || field.sopFileName ? (
-          <div className="text-xs text-slate-500">
-            {field.sopRef ? <span className="font-medium">{field.sopRef}</span> : null}
-            {field.sopRef && field.sopFileName ? " · " : null}
-            {field.sopFileName ? (
-              <a
-                href={sopDownloadHref}
-                tabIndex={-1}
-                target="_blank"
-                rel="noreferrer"
-                className="underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
-              >
-                {field.sopFileName}
-              </a>
-            ) : null}
-          </div>
-        ) : null}
+        <SopAttachmentLink
+          sopRef={field.sopRef}
+          sopFileName={field.sopFileName}
+          tabIndex={-1}
+        />
       </div>
       <div className="mt-2 h-px bg-slate-100" />
     </div>

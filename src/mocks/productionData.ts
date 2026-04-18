@@ -59,6 +59,9 @@ export interface FieldDefinition {
 export interface StepTemplate {
   id: string;
   name: string;
+  /** Ссылка на документ шага (как у section_header в форме): открывается в новой вкладке. */
+  sopRef?: string;
+  sopFileName?: string;
   fields: FieldDefinition[];
   consumables: ConsumableItem[];
   equipment: EquipmentItem[];
@@ -346,6 +349,8 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
         {
           id: "step-prod-1",
           name: "1. Получение обогащённой тромбоцитами плазмы",
+          sopRef: "СОП 3.1",
+          sopFileName: "SOP_PRP_plasma.pdf",
           hasDeviations: true,
           fields: [
             { id: "centrifugation1", label: "Центрифугирование", type: "checkbox", required: false },
@@ -570,6 +575,8 @@ function mergeProductionSteps(
     return {
       ...sstep,
       name: bstep.name,
+      sopRef: bstep.sopRef,
+      sopFileName: bstep.sopFileName,
       hasDeviations: bstep.hasDeviations,
       consumables: bstep.consumables,
       equipment: bstep.equipment,
