@@ -1,5 +1,7 @@
 /** Моки и типы для модуля «Производство». */
 
+import thrombogelNewSeed from "./thrombogelNewSeed.json";
+
 export type Role = string;
 
 export type StageType =
@@ -42,12 +44,16 @@ export interface FieldDefinition {
   isSystem?: boolean;
   unit?: string;
   required: boolean;
+  /** Сортировка (порядок отображения в таблицах). */
+  sortOrder?: number;
   options?: string[];
   placeholder?: string;
   /** Многострочное поле (textarea) для типа text. */
   multiline?: boolean;
   /** Для `number`: референсный интервал (подсветка отклонений в UI КК). */
   referenceRange?: FieldReferenceRange;
+  /** Для `select`: "нормальное" (эталонное) значение. */
+  referenceValue?: string;
   computedFrom?: string;
   computeRule?: ComputeRule;
   refStageIndex?: number;
@@ -83,6 +89,10 @@ export interface StepGroupTemplate {
 export interface StepActionTemplate {
   id: string;
   text: string;
+  /** Конструктор ver2: обязательность отметки «выполнено». */
+  required?: boolean;
+  /** Опциональное поле ввода у действия (число/текст). */
+  input?: { label: string; type: "text" | "number" };
 }
 
 export interface StepTemplate {
@@ -599,8 +609,6 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
   ],
 };
 
-export const INITIAL_PROCESS_TEMPLATES: ProcessTemplate[] = [THROMBOGEL_TEMPLATE];
-
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
@@ -689,6 +697,18 @@ export function createTemplateWithSystemStages(
   };
 }
 
+/**
+ * Шаблон «Тромбогель NEW» из конструктора ver2: тело в `thrombogelNewSeed.json`
+ * (экспорт из localStorage). После очистки storage подставляется с id `tpl-thrombogel-new`.
+ */
+export const THROMBOGEL_NEW_TEMPLATE: ProcessTemplate =
+  thrombogelNewSeed as ProcessTemplate;
+
+export const INITIAL_PROCESS_TEMPLATES: ProcessTemplate[] = [
+  THROMBOGEL_TEMPLATE,
+  THROMBOGEL_NEW_TEMPLATE,
+];
+
 function mergeFieldDefinitions(
   storedFields: FieldDefinition[],
   baselineFields: FieldDefinition[],
@@ -701,6 +721,26 @@ function mergeFieldDefinitions(
     (f) => !baselineFields.some((b) => b.id === f.id),
   );
   return [...merged, ...extra];
+}
+
+/** Действия ver2: структура и id — из baseline; текст/обязательность/поле — из storage. Если в baseline нет действий — сбрасываем (иначе «лишние» actions из storage смешиваются с чек-листом по fields). */
+function mergeStepActions(
+  stored: StepActionTemplate[] | undefined,
+  baseline: StepActionTemplate[] | undefined,
+): StepActionTemplate[] | undefined {
+  if (!baseline?.length) {
+    return undefined;
+  }
+  return baseline.map((ba) => {
+    const sa = stored?.find((a) => a.id === ba.id);
+    if (!sa) return clone(ba);
+    return {
+      id: ba.id,
+      text: sa.text?.trim() ? sa.text : ba.text,
+      required: sa.required !== undefined ? sa.required : ba.required,
+      input: sa.input !== undefined ? sa.input : ba.input,
+    };
+  });
 }
 
 function mergeProductionSteps(
@@ -719,6 +759,12 @@ function mergeProductionSteps(
       consumables: bstep.consumables,
       equipment: bstep.equipment,
       fields: mergeFieldDefinitions(sstep.fields, bstep.fields),
+      actions: mergeStepActions(sstep.actions, bstep.actions),
+      groups: !bstep.groups?.length
+        ? undefined
+        : sstep.groups?.length
+          ? sstep.groups
+          : clone(bstep.groups),
     };
   });
 }
@@ -754,7 +800,13 @@ export function mergeProductionTemplatesWithBaseline(
     if (!st) return clone(bt);
     return {
       ...st,
-      name: bt.name,
+      // Эталон — каноническое имя из кода; прочие baseline-шаблоны — имя из storage (переименование в UI).
+      name:
+        bt.id === "tpl-thrombogel"
+          ? bt.name
+          : typeof st.name === "string" && st.name.trim().length > 0
+            ? st.name
+            : bt.name,
       stages: mergeProductionStages(st.stages, bt.stages),
     };
   });
@@ -764,7 +816,34 @@ export function mergeProductionTemplatesWithBaseline(
     (st) => !baselineList.some((bt) => bt.id === st.id),
   );
 
-  return [...mergedBaseline, ...clone(extraStored)];
+  return reconcileRuntimeV2Templates([...mergedBaseline, ...clone(extraStored)]);
+}
+
+const RUNTIME_V2_PREFIX = "tpl-runtime-v2-";
+
+/** Подтягивает этап «Производство» в runtime-шаблоне заказа ver2 из актуального исходного шаблона (после merge). */
+export function reconcileRuntimeV2Templates(
+  templates: ProcessTemplate[],
+): ProcessTemplate[] {
+  const byId = new Map(templates.map((t) => [t.id, t]));
+  return templates.map((t) => {
+    if (!t.id.startsWith(RUNTIME_V2_PREFIX)) return t;
+    const sourceId = t.id.slice(RUNTIME_V2_PREFIX.length);
+    const source = byId.get(sourceId);
+    if (!source) return t;
+    const prodStage = source.stages.find((s) => s.type === "production");
+    if (!prodStage) return t;
+    const prodClone = clone(prodStage);
+    return {
+      ...t,
+      name: source.name,
+      stages: t.stages.map((stage) =>
+        stage.type === "production"
+          ? { ...prodClone, id: stage.id, name: stage.name }
+          : stage,
+      ),
+    };
+  });
 }
 
 export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {

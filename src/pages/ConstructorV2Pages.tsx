@@ -1,6 +1,33 @@
 import { Link, useNavigate } from "react-router-dom";
 import { ProductionProvider, useProduction } from "../context/ProductionContext";
+import type { StageTemplate } from "../mocks/productionData";
 import { ConstructorEditorView } from "./ConstructorPages";
+
+/** Стабильные ссылки — иначе у `ConstructorEditorView` каждый рендер новые пропсы и эффекты срабатывают постоянно. */
+const CONSTRUCTOR_V2_STAGE_ORDER: StageTemplate["type"][] = [
+  "production",
+  "quality_control",
+];
+
+const CONSTRUCTOR_V2_STAGE_LABEL: Partial<
+  Record<StageTemplate["type"], string>
+> = {
+  production: "Настройки производства",
+  quality_control: "Настройки контроля качества",
+};
+
+const CONSTRUCTOR_V2_ALLOW_GROUPS: Partial<
+  Record<StageTemplate["type"], boolean>
+> = {
+  production: false,
+  quality_control: false,
+};
+
+const CONSTRUCTOR_V2_ALLOW_STEPS: Partial<
+  Record<StageTemplate["type"], boolean>
+> = {
+  quality_control: false,
+};
 
 export function ConstructorV2ListPage() {
   return (
@@ -16,12 +43,10 @@ export function ConstructorV2EditorPage() {
       <ConstructorEditorView
         headerTitle="Конструктор ver2"
         basePath="/admin/konstruktor-ver2"
-        stageTypeOrder={["production", "quality_control"]}
-        stageTypeLabel={{
-          production: "Настройки производства",
-          quality_control: "Настройки контроля качества",
-        }}
-        allowGroupsByStageType={{ production: false }}
+        stageTypeOrder={CONSTRUCTOR_V2_STAGE_ORDER}
+        stageTypeLabel={CONSTRUCTOR_V2_STAGE_LABEL}
+        allowGroupsByStageType={CONSTRUCTOR_V2_ALLOW_GROUPS}
+        allowStepsByStageType={CONSTRUCTOR_V2_ALLOW_STEPS}
       />
     </ProductionProvider>
   );
@@ -59,7 +84,6 @@ function ConstructorV2ListContent() {
           <thead className="bg-slate-50 text-left text-slate-600">
             <tr>
               <th className="px-4 py-3 font-medium">Название</th>
-              <th className="px-4 py-3 font-medium">Этапов</th>
               <th className="px-4 py-3 font-medium">Связанных заказов</th>
               <th className="px-4 py-3 font-medium text-right">Действия</th>
             </tr>
@@ -86,7 +110,6 @@ function ConstructorV2ListContent() {
                       ) : null}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{tpl.stages.length}</td>
                   <td className="px-4 py-3 text-slate-600">{used}</td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">

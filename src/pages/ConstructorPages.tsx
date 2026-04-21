@@ -243,12 +243,14 @@ export function ConstructorEditorView({
   stageTypeOrder = STAGE_TYPE_ORDER,
   stageTypeLabel = STAGE_TYPE_LABEL,
   allowGroupsByStageType,
+  allowStepsByStageType,
 }: {
   headerTitle: string;
   basePath: string;
   stageTypeOrder?: Array<StageTemplate["type"]>;
   stageTypeLabel?: Partial<Record<StageTemplate["type"], string>>;
   allowGroupsByStageType?: Partial<Record<StageTemplate["type"], boolean>>;
+  allowStepsByStageType?: Partial<Record<StageTemplate["type"], boolean>>;
 }) {
   const { templateId } = useParams<{ templateId: string }>();
   const navigate = useNavigate();
@@ -281,6 +283,12 @@ export function ConstructorEditorView({
   const [equipmentSearchByStepId, setEquipmentSearchByStepId] = useState<
     Record<string, string>
   >({});
+  const [qcOptionsDraftByFieldId, setQcOptionsDraftByFieldId] = useState<
+    Record<string, string>
+  >({});
+  const [qcDraggingFieldId, setQcDraggingFieldId] = useState<string | null>(null);
+  const [qcDragOverFieldId, setQcDragOverFieldId] = useState<string | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [activeStageType, setActiveStageType] = useState<
     StageTemplate["type"]
   >("registration");
@@ -309,6 +317,34 @@ export function ConstructorEditorView({
   const allowGroups = (type: StageTemplate["type"]) =>
     allowGroupsByStageType?.[type] ?? true;
 
+  const allowSteps = (type: StageTemplate["type"]) =>
+    allowStepsByStageType?.[type] ?? true;
+
+  useEffect(() => {
+    // For stages where steps are disabled, we still need one implicit step to hold groups/fields/etc.
+    // Ensure it's present so the UI doesn't get stuck in an "add first step" state.
+    for (const stage of orderedStages) {
+      if (allowSteps(stage.type)) continue;
+      if (stage.steps.length > 0) continue;
+      const newStepId = uid("step");
+      patchStage(stage.id, (prev) => {
+        const nextStep: StepTemplate = {
+          id: newStepId,
+          name: "",
+          sopActions: [],
+          actions: [],
+          groups: [],
+          fields: [],
+          consumables: [],
+          equipment: [],
+          hasDeviations: true,
+        };
+        return { ...prev, steps: [...prev.steps, nextStep] };
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template?.id, orderedStages, allowStepsByStageType]);
+
   useEffect(() => {
     if (!template) return;
     const allowed = new Set(orderedStages.map((s) => s.type));
@@ -316,6 +352,10 @@ export function ConstructorEditorView({
       setActiveStageType(orderedStages[0]?.type ?? "registration");
     }
   }, [template?.id, orderedStages, activeStageType, template]);
+
+  useEffect(() => {
+    setLastSavedAt(null);
+  }, [templateId]);
 
   if (!template) {
     return (
@@ -356,6 +396,7 @@ export function ConstructorEditorView({
 
   const patchTemplate = (updater: (prev: ProcessTemplate) => ProcessTemplate) => {
     updateTemplate(updater(template));
+    setLastSavedAt(new Date().toISOString());
   };
 
   const patchStage = (stageId: string, updater: (prev: StageTemplate) => StageTemplate) => {
@@ -377,6 +418,7 @@ export function ConstructorEditorView({
   };
 
   const addStep = (stage: StageTemplate) => {
+    if (!allowSteps(stage.type)) return;
     const newStepId = uid("step");
     patchStage(stage.id, (prev) => {
       const nextStep: StepTemplate = {
@@ -582,6 +624,73 @@ export function ConstructorEditorView({
     });
   };
 
+  const addQualityIndicator = (stage: StageTemplate, stepId: string) => {
+    const fieldId = uid("qc");
+    const nextSortOrder = (() => {
+      const st = template.stages.find((s) => s.id === stage.id);
+      const step = st?.steps.find((s) => s.id === stepId) ?? null;
+      return (step?.fields?.length ?? 0) + 1;
+    })();
+    const nextField: FieldDefinition = {
+      id: fieldId,
+      label: "",
+      type: "number",
+      unit: "",
+      required: false,
+      sortOrder: nextSortOrder,
+      referenceRange: { min: undefined, max: undefined },
+    };
+    patchStep(stage.id, stepId, (prev) => ({
+      ...prev,
+      fields: [...(prev.fields ?? []), nextField],
+    }));
+    setEditingFieldById((prev) => ({ ...prev, [fieldId]: true }));
+  };
+
+  const patchQualityIndicator = (
+    stage: StageTemplate,
+    stepId: string,
+    fieldId: string,
+    updater: (prev: FieldDefinition) => FieldDefinition,
+  ) => {
+    patchStep(stage.id, stepId, (prev) => ({
+      ...prev,
+      fields: (prev.fields ?? []).map((f) => (f.id === fieldId ? updater(f) : f)),
+    }));
+  };
+
+  const removeQualityIndicator = (stage: StageTemplate, stepId: string, fieldId: string) => {
+    patchStep(stage.id, stepId, (prev) => ({
+      ...prev,
+      fields: (prev.fields ?? []).filter((f) => f.id !== fieldId),
+    }));
+    setEditingFieldById((prev) => {
+      if (!(fieldId in prev)) return prev;
+      const next = { ...prev };
+      delete next[fieldId];
+      return next;
+    });
+  };
+
+  const reorderQualityIndicators = (
+    stage: StageTemplate,
+    stepId: string,
+    fromFieldId: string,
+    toFieldId: string,
+  ) => {
+    if (fromFieldId === toFieldId) return;
+    patchStep(stage.id, stepId, (prev) => {
+      const fields = [...(prev.fields ?? [])];
+      const fromIdx = fields.findIndex((f) => f.id === fromFieldId);
+      const toIdx = fields.findIndex((f) => f.id === toFieldId);
+      if (fromIdx < 0 || toIdx < 0) return prev;
+      const [moved] = fields.splice(fromIdx, 1);
+      fields.splice(toIdx, 0, moved);
+      const normalized = fields.map((f, idx) => ({ ...f, sortOrder: idx + 1 }));
+      return { ...prev, fields: normalized };
+    });
+  };
+
   const addAction = (stage: StageTemplate, stepId: string) => {
     const actionId = uid("act");
     patchStep(stage.id, stepId, (prev) => {
@@ -744,26 +853,39 @@ export function ConstructorEditorView({
           if (next) setActiveStageType(next.type);
         }}
       >
-        <Tab.List className="flex flex-wrap gap-2 border-b border-slate-200 pb-2">
-          {orderedStages.map((stage) => (
-            <Tab
-              key={stage.id}
-              className={({ selected }) =>
-                [
-                  "rounded-md px-3 py-2 text-sm font-medium outline-none transition",
-                  selected
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-700 hover:bg-slate-100",
-                ].join(" ")
-              }
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-2">
+          <Tab.List className="flex flex-wrap gap-2">
+            {orderedStages.map((stage) => (
+              <Tab
+                key={stage.id}
+                className={({ selected }) =>
+                  [
+                    "rounded-md px-3 py-2 text-sm font-medium outline-none transition",
+                    selected
+                      ? "bg-blue-600 text-white"
+                      : "text-slate-700 hover:bg-slate-100",
+                  ].join(" ")
+                }
+              >
+                <span>{stageTypeLabel[stage.type] ?? stage.name}</span>
+                {allowSteps(stage.type) ? (
+                  <span className="ml-2 text-xs opacity-80">
+                    {formatStepCount(stage.steps.length)}
+                  </span>
+                ) : null}
+              </Tab>
+            ))}
+          </Tab.List>
+
+          {lastSavedAt ? (
+            <span
+              className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-900 ring-1 ring-emerald-600/20"
+              title="Локальное автосохранение черновика"
             >
-              <span>{stageTypeLabel[stage.type] ?? stage.name}</span>
-              <span className="ml-2 text-xs opacity-80">
-                {formatStepCount(stage.steps.length)}
-              </span>
-            </Tab>
-          ))}
-        </Tab.List>
+              Сохранено {formatSavedClock(lastSavedAt)}
+            </span>
+          ) : null}
+        </div>
 
         <Tab.Panels className="pt-4">
           {orderedStages.map((stage) => (
@@ -771,46 +893,52 @@ export function ConstructorEditorView({
               <div className="space-y-3">
                 {stage.steps.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-600">
-                    Добавьте первый шаг.
+                    {allowSteps(stage.type) ? "Добавьте первый шаг." : "Подготовка формы этапа…"}
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {stage.steps.map((step, idx) => (
+                    {(allowSteps(stage.type) ? stage.steps : stage.steps.slice(0, 1)).map(
+                      (step, idx) => (
                       <div
                         key={step.id}
                         className="rounded-lg border border-slate-200 bg-white p-3"
                       >
                         {(() => {
-                          const isEditing = editingStepById[step.id] ?? false;
-                          const isCollapsed = collapsedStepById[step.id] ?? false;
+                          const isEditing = allowSteps(stage.type)
+                            ? (editingStepById[step.id] ?? false)
+                            : false;
+                          const isCollapsed = allowSteps(stage.type)
+                            ? (collapsedStepById[step.id] ?? false)
+                            : false;
                           return (
                             <div className="space-y-3">
-                              <div
-                                role="button"
-                                tabIndex={0}
-                                className={[
-                                  "flex flex-wrap items-center justify-between gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60",
-                                  isEditing ? "cursor-default" : "cursor-pointer",
-                                ].join(" ")}
-                                aria-expanded={!isCollapsed || isEditing}
-                                onClick={() => {
-                                  if (isEditing) return;
-                                  setCollapsedStepById((prev) => ({
-                                    ...prev,
-                                    [step.id]: !(prev[step.id] ?? false),
-                                  }));
-                                }}
-                                onKeyDown={(e) => {
-                                  if (isEditing) return;
-                                  if (e.key !== "Enter" && e.key !== " ") return;
-                                  e.preventDefault();
-                                  setCollapsedStepById((prev) => ({
-                                    ...prev,
-                                    [step.id]: !(prev[step.id] ?? false),
-                                  }));
-                                }}
-                                title="Свернуть/развернуть шаг"
-                              >
+                              {allowSteps(stage.type) ? (
+                                <div
+                                  role="button"
+                                  tabIndex={0}
+                                  className={[
+                                    "flex flex-wrap items-center justify-between gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60",
+                                    isEditing ? "cursor-default" : "cursor-pointer",
+                                  ].join(" ")}
+                                  aria-expanded={!isCollapsed || isEditing}
+                                  onClick={() => {
+                                    if (isEditing) return;
+                                    setCollapsedStepById((prev) => ({
+                                      ...prev,
+                                      [step.id]: !(prev[step.id] ?? false),
+                                    }));
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (isEditing) return;
+                                    if (e.key !== "Enter" && e.key !== " ") return;
+                                    e.preventDefault();
+                                    setCollapsedStepById((prev) => ({
+                                      ...prev,
+                                      [step.id]: !(prev[step.id] ?? false),
+                                    }));
+                                  }}
+                                  title="Свернуть/развернуть шаг"
+                                >
                                 <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-800">
                                   <svg
                                     className={[
@@ -899,6 +1027,7 @@ export function ConstructorEditorView({
                                       </button>
                                     </div>
                                   </div>
+                              ) : null}
 
                                   {isCollapsed && !isEditing ? null : isEditing ? (
                                     <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3">
@@ -983,6 +1112,420 @@ export function ConstructorEditorView({
                                         >
                                           Сохранить
                                         </button>
+                                      </div>
+                                    </div>
+                                  ) : stage.type === "quality_control" ? (
+                                    <div className="space-y-3">
+                                      <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-3">
+                                        <div className="mb-2 text-sm font-semibold text-slate-800">
+                                          Показатели
+                                        </div>
+
+                                        {(step.fields ?? []).length === 0 ? (
+                                          <div className="mt-3 rounded-md border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-600">
+                                            Показателей пока нет.
+                                          </div>
+                                        ) : (
+                                          <div className="mt-3 overflow-x-hidden rounded-md border border-slate-200 bg-white">
+                                            <table className="w-full table-fixed text-sm">
+                                              <colgroup>
+                                                <col className="w-12" />
+                                                <col />
+                                                <col className="w-[240px]" />
+                                                <col className="w-[240px]" />
+                                                <col className="w-[96px]" />
+                                                <col className="w-[76px]" />
+                                                <col className="w-[72px]" />
+                                              </colgroup>
+                                              <thead className="bg-slate-50 text-left text-slate-600">
+                                                <tr>
+                                                  <th className="px-3 py-2 font-medium" />
+                                                  <th className="px-3 py-2 font-medium">Наименование</th>
+                                                  <th className="px-3 py-2 font-medium">Тип</th>
+                                                  <th className="px-3 py-2 font-medium">Норма</th>
+                                                  <th className="px-3 py-2 font-medium whitespace-nowrap">Ед.</th>
+                                                  <th className="px-3 py-2 font-medium whitespace-nowrap">Сорт.</th>
+                                                  <th className="px-3 py-2 font-medium text-right whitespace-nowrap">
+                                                    Действия
+                                                  </th>
+                                                </tr>
+                                              </thead>
+                                              <tbody>
+                                                {(step.fields ?? []).map((field, idx) => (
+                                                  <tr
+                                                    key={field.id}
+                                                    className={[
+                                                      "border-t border-slate-100 align-top",
+                                                      qcDragOverFieldId === field.id &&
+                                                      qcDraggingFieldId
+                                                        ? "bg-blue-50/40"
+                                                        : "",
+                                                    ].join(" ")}
+                                                    onDragOver={(e) => {
+                                                      if (!qcDraggingFieldId) return;
+                                                      e.preventDefault();
+                                                      setQcDragOverFieldId(field.id);
+                                                    }}
+                                                    onDrop={(e) => {
+                                                      e.preventDefault();
+                                                      const fromId =
+                                                        e.dataTransfer.getData("text/plain") ||
+                                                        qcDraggingFieldId;
+                                                      if (!fromId) return;
+                                                      reorderQualityIndicators(
+                                                        stage,
+                                                        step.id,
+                                                        fromId,
+                                                        field.id,
+                                                      );
+                                                      setQcDraggingFieldId(null);
+                                                      setQcDragOverFieldId(null);
+                                                    }}
+                                                  >
+                                                    <td className="px-3 py-2">
+                                                      <span
+                                                        className="inline-flex cursor-grab rounded-md border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-800 active:cursor-grabbing"
+                                                        title="Перетащите, чтобы изменить порядок"
+                                                        aria-label="Перетащить показатель"
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        draggable
+                                                        onDragStart={(e) => {
+                                                          setQcDraggingFieldId(field.id);
+                                                          e.dataTransfer.effectAllowed = "move";
+                                                          e.dataTransfer.setData(
+                                                            "text/plain",
+                                                            field.id,
+                                                          );
+                                                        }}
+                                                        onDragEnd={() => {
+                                                          setQcDraggingFieldId(null);
+                                                          setQcDragOverFieldId(null);
+                                                        }}
+                                                        onKeyDown={(e) => {
+                                                          // Keyboard DnD not implemented; prevent accidental scrolling on Space.
+                                                          if (e.key === " ") e.preventDefault();
+                                                        }}
+                                                      >
+                                                        <svg
+                                                          className="size-4"
+                                                          viewBox="0 0 24 24"
+                                                          fill="none"
+                                                          stroke="currentColor"
+                                                          strokeWidth="2"
+                                                          strokeLinecap="round"
+                                                          strokeLinejoin="round"
+                                                          aria-hidden
+                                                        >
+                                                          <path d="M10 5h.01" />
+                                                          <path d="M10 12h.01" />
+                                                          <path d="M10 19h.01" />
+                                                          <path d="M14 5h.01" />
+                                                          <path d="M14 12h.01" />
+                                                          <path d="M14 19h.01" />
+                                                        </svg>
+                                                      </span>
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                      <input
+                                                        className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+                                                        value={field.label}
+                                                        placeholder="Напр. Кол-во Тц…"
+                                                        onChange={(e) =>
+                                                          patchQualityIndicator(
+                                                            stage,
+                                                            step.id,
+                                                            field.id,
+                                                            (prev) => ({
+                                                              ...prev,
+                                                              label: e.target.value,
+                                                            }),
+                                                          )
+                                                        }
+                                                      />
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                      <div className="space-y-2">
+                                                        <select
+                                                          className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+                                                          value={field.type}
+                                                          onChange={(e) => {
+                                                            const nextType = e.target
+                                                              .value as FieldDefinition["type"];
+                                                            patchQualityIndicator(
+                                                              stage,
+                                                              step.id,
+                                                              field.id,
+                                                              (prev) => {
+                                                                if (nextType === "number") {
+                                                                  return {
+                                                                    ...prev,
+                                                                    type: "number",
+                                                                    options: undefined,
+                                                                    referenceValue: undefined,
+                                                                    referenceRange:
+                                                                      prev.referenceRange ?? {
+                                                                        min: undefined,
+                                                                        max: undefined,
+                                                                      },
+                                                                  };
+                                                                }
+                                                                const nextOptions =
+                                                                  prev.options?.length
+                                                                    ? prev.options
+                                                                    : [
+                                                                        "соответствует",
+                                                                        "не соответствует",
+                                                                      ];
+                                                                return {
+                                                                  ...prev,
+                                                                  type: "select",
+                                                                  options: nextOptions,
+                                                                  referenceRange: undefined,
+                                                                  referenceValue:
+                                                                    prev.referenceValue ??
+                                                                    nextOptions[0],
+                                                                };
+                                                              },
+                                                            );
+                                                          }}
+                                                        >
+                                                          <option value="number">Число</option>
+                                                          <option value="select">Выпадающий список</option>
+                                                        </select>
+
+                                                        {field.type === "select" ? (
+                                                          <label className="block text-xs font-medium text-slate-600">
+                                                            Варианты
+                                                            <textarea
+                                                              className="mt-1 min-h-[4.5rem] w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+                                                              placeholder="Напр. стерильно, нестерильно"
+                                                              value={
+                                                                qcOptionsDraftByFieldId[field.id] ??
+                                                                (field.options ?? []).join(", ")
+                                                              }
+                                                              onChange={(e) => {
+                                                                const nextText = e.target.value;
+                                                                setQcOptionsDraftByFieldId((prev) => ({
+                                                                  ...prev,
+                                                                  [field.id]: nextText,
+                                                                }));
+                                                              }}
+                                                              onFocus={() => {
+                                                                setQcOptionsDraftByFieldId((prev) => {
+                                                                  if (field.id in prev) return prev;
+                                                                  return {
+                                                                    ...prev,
+                                                                    [field.id]: (field.options ?? []).join(
+                                                                      ", ",
+                                                                    ),
+                                                                  };
+                                                                });
+                                                              }}
+                                                              onBlur={() => {
+                                                                const raw =
+                                                                  qcOptionsDraftByFieldId[field.id] ??
+                                                                  (field.options ?? []).join(", ");
+                                                                const nextOptions = raw
+                                                                  .split(/[,\n]/g)
+                                                                  .map((s) => s.trim())
+                                                                  .filter(Boolean);
+                                                                patchQualityIndicator(
+                                                                  stage,
+                                                                  step.id,
+                                                                  field.id,
+                                                                  (prev) => ({
+                                                                    ...prev,
+                                                                    options: nextOptions,
+                                                                    referenceValue:
+                                                                      nextOptions.includes(
+                                                                        prev.referenceValue ??
+                                                                          "",
+                                                                      )
+                                                                        ? prev.referenceValue
+                                                                        : nextOptions[0],
+                                                                  }),
+                                                                );
+                                                                setQcOptionsDraftByFieldId((prev) => ({
+                                                                  ...prev,
+                                                                  [field.id]: nextOptions.join(", "),
+                                                                }));
+                                                              }}
+                                                            />
+                                                          </label>
+                                                        ) : null}
+                                                      </div>
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                      {field.type === "number" ? (
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                          <input
+                                                            type="number"
+                                                            className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+                                                            placeholder="от"
+                                                            value={field.referenceRange?.min ?? ""}
+                                                            onChange={(e) =>
+                                                              patchQualityIndicator(
+                                                                stage,
+                                                                step.id,
+                                                                field.id,
+                                                                (prev) => ({
+                                                                  ...prev,
+                                                                  referenceRange: {
+                                                                    min:
+                                                                      e.target.value === ""
+                                                                        ? undefined
+                                                                        : Number(e.target.value),
+                                                                    max: prev.referenceRange?.max,
+                                                                  },
+                                                                }),
+                                                              )
+                                                            }
+                                                          />
+                                                          <input
+                                                            type="number"
+                                                            className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+                                                            placeholder="до"
+                                                            value={field.referenceRange?.max ?? ""}
+                                                            onChange={(e) =>
+                                                              patchQualityIndicator(
+                                                                stage,
+                                                                step.id,
+                                                                field.id,
+                                                                (prev) => ({
+                                                                  ...prev,
+                                                                  referenceRange: {
+                                                                    min: prev.referenceRange?.min,
+                                                                    max:
+                                                                      e.target.value === ""
+                                                                        ? undefined
+                                                                        : Number(e.target.value),
+                                                                  },
+                                                                }),
+                                                              )
+                                                            }
+                                                          />
+                                                        </div>
+                                                      ) : (
+                                                        <div className="space-y-2">
+                                                          <select
+                                                            className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+                                                            value={field.referenceValue ?? ""}
+                                                            onChange={(e) =>
+                                                              patchQualityIndicator(
+                                                                stage,
+                                                                step.id,
+                                                                field.id,
+                                                                (prev) => ({
+                                                                  ...prev,
+                                                                  referenceValue: e.target.value,
+                                                                }),
+                                                              )
+                                                            }
+                                                          >
+                                                            {(field.options ?? []).length === 0 ? (
+                                                              <option value="">
+                                                                Сначала добавьте варианты…
+                                                              </option>
+                                                            ) : null}
+                                                            {(field.options ?? []).map((opt) => (
+                                                              <option key={opt} value={opt}>
+                                                                {opt}
+                                                              </option>
+                                                            ))}
+                                                          </select>
+                                                        </div>
+                                                      )}
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                      <input
+                                                        className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+                                                        value={field.unit ?? ""}
+                                                        placeholder="Напр. 10^9/л"
+                                                        onChange={(e) =>
+                                                          patchQualityIndicator(
+                                                            stage,
+                                                            step.id,
+                                                            field.id,
+                                                            (prev) => ({
+                                                              ...prev,
+                                                              unit: e.target.value,
+                                                            }),
+                                                          )
+                                                        }
+                                                      />
+                                                    </td>
+                                                    <td className="px-3 py-2">
+                                                      <input
+                                                        type="number"
+                                                        className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+                                                        value={field.sortOrder ?? idx + 1}
+                                                        onChange={(e) =>
+                                                          patchQualityIndicator(
+                                                            stage,
+                                                            step.id,
+                                                            field.id,
+                                                            (prev) => ({
+                                                              ...prev,
+                                                              sortOrder:
+                                                                e.target.value === ""
+                                                                  ? undefined
+                                                                  : Number(e.target.value),
+                                                            }),
+                                                          )
+                                                        }
+                                                      />
+                                                    </td>
+                                                    <td className="px-3 py-2 text-right">
+                                                      <button
+                                                        type="button"
+                                                        className="rounded-md border border-red-300 bg-white p-2 text-red-700 hover:bg-red-50"
+                                                        onClick={() =>
+                                                          removeQualityIndicator(
+                                                            stage,
+                                                            step.id,
+                                                            field.id,
+                                                          )
+                                                        }
+                                                        aria-label="Удалить показатель"
+                                                        title="Удалить показатель"
+                                                      >
+                                                        <svg
+                                                          className="size-4"
+                                                          viewBox="0 0 24 24"
+                                                          fill="none"
+                                                          stroke="currentColor"
+                                                          strokeWidth="2"
+                                                          strokeLinecap="round"
+                                                          strokeLinejoin="round"
+                                                          aria-hidden
+                                                        >
+                                                          <path d="M3 6h18" />
+                                                          <path d="M8 6V4h8v2" />
+                                                          <path d="M19 6l-1 14H6L5 6" />
+                                                          <path d="M10 11v6" />
+                                                          <path d="M14 11v6" />
+                                                        </svg>
+                                                      </button>
+                                                    </td>
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        )}
+
+                                        <div className="mt-3">
+                                          <button
+                                            type="button"
+                                            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                            onClick={() =>
+                                              addQualityIndicator(stage, step.id)
+                                            }
+                                          >
+                                            + Показатель
+                                          </button>
+                                        </div>
                                       </div>
                                     </div>
                                   ) : stage.type === "production" ? (
@@ -2099,18 +2642,21 @@ export function ConstructorEditorView({
                           );
                         })()}
                       </div>
-                    ))}
+                    ),
+                    )}
                   </div>
                 )}
 
                 <div className="pt-1">
-                  <button
-                    type="button"
-                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    onClick={() => addStep(stage)}
-                  >
-                    + Шаг
-                  </button>
+                  {allowSteps(stage.type) ? (
+                    <button
+                      type="button"
+                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                      onClick={() => addStep(stage)}
+                    >
+                      + Шаг
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </Tab.Panel>
@@ -2119,4 +2665,12 @@ export function ConstructorEditorView({
       </Tab.Group>
     </div>
   );
+}
+
+function formatSavedClock(iso: string): string {
+  const dt = new Date(iso);
+  const hh = String(dt.getHours()).padStart(2, "0");
+  const mm = String(dt.getMinutes()).padStart(2, "0");
+  const ss = String(dt.getSeconds()).padStart(2, "0");
+  return `${hh}:${mm}:${ss}`;
 }

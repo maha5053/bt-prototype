@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { ProductionJournalDevTools } from "../components/ProductionJournalDevTools";
 import {
   ProductionProvider,
   useProduction,
@@ -868,6 +869,8 @@ function ProductionListContent() {
           </div>
         </div>
       )}
+
+      <ProductionJournalDevTools />
     </div>
   );
 }

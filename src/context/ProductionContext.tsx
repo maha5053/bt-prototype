@@ -13,6 +13,7 @@ import {
   buildOrderFromTemplate,
   createTemplateWithSystemStages,
   mergeProductionTemplatesWithBaseline,
+  reconcileRuntimeV2Templates,
   type ExecutionStatus,
   type FieldValue,
   type ProcessTemplate,
@@ -25,7 +26,7 @@ import {
 import {
   getBaselineRegistrationStage,
   getBaselineReleaseStage,
-  makeMinimalQualityControlStage,
+  resolveQualityControlStageForV2Runtime,
 } from "../lib/productionSystemStages";
 import { isReleaseTechProcessApproved } from "../lib/productionReleaseAct";
 import { PRODUCTION_STORAGE_KEY } from "../lib/productionStorageKey";
@@ -231,12 +232,22 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
   const createOrderFromConstructorV2 = useCallback(
     (input: { templateId: string; orderId: string; createdBy: string }): ProductionOrder => {
       const { templateId, orderId, createdBy } = input;
-      const activeTemplates = templates.filter((t) => !t.archivedAt);
+      const snapshot = loadFromStorage();
+      const mergedForSource =
+        snapshot?.templates && snapshot.templates.length > 0
+          ? mergeProductionTemplatesWithBaseline(
+              snapshot.templates,
+              INITIAL_PROCESS_TEMPLATES,
+            )
+          : templates;
+      const activeTemplates = mergedForSource.filter((t) => !t.archivedAt);
       const source =
         activeTemplates.find((t) => t.id === templateId) ?? null;
       if (!source) throw new Error("Template not found");
 
       const prodStage = source.stages.find((s) => s.type === "production") ?? null;
+      const qcFromSource = source.stages.find((s) => s.type === "quality_control");
+      const qcStage = resolveQualityControlStageForV2Runtime(qcFromSource);
       const runtimeTemplateId = `tpl-runtime-v2-${templateId}`;
       const runtimeTemplate: ProcessTemplate = {
         id: runtimeTemplateId,
@@ -252,7 +263,7 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
             allowedRoles: [],
             steps: [],
           },
-          makeMinimalQualityControlStage(),
+          qcStage,
           getBaselineReleaseStage(),
         ],
       };
@@ -328,8 +339,10 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       if (isArchived || usedByOrder) return prev;
       const next = {
         ...prev,
-        templates: prev.templates.map((t) =>
-          t.id === template.id ? template : t,
+        templates: reconcileRuntimeV2Templates(
+          prev.templates.map((t) =>
+            t.id === template.id ? template : t,
+          ),
         ),
       };
       saveToStorage(next);

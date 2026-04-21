@@ -1,0 +1,707 @@
+{
+    "id": "tpl-thrombogel-new",
+    "name": "Тромбогель NEW",
+    "stages": [
+      {
+        "id": "stg-registration",
+        "name": "Регистрация биоматериала",
+        "type": "registration",
+        "isSystem": true,
+        "isSopStage": true,
+        "allowedRoles": [],
+        "steps": [
+          {
+            "id": "step-registration-1",
+            "name": "Шаг 1",
+            "sopActions": [],
+            "fields": [
+              {
+                "id": "sec-common",
+                "label": "Общие данные",
+                "type": "section_header",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "seq",
+                "label": "Порядковый номер",
+                "type": "number",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "fio",
+                "label": "ФИО",
+                "type": "text",
+                "required": true,
+                "placeholder": "Введите ФИО",
+                "isSystem": true
+              },
+              {
+                "id": "dob",
+                "label": "Дата рождения",
+                "type": "date",
+                "required": true,
+                "isSystem": true
+              },
+              {
+                "id": "age",
+                "label": "Возраст",
+                "type": "number",
+                "required": false,
+                "computedFrom": "dob",
+                "computeRule": "age_from_date",
+                "isSystem": true
+              },
+              {
+                "id": "department",
+                "label": "Отделение",
+                "type": "select",
+                "required": false,
+                "options": [
+                  "Хирургия",
+                  "Терапия",
+                  "Травматология"
+                ],
+                "isSystem": true
+              },
+              {
+                "id": "ib",
+                "label": "N ИБ",
+                "type": "text",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "diagnosis",
+                "label": "Диагноз",
+                "type": "text",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "productId",
+                "label": "ID продукта",
+                "type": "text",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "executor",
+                "label": "ФИО исполнителя",
+                "type": "text",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "sec-blood",
+                "label": "Забор крови",
+                "type": "section_header",
+                "required": false,
+                "sopRef": "СОП 2.1.1",
+                "sopFileName": "SOP_2.1.1_zabor_krovi.docx",
+                "isSystem": true
+              },
+              {
+                "id": "bloodVolume",
+                "label": "Объём забранной крови",
+                "type": "number",
+                "unit": "мл",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "containerType",
+                "label": "Тип контейнера",
+                "type": "select",
+                "required": false,
+                "options": [
+                  "гемакон",
+                  "пробирки"
+                ],
+                "isSystem": true
+              },
+              {
+                "id": "sec-qc",
+                "label": "Входной контроль качества",
+                "type": "section_header",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "integrity",
+                "label": "Целостность",
+                "type": "select",
+                "required": false,
+                "options": [
+                  "не нарушена",
+                  "нарушена"
+                ],
+                "isSystem": true
+              },
+              {
+                "id": "volumeOk",
+                "label": "Объём",
+                "type": "select",
+                "required": false,
+                "options": [
+                  "соответствует",
+                  "не соответствует"
+                ],
+                "isSystem": true
+              },
+              {
+                "id": "hemolysis",
+                "label": "Гемолиз",
+                "type": "select",
+                "required": false,
+                "options": [
+                  "нет",
+                  "да"
+                ],
+                "isSystem": true
+              },
+              {
+                "id": "assignedStatus",
+                "label": "Присвоен статус",
+                "type": "select",
+                "required": false,
+                "options": [
+                  "Разрешено",
+                  "Брак"
+                ],
+                "isSystem": true
+              },
+              {
+                "id": "sec-balance",
+                "label": "Материальный баланс",
+                "type": "section_header",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "syringe20",
+                "label": "Шприцы 20",
+                "type": "number",
+                "unit": "шт",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "syringe30",
+                "label": "Шприцы 30",
+                "type": "number",
+                "unit": "шт",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "hemacon",
+                "label": "Гемакон",
+                "type": "number",
+                "unit": "шт",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "gauze",
+                "label": "Стерильные марлевые салфетки",
+                "type": "number",
+                "unit": "шт",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "alcohol",
+                "label": "Спирт",
+                "type": "number",
+                "unit": "мл",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "citrate",
+                "label": "Цитрат Na",
+                "type": "number",
+                "unit": "мл",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "sec-dev",
+                "label": "Отклонения",
+                "type": "section_header",
+                "required": false,
+                "isSystem": true
+              },
+              {
+                "id": "devFlag",
+                "label": "Отклонения",
+                "type": "select",
+                "required": false,
+                "options": [
+                  "Нет",
+                  "Да"
+                ],
+                "isSystem": true
+              },
+              {
+                "id": "devNotes",
+                "label": "Примечания",
+                "type": "text",
+                "required": false,
+                "isSystem": true
+              }
+            ],
+            "consumables": [],
+            "equipment": [],
+            "hasDeviations": true
+          }
+        ]
+      },
+      {
+        "id": "stg-production",
+        "name": "Производство",
+        "type": "production",
+        "isSystem": true,
+        "isSopStage": true,
+        "allowedRoles": [],
+        "steps": [
+          {
+            "id": "step-prod-1",
+            "name": "Получение плазмы",
+            "sopRef": "СОП 3.1",
+            "sopFileName": "SOP_PRP_plasma.pdf",
+            "hasDeviations": true,
+            "fields": [],
+            "consumables": [
+              {
+                "id": "c-tubes50",
+                "name": "Пробирки 50 мл",
+                "unit": "шт"
+              },
+              {
+                "id": "c-pip5",
+                "name": "Пипетки 5 мл",
+                "unit": "шт"
+              },
+              {
+                "id": "c-pip10",
+                "name": "Пипетки 10 мл",
+                "unit": "шт"
+              },
+              {
+                "id": "c-pip25",
+                "name": "Пипетки 25 мл",
+                "unit": "шт"
+              },
+              {
+                "id": "c-labels",
+                "name": "Термоэтикетки",
+                "unit": "шт"
+              },
+              {
+                "id": "c-epp",
+                "name": "Пробирки Эппендорф",
+                "unit": "шт"
+              },
+              {
+                "id": "c-syr20",
+                "name": "Шприцы 20 мл",
+                "unit": "шт"
+              },
+              {
+                "id": "c-scalpel",
+                "name": "Скальпель",
+                "unit": "шт"
+              },
+              {
+                "id": "c-aero",
+                "name": "Флаконы для бак. посева на аэробы",
+                "unit": "шт"
+              },
+              {
+                "id": "c-ana",
+                "name": "Флаконы для бак. посева на анаэробы",
+                "unit": "шт"
+              }
+            ],
+            "equipment": [
+              {
+                "id": "e-laminar",
+                "name": "Ламинарный шкаф"
+              },
+              {
+                "id": "e-centrifuge",
+                "name": "Центрифуга"
+              },
+              {
+                "id": "e-strip",
+                "name": "Стриппетер"
+              }
+            ],
+            "actions": [
+              {
+                "id": "act-tn-cent-1",
+                "text": "Центрифугирование",
+                "required": true
+              },
+              {
+                "id": "act-tn-plasma-50",
+                "text": "Отбор плазмы в 50 мл пробирки",
+                "required": true,
+                "input": {
+                  "label": "Объём отобранной плазмы(мл)",
+                  "type": "number"
+                }
+              },
+              {
+                "id": "act-tn-cent-2",
+                "text": "Центрифугирование (повторное)",
+                "required": true
+              },
+              {
+                "id": "act-tn-supernatant",
+                "text": "Отбор надосадочной плазмы",
+                "required": true,
+                "input": {
+                  "label": "Объем отобранной плазмы, мл",
+                  "type": "number"
+                }
+              },
+              {
+                "id": "act-tn-test",
+                "text": "ТЕСТОВОЕ",
+                "required": true
+              }
+            ]
+          },
+          {
+            "id": "step-prod-2",
+            "name": "2. Получение тромбогеля",
+            "sopRef": "СОП 3.2",
+            "sopFileName": "SOP_thrombogel.pdf",
+            "hasDeviations": true,
+            "fields": [
+              {
+                "id": "resusp",
+                "label": "Ресуспендирование осадка",
+                "type": "checkbox",
+                "required": false
+              },
+              {
+                "id": "resuspVol",
+                "label": "Объём ресуспендирования",
+                "type": "number",
+                "unit": "мл",
+                "required": false
+              },
+              {
+                "id": "marking",
+                "label": "Маркировка",
+                "type": "checkbox",
+                "required": false
+              },
+              {
+                "id": "bact",
+                "label": "Бакпосев",
+                "type": "checkbox",
+                "required": false
+              },
+              {
+                "id": "cbc",
+                "label": "ОАК",
+                "type": "checkbox",
+                "required": false
+              },
+              {
+                "id": "extra",
+                "label": "Дополнительные исследования",
+                "type": "text",
+                "required": false
+              },
+              {
+                "id": "quarantine",
+                "label": "Карантинное хранение",
+                "type": "checkbox",
+                "required": false
+              },
+              {
+                "id": "aliquots",
+                "label": "Количество аликвот",
+                "type": "number",
+                "unit": "шт",
+                "required": false
+              }
+            ],
+            "consumables": [
+              {
+                "id": "c-tubes50",
+                "name": "Пробирки 50 мл",
+                "unit": "шт"
+              },
+              {
+                "id": "c-pip5",
+                "name": "Пипетки 5 мл",
+                "unit": "шт"
+              },
+              {
+                "id": "c-pip10",
+                "name": "Пипетки 10 мл",
+                "unit": "шт"
+              },
+              {
+                "id": "c-pip25",
+                "name": "Пипетки 25 мл",
+                "unit": "шт"
+              },
+              {
+                "id": "c-labels",
+                "name": "Термоэтикетки",
+                "unit": "шт"
+              },
+              {
+                "id": "c-epp",
+                "name": "Пробирки Эппендорф",
+                "unit": "шт"
+              },
+              {
+                "id": "c-syr20",
+                "name": "Шприцы 20 мл",
+                "unit": "шт"
+              },
+              {
+                "id": "c-scalpel",
+                "name": "Скальпель",
+                "unit": "шт"
+              },
+              {
+                "id": "c-aero",
+                "name": "Флаконы для бак. посева на аэробы",
+                "unit": "шт"
+              },
+              {
+                "id": "c-ana",
+                "name": "Флаконы для бак. посева на анаэробы",
+                "unit": "шт"
+              }
+            ],
+            "equipment": [
+              {
+                "id": "e-laminar",
+                "name": "Ламинарный шкаф"
+              },
+              {
+                "id": "e-centrifuge",
+                "name": "Центрифуга"
+              },
+              {
+                "id": "e-strip",
+                "name": "Стриппетер"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "stg-quality_control",
+        "name": "Контроль качества",
+        "type": "quality_control",
+        "isSystem": true,
+        "isSopStage": true,
+        "allowedRoles": [],
+        "steps": [
+          {
+            "id": "step-qc-1",
+            "name": "1. Результаты контроля качества",
+            "hasDeviations": true,
+            "consumables": [],
+            "equipment": [],
+            "fields": [
+              {
+                "id": "pltWhole",
+                "label": "Кол-во Тц в цельной крови",
+                "type": "number",
+                "unit": "10^9/л",
+                "required": false,
+                "referenceRange": {
+                  "min": 150,
+                  "max": 450
+                }
+              },
+              {
+                "id": "wbcWhole",
+                "label": "Кол-во Лц в цельной крови",
+                "type": "number",
+                "unit": "10^9/л",
+                "required": false,
+                "referenceRange": {
+                  "min": 4,
+                  "max": 10
+                }
+              },
+              {
+                "id": "rbcWhole",
+                "label": "Кол-во Эр в цельной крови",
+                "type": "number",
+                "unit": "10^12/л",
+                "required": false,
+                "referenceRange": {
+                  "min": 3.8,
+                  "max": 5.5
+                }
+              },
+              {
+                "id": "hbWhole",
+                "label": "Hb в цельной крови",
+                "type": "number",
+                "unit": "г/л",
+                "required": false,
+                "referenceRange": {
+                  "min": 120,
+                  "max": 160
+                }
+              },
+              {
+                "id": "pltPrp",
+                "label": "Кол-во Тц в PRP",
+                "type": "number",
+                "unit": "10^9/л",
+                "required": false,
+                "referenceRange": {
+                  "min": 800,
+                  "max": 1800
+                }
+              },
+              {
+                "id": "wbcPrp",
+                "label": "Кол-во Лц в PRP",
+                "type": "number",
+                "unit": "10^9/л",
+                "required": false,
+                "referenceRange": {
+                  "min": 0.5,
+                  "max": 8
+                }
+              },
+              {
+                "id": "rbcPrp",
+                "label": "Кол-во Эр в PRP",
+                "type": "number",
+                "unit": "10^12/л",
+                "required": false,
+                "referenceRange": {
+                  "min": 0,
+                  "max": 0.5
+                }
+              },
+              {
+                "id": "hbPrp",
+                "label": "Hb в PRP",
+                "type": "number",
+                "unit": "г/л",
+                "required": false,
+                "referenceRange": {
+                  "min": 0,
+                  "max": 8
+                }
+              },
+              {
+                "id": "sterility",
+                "label": "Посев на стерильность",
+                "type": "select",
+                "required": false,
+                "options": [
+                  "стерильно",
+                  "нестерильно"
+                ]
+              },
+              {
+                "id": "extraQc",
+                "label": "Дополнительные показатели",
+                "type": "text",
+                "required": false
+              },
+              {
+                "id": "qcComment",
+                "label": "Комментарий",
+                "type": "text",
+                "required": false,
+                "multiline": true,
+                "placeholder": "При необходимости укажите комментарий…"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "stg-release",
+        "name": "Выдача",
+        "type": "release",
+        "isSystem": true,
+        "isSopStage": true,
+        "allowedRoles": [],
+        "steps": [
+          {
+            "id": "step-release-1",
+            "name": "Шаг 1",
+            "sopActions": [],
+            "fields": [
+              {
+                "id": "productIdRef",
+                "label": "ID продукта",
+                "type": "text",
+                "required": false,
+                "refStageIndex": 0,
+                "refFieldId": "productId",
+                "isSystem": true
+              },
+              {
+                "id": "fioRef",
+                "label": "ФИО пациента",
+                "type": "text",
+                "required": false,
+                "refStageIndex": 0,
+                "refFieldId": "fio",
+                "isSystem": true
+              },
+              {
+                "id": "ibRef",
+                "label": "N ИБ",
+                "type": "text",
+                "required": false,
+                "refStageIndex": 0,
+                "refFieldId": "ib",
+                "isSystem": true
+              },
+              {
+                "id": "where",
+                "label": "Куда выдано",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "Операционная",
+                  "Перевязочная",
+                  "Эндоскопический кабинет"
+                ],
+                "isSystem": true
+              },
+              {
+                "id": "devSummary",
+                "label": "Отклонения (сводка)",
+                "type": "text",
+                "required": false,
+                "refDeviations": [
+                  0
+                ],
+                "isSystem": true
+              }
+            ],
+            "consumables": [],
+            "equipment": [],
+            "hasDeviations": true
+          }
+        ]
+      }
+    ]
+  }

@@ -49,3 +49,38 @@ export function makeMinimalQualityControlStage(): StageTemplate {
   };
 }
 
+/**
+ * Этап КК для runtime-шаблона ver2: копия из шаблона конструктора, без подмены на «минимальный»
+ * с pltWhole, если в шаблоне уже есть этап КК. Поддерживает пустой список шагов и поля в groups.
+ */
+export function resolveQualityControlStageForV2Runtime(
+  qcStageFromTemplate: StageTemplate | undefined,
+): StageTemplate {
+  if (!qcStageFromTemplate) {
+    return makeMinimalQualityControlStage();
+  }
+  const cloned = clone(qcStageFromTemplate);
+  if (cloned.steps.length === 0) {
+    cloned.steps = [
+      {
+        id: "step-qc-1",
+        name: "1. Результаты контроля качества",
+        hasDeviations: true,
+        consumables: [],
+        equipment: [],
+        fields: [],
+      },
+    ];
+  }
+  for (const step of cloned.steps) {
+    const fromGroups = (step.groups ?? []).flatMap((g) => g.fields ?? []);
+    if (!(step.fields?.length) && fromGroups.length > 0) {
+      step.fields = fromGroups;
+    }
+    if (!step.fields) {
+      step.fields = [];
+    }
+  }
+  return cloned;
+}
+
