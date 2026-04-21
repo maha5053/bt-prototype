@@ -30,6 +30,7 @@ import {
   ConstructorEditorPage,
   ConstructorListPage,
 } from "./pages/ConstructorPages";
+import { ConstructorV2EditorPage, ConstructorV2ListPage } from "./pages/ConstructorV2Pages";
 import { TemplateListPage } from "./pages/TemplateListPage";
 import { UsersAdminPage } from "./pages/UsersAdminPage";
 
@@ -118,10 +119,16 @@ const router = createBrowserRouter(
               element: <UsersAdminPage />,
             },
             { path: "konstruktor", element: <ConstructorListPage /> },
+            { path: "konstruktor-ver2", element: <ConstructorV2ListPage /> },
             { path: "konstruktor/novyy", element: <ConstructorEditorPage /> },
             {
               path: "konstruktor/:templateId",
               element: <ConstructorEditorPage />,
+            },
+            { path: "konstruktor-ver2/novyy", element: <ConstructorV2EditorPage /> },
+            {
+              path: "konstruktor-ver2/:templateId",
+              element: <ConstructorV2EditorPage />,
             },
           ],
         },

@@ -7,9 +7,11 @@ import {
   type ReactNode,
 } from "react";
 import {
+  DEFAULT_SYSTEM_FIELD_REGISTRY,
   INITIAL_PROCESS_TEMPLATES,
   INITIAL_PRODUCTION_ORDERS,
   buildOrderFromTemplate,
+  createTemplateWithSystemStages,
   mergeProductionTemplatesWithBaseline,
   type ExecutionStatus,
   type FieldValue,
@@ -18,10 +20,15 @@ import {
   type ProductionOrderStatus,
   type ProductionRejectionAttachment,
   type ProductionRejectionPhase,
+  type SystemFieldRegistry,
 } from "../mocks/productionData";
+import {
+  getBaselineRegistrationStage,
+  getBaselineReleaseStage,
+  makeMinimalQualityControlStage,
+} from "../lib/productionSystemStages";
 import { isReleaseTechProcessApproved } from "../lib/productionReleaseAct";
-
-const STORAGE_KEY = "bio-production";
+import { PRODUCTION_STORAGE_KEY } from "../lib/productionStorageKey";
 
 const PO_ORDER_ID_RE = /^po-(\d+)$/i;
 
@@ -38,19 +45,34 @@ function nextProductionOrderId(orders: ProductionOrder[]): string {
   return `po-${String(next).padStart(3, "0")}`;
 }
 
-function loadFromStorage(): { templates: ProcessTemplate[]; orders: ProductionOrder[] } | null {
+function loadFromStorage():
+  | {
+      templates: ProcessTemplate[];
+      orders: ProductionOrder[];
+      systemFieldRegistry?: SystemFieldRegistry;
+    }
+  | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as { templates: ProcessTemplate[]; orders: ProductionOrder[] };
+    const raw = localStorage.getItem(PRODUCTION_STORAGE_KEY);
+    if (raw)
+      return JSON.parse(raw) as {
+        templates: ProcessTemplate[];
+        orders: ProductionOrder[];
+        systemFieldRegistry?: SystemFieldRegistry;
+      };
   } catch {
     /* ignore */
   }
   return null;
 }
 
-function saveToStorage(state: { templates: ProcessTemplate[]; orders: ProductionOrder[] }) {
+function saveToStorage(state: {
+  templates: ProcessTemplate[];
+  orders: ProductionOrder[];
+  systemFieldRegistry: SystemFieldRegistry;
+}) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(PRODUCTION_STORAGE_KEY, JSON.stringify(state));
   } catch {
     /* ignore */
   }
@@ -85,8 +107,19 @@ export type UpdateFieldValueInput =
 type ProductionContextValue = {
   templates: ProcessTemplate[];
   orders: ProductionOrder[];
+  systemFieldRegistry: SystemFieldRegistry;
   getOrderById: (orderId: string) => ProductionOrder | null;
+  createTemplate: (name: string) => ProcessTemplate;
+  updateTemplate: (template: ProcessTemplate) => void;
+  deleteTemplate: (templateId: string) => boolean;
+  archiveTemplate: (templateId: string) => boolean;
   createOrder: (templateId: string, createdBy: string) => ProductionOrder;
+  createOrderFromConstructorV2: (input: {
+    templateId: string;
+    orderId: string;
+    createdBy: string;
+  }) => ProductionOrder;
+  deleteOrder: (orderId: string) => boolean;
   updateFieldValue: (input: UpdateFieldValueInput) => void;
   approveReleaseTechProcess: (input: {
     orderId: string;
@@ -139,15 +172,17 @@ type ProductionContextValue = {
 const ProductionContext = createContext<ProductionContextValue | null>(null);
 
 export function ProductionProvider({ children }: { children: ReactNode }) {
-  const [{ templates, orders }, setState] = useState<{
+  const [{ templates, orders, systemFieldRegistry }, setState] = useState<{
     templates: ProcessTemplate[];
     orders: ProductionOrder[];
+    systemFieldRegistry: SystemFieldRegistry;
   }>(() => {
     const stored = loadFromStorage();
     if (!stored) {
       return {
         templates: [...INITIAL_PROCESS_TEMPLATES],
         orders: [...INITIAL_PRODUCTION_ORDERS],
+        systemFieldRegistry: DEFAULT_SYSTEM_FIELD_REGISTRY,
       };
     }
     const merged = {
@@ -156,6 +191,8 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
         INITIAL_PROCESS_TEMPLATES,
       ),
       orders: stored.orders,
+      systemFieldRegistry:
+        stored.systemFieldRegistry ?? DEFAULT_SYSTEM_FIELD_REGISTRY,
     };
     saveToStorage(merged);
     return merged;
@@ -168,8 +205,9 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
 
   const createOrder = useCallback(
     (templateId: string, createdBy: string): ProductionOrder => {
+      const activeTemplates = templates.filter((t) => !t.archivedAt);
       const template =
-        templates.find((t) => t.id === templateId) ?? templates[0];
+        activeTemplates.find((t) => t.id === templateId) ?? activeTemplates[0];
       if (!template) throw new Error("No production templates available");
 
       let created: ProductionOrder | undefined;
@@ -189,6 +227,153 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
     },
     [templates],
   );
+
+  const createOrderFromConstructorV2 = useCallback(
+    (input: { templateId: string; orderId: string; createdBy: string }): ProductionOrder => {
+      const { templateId, orderId, createdBy } = input;
+      const activeTemplates = templates.filter((t) => !t.archivedAt);
+      const source =
+        activeTemplates.find((t) => t.id === templateId) ?? null;
+      if (!source) throw new Error("Template not found");
+
+      const prodStage = source.stages.find((s) => s.type === "production") ?? null;
+      const runtimeTemplateId = `tpl-runtime-v2-${templateId}`;
+      const runtimeTemplate: ProcessTemplate = {
+        id: runtimeTemplateId,
+        name: source.name,
+        stages: [
+          getBaselineRegistrationStage(),
+          prodStage ? JSON.parse(JSON.stringify(prodStage)) : {
+            id: "stg-prod",
+            name: "Производство",
+            type: "production",
+            isSystem: true,
+            isSopStage: true,
+            allowedRoles: [],
+            steps: [],
+          },
+          makeMinimalQualityControlStage(),
+          getBaselineReleaseStage(),
+        ],
+      };
+
+      let created: ProductionOrder | undefined;
+      setState((prev) => {
+        if (prev.orders.some((o) => o.id === orderId)) return prev;
+        const newOrder = buildOrderFromTemplate(runtimeTemplate, {
+          id: orderId,
+          createdBy,
+        });
+        created = newOrder;
+        const hasRuntime = prev.templates.some((t) => t.id === runtimeTemplateId);
+        const nextTemplates = hasRuntime
+          ? prev.templates.map((t) => (t.id === runtimeTemplateId ? runtimeTemplate : t))
+          : [runtimeTemplate, ...prev.templates];
+        const next = { ...prev, templates: nextTemplates, orders: [newOrder, ...prev.orders] };
+        saveToStorage(next);
+        return next;
+      });
+      if (!created) throw new Error("Failed to create order");
+      return created;
+    },
+    [templates],
+  );
+
+  const deleteOrder = useCallback((orderId: string): boolean => {
+    let removed = false;
+    setState((prev) => {
+      const order = prev.orders.find((o) => o.id === orderId);
+      if (!order) return prev;
+      if (order.status !== "in_progress") return prev;
+      const currentStage = order.stages[order.currentStageIndex];
+      if (!currentStage || currentStage.type !== "registration") return prev;
+      const nextOrders = prev.orders.filter((o) => o.id !== orderId);
+      if (nextOrders.length === prev.orders.length) return prev;
+      removed = true;
+      const next = { ...prev, orders: nextOrders };
+      saveToStorage(next);
+      return next;
+    });
+    return removed;
+  }, []);
+
+  const createTemplate = useCallback(
+    (name: string): ProcessTemplate => {
+      const id = `tpl-${Date.now()}`;
+      const safeName = name.trim() || "Новый шаблон";
+      const fromStorage = loadFromStorage();
+      const nextTemplate = createTemplateWithSystemStages({
+        id,
+        name: safeName,
+        systemFieldRegistry:
+          fromStorage?.systemFieldRegistry ?? DEFAULT_SYSTEM_FIELD_REGISTRY,
+      });
+      setState((prev) => {
+        const next = { ...prev, templates: [nextTemplate, ...prev.templates] };
+        saveToStorage(next);
+        return next;
+      });
+      return nextTemplate;
+    },
+    [],
+  );
+
+  const updateTemplate = useCallback((template: ProcessTemplate) => {
+    setState((prev) => {
+      const current = prev.templates.find((t) => t.id === template.id);
+      if (!current) return prev;
+      if (current.id === "tpl-thrombogel") return prev;
+      const isArchived = Boolean(current.archivedAt);
+      const usedByOrder = prev.orders.some((o) => o.templateId === template.id);
+      if (isArchived || usedByOrder) return prev;
+      const next = {
+        ...prev,
+        templates: prev.templates.map((t) =>
+          t.id === template.id ? template : t,
+        ),
+      };
+      saveToStorage(next);
+      return next;
+    });
+  }, []);
+
+  const deleteTemplate = useCallback((templateId: string): boolean => {
+    let removed = false;
+    setState((prev) => {
+      if (templateId === "tpl-thrombogel") return prev;
+      const usedByOrder = prev.orders.some((o) => o.templateId === templateId);
+      const isArchived = prev.templates.some((t) => t.id === templateId && t.archivedAt);
+      if (usedByOrder || isArchived) return prev;
+      const nextTemplates = prev.templates.filter((t) => t.id !== templateId);
+      if (nextTemplates.length === prev.templates.length) return prev;
+      removed = true;
+      const next = { ...prev, templates: nextTemplates };
+      saveToStorage(next);
+      return next;
+    });
+    return removed;
+  }, []);
+
+  const archiveTemplate = useCallback((templateId: string): boolean => {
+    let archived = false;
+    const now = new Date().toISOString();
+    setState((prev) => {
+      if (templateId === "tpl-thrombogel") return prev;
+      const target = prev.templates.find((t) => t.id === templateId);
+      if (!target) return prev;
+      if (target.archivedAt) return prev;
+      archived = true;
+      const next = {
+        ...prev,
+        templates: prev.templates.map((t) =>
+          t.id === templateId ? { ...t, archivedAt: now } : t,
+        ),
+      };
+      saveToStorage(next);
+      return next;
+    });
+    return archived;
+  }, []);
 
   const updateFieldValue = useCallback((input: UpdateFieldValueInput) => {
     const { orderId, stageIndex, stepIndex, updatedBy } = input;
@@ -324,6 +509,20 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
             !isReleaseTechProcessApproved(step)
           ) {
             return o;
+          }
+          if (stage.type === "production") {
+            const tpl = prev.templates.find((t) => t.id === o.templateId) ?? null;
+            const stageTpl = tpl?.stages[input.stageIndex] ?? null;
+            const stepTpl = stageTpl?.steps?.[input.stepIndex] ?? null;
+            const actions = (stepTpl?.actions ?? []) as unknown as Array<{
+              id: string;
+              required?: boolean;
+            }>;
+            const required = actions.filter((a) => (a.required ?? true) === true);
+            const hasMissing = required.some(
+              (a) => step.fieldValues?.[`action:${a.id}:done`] !== true,
+            );
+            if (hasMissing) return o;
           }
 
           const nextStages = [...o.stages];
@@ -547,8 +746,15 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
     () => ({
       templates,
       orders,
+      systemFieldRegistry,
       getOrderById,
+      createTemplate,
+      updateTemplate,
+      deleteTemplate,
+      archiveTemplate,
       createOrder,
+      createOrderFromConstructorV2,
+      deleteOrder,
       updateFieldValue,
       approveReleaseTechProcess,
       saveDraft,
@@ -562,8 +768,15 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
     [
       templates,
       orders,
+      systemFieldRegistry,
       getOrderById,
+      createTemplate,
+      updateTemplate,
+      deleteTemplate,
+      archiveTemplate,
       createOrder,
+      createOrderFromConstructorV2,
+      deleteOrder,
       updateFieldValue,
       approveReleaseTechProcess,
       saveDraft,

@@ -39,6 +39,7 @@ export interface FieldDefinition {
   id: string;
   label: string;
   type: FieldType;
+  isSystem?: boolean;
   unit?: string;
   required: boolean;
   options?: string[];
@@ -56,12 +57,45 @@ export interface FieldDefinition {
   sopFileName?: string;
 }
 
+export interface StepFieldGroup {
+  id: string;
+  name: string;
+  fields: FieldDefinition[];
+}
+
+export interface SopAction {
+  id: string;
+  title: string;
+  description: string;
+  doneFieldId: string;
+  groups: StepFieldGroup[];
+}
+
+export interface StepGroupTemplate {
+  id: string;
+  name: string;
+  /** PDF-вложение группы (хранится как data URL в localStorage прототипа). */
+  attachmentPdf?: { fileName: string; dataUrl: string };
+  /** Элементы формы внутри группы (для конструктора). */
+  fields: FieldDefinition[];
+}
+
+export interface StepActionTemplate {
+  id: string;
+  text: string;
+}
+
 export interface StepTemplate {
   id: string;
   name: string;
   /** Ссылка на документ шага (как у section_header в форме): открывается в новой вкладке. */
   sopRef?: string;
   sopFileName?: string;
+  /** PDF-вложение шага (хранится как data URL в localStorage прототипа). */
+  attachmentPdf?: { fileName: string; dataUrl: string };
+  groups?: StepGroupTemplate[];
+  actions?: StepActionTemplate[];
+  sopActions?: SopAction[];
   fields: FieldDefinition[];
   consumables: ConsumableItem[];
   equipment: EquipmentItem[];
@@ -72,6 +106,8 @@ export interface StageTemplate {
   id: string;
   name: string;
   type: StageType;
+  isSystem?: boolean;
+  isSopStage?: boolean;
   allowedRoles: Role[];
   steps: StepTemplate[];
 }
@@ -79,6 +115,8 @@ export interface StageTemplate {
 export interface ProcessTemplate {
   id: string;
   name: string;
+  /** ISO datetime when archived. Archived templates are read-only and hidden from "start production" chooser. */
+  archivedAt?: string;
   stages: StageTemplate[];
 }
 
@@ -159,6 +197,12 @@ export interface ProductionOrder {
   rejectedStepTemplateId?: string;
   stages: StageExecution[];
 }
+
+export type SystemFieldRegistry = {
+  version: number;
+  registration: FieldDefinition[];
+  release: FieldDefinition[];
+};
 
 const CURRENT_USER = "Смирнова А.";
 
@@ -256,6 +300,8 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
       id: "stg-reg",
       name: "Регистрация биоматериала",
       type: "registration",
+      isSystem: true,
+      isSopStage: true,
       allowedRoles: [],
       steps: [
         {
@@ -343,6 +389,8 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
       id: "stg-prod",
       name: "Производство",
       type: "production",
+      isSystem: true,
+      isSopStage: true,
       allowedRoles: [],
       steps: [
         {
@@ -417,6 +465,8 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
       id: "stg-qc",
       name: "Контроль качества",
       type: "quality_control",
+      isSystem: true,
+      isSopStage: true,
       allowedRoles: [],
       steps: [
         {
@@ -514,6 +564,8 @@ export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
       id: "stg-release",
       name: "Выдача",
       type: "release",
+      isSystem: true,
+      isSopStage: true,
       allowedRoles: [],
       steps: [
         {
@@ -551,6 +603,90 @@ export const INITIAL_PROCESS_TEMPLATES: ProcessTemplate[] = [THROMBOGEL_TEMPLATE
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function toSystemFields(fields: FieldDefinition[]): FieldDefinition[] {
+  return fields.map((f) => ({ ...clone(f), isSystem: true }));
+}
+
+function getTemplateStage(
+  template: ProcessTemplate,
+  type: StageType,
+): StageTemplate | undefined {
+  return template.stages.find((s) => s.type === type);
+}
+
+export const DEFAULT_SYSTEM_FIELD_REGISTRY: SystemFieldRegistry = (() => {
+  const regFields = getTemplateStage(THROMBOGEL_TEMPLATE, "registration")?.steps[0]
+    ?.fields;
+  const relFields = getTemplateStage(THROMBOGEL_TEMPLATE, "release")?.steps[0]
+    ?.fields;
+  return {
+    version: 1,
+    registration: toSystemFields(regFields ?? []),
+    release: toSystemFields(relFields ?? []),
+  };
+})();
+
+function defaultStageName(type: StageType): string {
+  if (type === "registration") return "Регистрация биоматериала";
+  if (type === "production") return "Производство";
+  if (type === "quality_control") return "Контроль качества";
+  return "Выдача";
+}
+
+function makeStageStep(
+  stageType: StageType,
+  systemFields: FieldDefinition[],
+): StepTemplate {
+  return {
+    id: `step-${stageType}-1`,
+    name: "Шаг 1",
+    sopFileName: undefined,
+    sopActions: [],
+    fields: clone(systemFields),
+    consumables: [],
+    equipment: [],
+    hasDeviations: true,
+  };
+}
+
+export function createTemplateWithSystemStages(
+  input: {
+    id: string;
+    name: string;
+    systemFieldRegistry?: SystemFieldRegistry;
+  },
+): ProcessTemplate {
+  const system = input.systemFieldRegistry ?? DEFAULT_SYSTEM_FIELD_REGISTRY;
+  const stageTypes: StageType[] = [
+    "registration",
+    "production",
+    "quality_control",
+    "release",
+  ];
+  return {
+    id: input.id,
+    name: input.name,
+    stages: stageTypes.map((type) => ({
+      id: `stg-${type}`,
+      name: defaultStageName(type),
+      type,
+      isSystem: true,
+      isSopStage: true,
+      allowedRoles: [],
+      steps: [
+        makeStageStep(
+          type,
+          type === "registration"
+            ? system.registration
+            : type === "release"
+              ? system.release
+              : [],
+        ),
+      ],
+    })),
+  };
 }
 
 function mergeFieldDefinitions(
@@ -598,6 +734,7 @@ function mergeProductionStages(
       ...ss,
       name: bs.name,
       type: bs.type,
+      isSopStage: bs.isSopStage,
       allowedRoles: bs.allowedRoles,
       steps: mergeProductionSteps(ss.steps, bs.steps),
     };
@@ -612,7 +749,7 @@ export function mergeProductionTemplatesWithBaseline(
   storedList: ProcessTemplate[],
   baselineList: ProcessTemplate[],
 ): ProcessTemplate[] {
-  return baselineList.map((bt) => {
+  const mergedBaseline = baselineList.map((bt) => {
     const st = storedList.find((t) => t.id === bt.id);
     if (!st) return clone(bt);
     return {
@@ -621,6 +758,13 @@ export function mergeProductionTemplatesWithBaseline(
       stages: mergeProductionStages(st.stages, bt.stages),
     };
   });
+
+  // Keep user-created templates that are not part of baseline seeds.
+  const extraStored = storedList.filter(
+    (st) => !baselineList.some((bt) => bt.id === st.id),
+  );
+
+  return [...mergedBaseline, ...clone(extraStored)];
 }
 
 export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {

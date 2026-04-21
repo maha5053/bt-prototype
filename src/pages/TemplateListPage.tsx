@@ -1,3 +1,4 @@
+import { ProductionStorageDevTools } from "../components/ProductionStorageDevTools";
 import { ProductionProvider, useProduction } from "../context/ProductionContext";
 
 export function TemplateListPage() {
@@ -12,7 +13,7 @@ function TemplateListContent() {
   const { templates } = useProduction();
 
   return (
-    <div className="p-6 md:p-8">
+    <div className="relative p-6 md:p-8">
       <div className="mb-6">
         <h1 className="text-xl font-semibold text-slate-800">Шаблоны</h1>
         <p className="mt-1 text-sm text-slate-500">
@@ -26,6 +27,8 @@ function TemplateListContent() {
           {templates.length}
         </span>
       </div>
+
+      <ProductionStorageDevTools />
     </div>
   );
 }

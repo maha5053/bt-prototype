@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   useCallback,
   useEffect,
@@ -186,12 +186,11 @@ export function ProductionListPage() {
 }
 
 function ProductionListContent() {
-  const { orders, templates, createOrder } = useProduction();
+  const { orders, templates, createOrder, deleteOrder } = useProduction();
   const { currentUserId } = useCurrentUser();
   const navigate = useNavigate();
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
-  const [showDevTools, setShowDevTools] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [productFilter, setProductFilter] = useState<string>("all");
@@ -336,13 +335,30 @@ function ProductionListContent() {
   };
 
   const handleCreate = () => {
-    const templateId =
-      selectedTemplateId || (templates[0] ? templates[0].id : "");
-    if (!templateId) return;
-    const order = createOrder(templateId, currentUserId);
+    const baselineId = "tpl-thrombogel";
+    const activeTemplates = templates.filter((t) => !t.archivedAt);
+    const baseline = activeTemplates.find((t) => t.id === baselineId) ?? null;
+    const runtimePrefix = "tpl-runtime-v2-";
+    const newTemplates = activeTemplates.filter(
+      (t) => t.id !== baselineId && !t.id.startsWith(runtimePrefix),
+    );
+    const chosen =
+      selectedTemplateId ||
+      (baseline ? baseline.id : newTemplates[0]?.id ?? "");
+    if (!chosen) return;
+
     setShowCreate(false);
     setSelectedTemplateId("");
-    navigate(`/proizvodstvo/${order.id}`);
+
+    if (chosen === baselineId) {
+      const order = createOrder(chosen, currentUserId);
+      navigate(`/proizvodstvo/${order.id}`);
+      return;
+    }
+
+    // New (constructor ver2) flow: create order id and navigate to /:orderId-new
+    const orderId = `po-${Date.now()}`;
+    navigate(`/proizvodstvo/${orderId}-new?templateId=${encodeURIComponent(chosen)}`);
   };
 
   useEffect(() => {
@@ -354,19 +370,8 @@ function ProductionListContent() {
     return () => document.removeEventListener("keydown", onKey);
   }, [showCreate]);
 
-  const STORAGE_KEY = "bio-production";
-
-  const clearProductionLocalStorage = () => {
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-      window.location.reload();
-    } catch {
-      // ignore
-    }
-  };
-
   return (
-    <div className="p-6 md:p-8 relative">
+    <div className="p-6 md:p-8">
       {filtersOpen && (
         <div
           className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 pt-16"
@@ -595,13 +600,14 @@ function ProductionListContent() {
                 </th>
                 <th className="px-4 py-3 font-medium">Текущий этап</th>
                 <th className="px-4 py-3 font-medium">Создатель</th>
+                <th className="px-4 py-3 font-medium text-right">Действия</th>
               </tr>
             </thead>
             <tbody>
               {sortedOrders.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="px-4 py-12 text-center text-slate-500"
                   >
                     Нет заказов на производство.
@@ -610,7 +616,7 @@ function ProductionListContent() {
               ) : shown.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="px-4 py-12 text-center text-slate-500"
                   >
                     Нет записей по фильтрам.
@@ -623,6 +629,11 @@ function ProductionListContent() {
                     order.stages[order.currentStageIndex]?.name ?? "—";
                   const currentStage =
                     rawStage === "—" ? "—" : formatStageLabel(rawStage);
+                  const currentStageType =
+                    order.stages[order.currentStageIndex]?.type ?? null;
+                  const canDelete =
+                    order.status === "in_progress" &&
+                    currentStageType === "registration";
                   const { patientName, caseNumber } =
                     getRegistrationPatientFields(order);
                   return (
@@ -654,6 +665,29 @@ function ProductionListContent() {
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {order.createdBy}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end">
+                          {canDelete ? (
+                            <button
+                              type="button"
+                              className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const ok = window.confirm(
+                                  "Удалить заказ? Данные будут удалены без возможности восстановления.",
+                                );
+                                if (!ok) return;
+                                deleteOrder(order.id);
+                              }}
+                              title="Удалить заказ (доступно на этапе регистрации)"
+                            >
+                              Удалить
+                            </button>
+                          ) : (
+                            <span className="text-xs text-slate-300">—</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -785,11 +819,29 @@ function ProductionListContent() {
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-blue-400"
               >
                 <option value="">Выберите…</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} · этапов: {t.stages.length}
-                  </option>
-                ))}
+                <optgroup label="Эталон">
+                  {templates
+                    .filter((t) => !t.archivedAt && t.id === "tpl-thrombogel")
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                </optgroup>
+                <optgroup label="Новые">
+                  {templates
+                    .filter(
+                      (t) =>
+                        !t.archivedAt &&
+                        t.id !== "tpl-thrombogel" &&
+                        !t.id.startsWith("tpl-runtime-v2-"),
+                    )
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} · этапов: {t.stages.length}
+                      </option>
+                    ))}
+                </optgroup>
               </select>
             </label>
 
@@ -804,97 +856,13 @@ function ProductionListContent() {
               <button
                 type="button"
                 onClick={handleCreate}
-                disabled={!selectedTemplateId && templates.length === 0}
+                disabled={
+                  !selectedTemplateId &&
+                  templates.filter((t) => !t.archivedAt).length === 0
+                }
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Создать заказ
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Dev tools button - bottom right, subtle */}
-      <button
-        type="button"
-        onClick={() => setShowDevTools(true)}
-        className="fixed bottom-4 right-4 rounded-md p-2 text-slate-300 hover:bg-slate-100 hover:text-slate-600"
-        aria-label="Инструменты разработчика"
-        title="Инструменты разработчика"
-      >
-        <svg
-          className="size-5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-        >
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-        </svg>
-      </button>
-
-      {/* Dev tools modal */}
-      {showDevTools && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 pt-16"
-          onClick={() => setShowDevTools(false)}
-        >
-          <div
-            className="relative w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Инструменты разработчика"
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">
-                Инструменты разработчика
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowDevTools(false)}
-                className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                aria-label="Закрыть"
-              >
-                <svg
-                  className="size-5"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-
-            <p className="mb-4 text-sm text-slate-600">
-              Очистка localStorage удалит все данные производства и восстановит
-              исходные mock-данные.
-            </p>
-
-            <div className="flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
-              <button
-                type="button"
-                onClick={() => setShowDevTools(false)}
-                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                onClick={clearProductionLocalStorage}
-                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-red-500"
-              >
-                Очистить localStorage
               </button>
             </div>
           </div>
@@ -912,6 +880,59 @@ export function ProductionOrderPage() {
   );
 }
 
+function ProductionStartV2Inline({
+  orderIdNew,
+  createdBy,
+}: {
+  orderIdNew: string;
+  createdBy: string;
+}) {
+  const baseOrderId = orderIdNew.endsWith("-new")
+    ? orderIdNew.slice(0, -4)
+    : orderIdNew;
+  const [searchParams] = useSearchParams();
+  const templateId = searchParams.get("templateId") ?? "";
+  const navigate = useNavigate();
+  const { createOrderFromConstructorV2 } = useProduction();
+  const didRunRef = useRef(false);
+
+  useEffect(() => {
+    if (didRunRef.current) return;
+    didRunRef.current = true;
+    if (!baseOrderId || !templateId) return;
+    try {
+      createOrderFromConstructorV2({
+        templateId,
+        orderId: baseOrderId,
+        createdBy,
+      });
+      navigate(`/proizvodstvo/${baseOrderId}`, { replace: true });
+    } catch {
+      // handled by UI below
+    }
+  }, [baseOrderId, createOrderFromConstructorV2, createdBy, navigate, templateId]);
+
+  const canStart = Boolean(baseOrderId && templateId);
+  return (
+    <div className="p-6 md:p-8">
+      <h1 className="text-xl font-semibold text-slate-800">Создание заказа</h1>
+      <p className="mt-2 text-sm text-slate-600">
+        {canStart
+          ? "Создаём заказ по выбранному шаблону…"
+          : "Не передан шаблон для создания заказа."}
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Link
+          to="/proizvodstvo"
+          className="inline-flex rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+        >
+          ← К журналу заказов
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 function ProductionOrderContent() {
   const { orderId } = useParams<{ orderId: string }>();
   const { permissions, currentUser } = useCurrentUser();
@@ -925,6 +946,12 @@ function ProductionOrderContent() {
     completeStage,
     rejectOrder,
   } = useProduction();
+
+  // Special URL: /proizvodstvo/:orderId-new?templateId=...
+  if (orderId?.endsWith("-new")) {
+    return <ProductionStartV2Inline orderIdNew={orderId} createdBy={auditUserId} />;
+  }
+
   const order = orderId ? getOrderById(orderId) : null;
   const [activeStageIndex, setActiveStageIndex] = useState<number | null>(null);
   const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
@@ -2344,6 +2371,20 @@ function StepsStage({
   const activeStepTpl = stepsTpl[activeStepIndex];
   const activeStepExec = stepsExec[activeStepIndex];
 
+  const missingRequiredActions = (() => {
+    if (stageTemplate.type !== "production") return false;
+    if (!activeStepTpl || !activeStepExec) return false;
+    const actions = (activeStepTpl.actions ?? []) as unknown as Array<{
+      id: string;
+      required?: boolean;
+    }>;
+    const required = actions.filter((a) => (a.required ?? true) === true);
+    if (required.length === 0) return false;
+    return required.some(
+      (a) => activeStepExec.fieldValues[actionDoneFieldId(a.id)] !== true,
+    );
+  })();
+
   const stepTotal = stepsTpl.length;
   const completedStepCount = stageMarkedComplete
     ? stepTotal
@@ -2398,6 +2439,7 @@ function StepsStage({
   const completeDisabled =
     !canCompleteActiveStep ||
     missingRequiredFields.length > 0 ||
+    missingRequiredActions ||
     releaseNeedsTechApproval;
   const completeTitle =
     missingRequiredFields.length > 0
@@ -2405,6 +2447,8 @@ function StepsStage({
           .slice(0, 3)
           .map((f) => f.label)
           .join(", ")}${missingRequiredFields.length > 3 ? "…" : ""}`
+      : missingRequiredActions
+        ? "Отметьте все обязательные действия."
       : releaseNeedsTechApproval
         ? "Сначала одобрите технологический процесс."
         : undefined;
@@ -2648,6 +2692,14 @@ function StepsStage({
             <div className="mt-4 flex flex-col items-end gap-2">
               {completeDisabled && missingRequiredFields.length > 0 ? (
                 <MissingRequiredFieldsHint fields={missingRequiredFields} />
+              ) : null}
+              {completeDisabled &&
+              missingRequiredActions &&
+              missingRequiredFields.length === 0 &&
+              !releaseNeedsTechApproval ? (
+                <p className="max-w-md text-right text-sm text-amber-800">
+                  Отметьте все обязательные действия (со звёздочкой).
+                </p>
               ) : null}
               {completeDisabled &&
               releaseNeedsTechApproval &&
@@ -2944,6 +2996,26 @@ type ProductionChecklistSegment =
   | { kind: "action"; minor: number; fields: FieldDefinition[] }
   | { kind: "trailing"; fields: FieldDefinition[] };
 
+type ConstructorActionInputConfig = {
+  label: string;
+  type: "text" | "number";
+};
+
+type ConstructorStepAction = {
+  id: string;
+  text: string;
+  required?: boolean;
+  input?: ConstructorActionInputConfig | null;
+};
+
+function actionDoneFieldId(actionId: string): string {
+  return `action:${actionId}:done`;
+}
+
+function actionInputFieldId(actionId: string): string {
+  return `action:${actionId}:value`;
+}
+
 function isHiddenProductionMetaField(field: FieldDefinition): boolean {
   return field.id === "seq" || field.id === "executor";
 }
@@ -3235,6 +3307,123 @@ function FormFields({
       ? buildProductionChecklistSegments(stepTemplate.fields)
       : null;
 
+  const constructorActions =
+    stageType === "production"
+      ? ((stepTemplate.actions ?? []) as unknown as ConstructorStepAction[])
+      : [];
+
+  const actionsBody =
+    stageType === "production" && constructorActions.length > 0 ? (
+      <div className="space-y-3">
+        {constructorActions.map((a, idx) => {
+          const required = a.required ?? true;
+          const doneRaw = stepExecution.fieldValues[actionDoneFieldId(a.id)];
+          const done = doneRaw === true;
+          const disabled = !canEdit;
+          const inputCfg = a.input ?? null;
+          const inputFieldId = actionInputFieldId(a.id);
+          const inputRaw = stepExecution.fieldValues[inputFieldId];
+          const inputValue =
+            inputCfg?.type === "number"
+              ? typeof inputRaw === "number" && Number.isFinite(inputRaw)
+                ? inputRaw
+                : 0
+              : typeof inputRaw === "string"
+                ? inputRaw
+                : "";
+
+          return (
+            <div
+              key={a.id}
+              className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 shadow-sm"
+            >
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Действие {productionStepMajor}.{idx + 1}
+              </div>
+              <div className="space-y-3">
+                <label
+                  className={[
+                    "flex items-start gap-3",
+                    disabled ? "cursor-not-allowed" : "cursor-pointer",
+                  ].join(" ")}
+                >
+                  <input
+                    type="checkbox"
+                    checked={done}
+                    onChange={(e) =>
+                      onChange(actionDoneFieldId(a.id), e.target.checked)
+                    }
+                    disabled={disabled}
+                    className="mt-0.5 size-4 shrink-0 rounded border-slate-300 text-blue-600"
+                    aria-label={`Действие ${productionStepMajor}.${idx + 1}: выполнено`}
+                  />
+                  <span className="min-w-0 text-sm font-medium text-slate-800">
+                    {a.text?.trim() ? a.text.trim() : "—"}
+                    {required ? <span className="text-red-500"> *</span> : null}
+                  </span>
+                </label>
+
+                {inputCfg ? (
+                  <label className="block">
+                    <div className="mb-1 text-xs font-medium text-slate-600">
+                      {inputCfg.label?.trim() ? inputCfg.label.trim() : "Значение"}
+                    </div>
+                    {inputCfg.type === "number" ? (
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        step={1}
+                        value={inputValue as number}
+                        onKeyDown={(e) => {
+                          if (disabled) return;
+                          if (
+                            e.key === "-" ||
+                            e.key === "e" ||
+                            e.key === "E" ||
+                            e.key === "+"
+                          ) {
+                            e.preventDefault();
+                          }
+                        }}
+                        onChange={(e) => {
+                          if (disabled) return;
+                          const t = e.target.value;
+                          if (t === "") {
+                            onChange(inputFieldId, 0);
+                            return;
+                          }
+                          const n = Number(t);
+                          if (!Number.isFinite(n) || n < 0) return;
+                          onChange(inputFieldId, Math.floor(n));
+                        }}
+                        disabled={disabled}
+                        className="w-40 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                        aria-label={inputCfg.label?.trim() || "Значение"}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={inputValue as string}
+                        onChange={(e) => {
+                          if (disabled) return;
+                          onChange(inputFieldId, e.target.value);
+                        }}
+                        disabled={disabled}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                        placeholder="Введите значение…"
+                        aria-label={inputCfg.label?.trim() || "Значение"}
+                      />
+                    )}
+                  </label>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    ) : null;
+
   const fieldsBody =
     stageType === "production" && checklistSegments ? (
       <div className="space-y-4">
@@ -3303,6 +3492,7 @@ function FormFields({
 
   return (
     <div className="space-y-3">
+      {actionsBody}
       {fieldsBody}
 
       {stageType === "release" ? (
