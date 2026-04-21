@@ -698,7 +698,7 @@ export function ConstructorEditorView({
         id: actionId,
         text: "",
         required: true,
-        input: null,
+        input: undefined,
       };
       return {
         ...prev,
@@ -1792,7 +1792,7 @@ export function ConstructorEditorView({
                                                                   action.id,
                                                                   (prev) => ({
                                                                     ...prev,
-                                                                    input: null,
+                                                                    input: undefined,
                                                                   }),
                                                                 )
                                                               }
