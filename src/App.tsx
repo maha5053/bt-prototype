@@ -31,7 +31,6 @@ import {
   ConstructorListPage,
 } from "./pages/ConstructorPages";
 import { ConstructorV2EditorPage, ConstructorV2ListPage } from "./pages/ConstructorV2Pages";
-import { TemplateListPage } from "./pages/TemplateListPage";
 import { UsersAdminPage } from "./pages/UsersAdminPage";
 
 const router = createBrowserRouter(
@@ -139,7 +138,6 @@ const router = createBrowserRouter(
           path: "proizvodstvo",
           children: [
             { index: true, element: <ProductionListPage /> },
-            { path: "shablony", element: <TemplateListPage /> },
             { path: ":orderId", element: <ProductionOrderPage /> },
           ],
         },

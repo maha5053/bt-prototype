@@ -6,7 +6,7 @@ export const TOP_NAV: {
   basePath: string;
 }[] = [
   { key: "sklad", label: "Склад", basePath: "/sklad" },
-  { key: "proizvodstvo", label: "Производство", basePath: "/proizvodstvo" },
+  { key: "proizvodstvo", label: "Заказы", basePath: "/proizvodstvo" },
   { key: "spravochniki", label: "Справочники", basePath: "/spravochniki" },
   { key: "admin", label: "Администрирование", basePath: "/admin" },
 ];
@@ -25,8 +25,7 @@ export const SIDEBAR_BY_SECTION: Record<
     { path: "/sklad/nomenklatura", label: "Номенклатура" },
   ],
   proizvodstvo: [
-    { path: "/proizvodstvo", label: "Журнал заказов" },
-    { path: "/proizvodstvo/shablony", label: "Шаблоны" },
+    { path: "/proizvodstvo", label: "Журнал" },
   ],
   spravochniki: [
     {

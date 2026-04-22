@@ -487,9 +487,9 @@ function ProductionListContent() {
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-800">Производство</h1>
+          <h1 className="text-xl font-semibold text-slate-800">Заказы</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Журнал заказов на производство.
+            Журнал заказов.
           </p>
         </div>
       </div>
@@ -510,7 +510,7 @@ function ProductionListContent() {
           onClick={() => setShowCreate(true)}
           className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
         >
-          Начать производство
+          Создать заказ
         </button>
       </div>
 
@@ -766,12 +766,12 @@ function ProductionListContent() {
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
-            aria-label="Начать производство"
+            aria-label="Создать заказ"
           >
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">
-                  Начать производство
+                  Создать заказ
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
                   Выберите продукт для нового заказа.
@@ -815,7 +815,7 @@ function ProductionListContent() {
                   )
                   .map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.name} · этапов: {t.stages.length}
+                      {t.name}
                     </option>
                   ))}
               </select>
@@ -1153,7 +1153,7 @@ function ProductionOrderContent() {
             className="rounded-sm underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
             title="Журнал заказов"
           >
-            Производство
+            Заказы
           </Link>
           <span className="text-slate-300">›</span>
           <span className="max-w-[60ch] truncate text-slate-700">
