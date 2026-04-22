@@ -622,7 +622,7 @@ function ProductionListContent() {
                     rawStage === "—" ? "—" : formatStageLabel(rawStage);
                   const currentStageType =
                     order.stages[order.currentStageIndex]?.type ?? null;
-                  const canDelete =
+                  const deleteEnabled =
                     order.status === "in_progress" &&
                     currentStageType === "registration";
                   const { patientName, caseNumber } =
@@ -659,25 +659,32 @@ function ProductionListContent() {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end">
-                          {canDelete ? (
-                            <button
-                              type="button"
-                              className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const ok = window.confirm(
-                                  "Удалить заказ? Данные будут удалены без возможности восстановления.",
-                                );
-                                if (!ok) return;
-                                deleteOrder(order.id);
-                              }}
-                              title="Удалить заказ (доступно на этапе регистрации)"
-                            >
-                              Удалить
-                            </button>
-                          ) : (
-                            <span className="text-xs text-slate-300">—</span>
-                          )}
+                          <button
+                            type="button"
+                            disabled={!deleteEnabled}
+                            className={[
+                              "rounded-md border px-3 py-1.5 text-xs font-medium transition",
+                              deleteEnabled
+                                ? "border-red-300 text-red-700 hover:bg-red-50"
+                                : "cursor-not-allowed border-slate-200 text-slate-300",
+                            ].join(" ")}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!deleteEnabled) return;
+                              const ok = window.confirm(
+                                "Удалить заказ? Данные будут удалены без возможности восстановления.",
+                              );
+                              if (!ok) return;
+                              deleteOrder(order.id);
+                            }}
+                            title={
+                              deleteEnabled
+                                ? "Удалить заказ"
+                                : "Удаление доступно только на этапе регистрации"
+                            }
+                          >
+                            Удалить
+                          </button>
                         </div>
                       </td>
                     </tr>
