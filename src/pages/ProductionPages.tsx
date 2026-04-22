@@ -1191,7 +1191,7 @@ function ProductionOrderContent() {
                   className={[
                     "inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
                     order.status === "in_progress"
-                      ? "bg-emerald-50 text-emerald-900 ring-emerald-600/20"
+                      ? "bg-amber-50 text-amber-700 ring-amber-500/20"
                       : order.status === "completed"
                         ? "bg-slate-100 text-slate-800 ring-slate-300/60"
                         : "bg-red-50 text-red-900 ring-red-600/20",
