@@ -1190,52 +1190,51 @@ function ProductionOrderContent() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
-              <h1 className="min-w-0 truncate text-2xl font-bold leading-tight text-slate-900 md:text-3xl">
-                {order.templateName}
-              </h1>
-              <span
-                className={[
-                  "inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
-                  order.status === "in_progress"
-                    ? "bg-emerald-50 text-emerald-900 ring-emerald-600/20"
-                    : order.status === "completed"
-                      ? "bg-slate-100 text-slate-800 ring-slate-300/60"
-                      : "bg-red-50 text-red-900 ring-red-600/20",
-                ].join(" ")}
-                title="Статус заказа"
-              >
-                {formatOrderStatus(order.status)}
-              </span>
-              {canEditStage && lastSavedAt ? (
+                <h1 className="min-w-0 truncate text-2xl font-bold leading-tight text-slate-900 md:text-3xl">
+                  {order.templateName}
+                </h1>
                 <span
-                  className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-600/20"
-                  title="Локальное автосохранение черновика"
+                  className={[
+                    "inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
+                    order.status === "in_progress"
+                      ? "bg-emerald-50 text-emerald-900 ring-emerald-600/20"
+                      : order.status === "completed"
+                        ? "bg-slate-100 text-slate-800 ring-slate-300/60"
+                        : "bg-red-50 text-red-900 ring-red-600/20",
+                  ].join(" ")}
+                  title="Статус заказа"
                 >
-                  Сохранено {formatSavedClock(lastSavedAt)}
+                  {formatOrderStatus(order.status)}
                 </span>
-              ) : null}
+                {canEditStage && lastSavedAt ? (
+                  <span
+                    className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-600/20"
+                    title="Локальное автосохранение черновика"
+                  >
+                    Сохранено {formatSavedClock(lastSavedAt)}
+                  </span>
+                ) : null}
+              </div>
             </div>
 
+            <div className="flex max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-2 sm:max-w-[min(100%,44rem)]">
+              <StageActionsMenu
+                releasePrintHref={releasePrintHref}
+                printEnabled={printActEnabled}
+                printTitle={printMenuTitle}
+                rejectEnabled={rejectFromMenuEnabled}
+                rejectTitle={rejectMenuTitle}
+                onReject={() => {
+                  resetRejectForm();
+                  setShowReject(true);
+                }}
+              />
+            </div>
           </div>
 
-          <div className="flex max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-2 sm:max-w-[min(100%,44rem)]">
-            <StageActionsMenu
-              releasePrintHref={releasePrintHref}
-              printEnabled={printActEnabled}
-              printTitle={printMenuTitle}
-              rejectEnabled={rejectFromMenuEnabled}
-              rejectTitle={rejectMenuTitle}
-              onReject={() => {
-                resetRejectForm();
-                setShowReject(true);
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="mt-2">
-          <div className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-full bg-slate-50 px-3 py-1 text-sm text-slate-600 ring-1 ring-slate-200">
-            <span className="inline-flex items-center gap-2">
+          <div className="mt-2">
+            <div className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-full bg-slate-50 px-3 py-1 text-sm text-slate-600 ring-1 ring-slate-200">
+              <span className="inline-flex items-center gap-2">
               <svg
                 className="size-4 shrink-0 text-slate-400"
                 viewBox="0 0 24 24"
@@ -1288,6 +1287,7 @@ function ProductionOrderContent() {
               </svg>
               <span>Дата регистрации: {formatRuDateTime(order.createdAt)}</span>
             </span>
+            </div>
           </div>
         </div>
       </div>
