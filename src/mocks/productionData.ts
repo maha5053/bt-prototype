@@ -281,333 +281,12 @@ function seedRegistrationFioIb(
   step.fieldValues.ib = ib;
 }
 
-/** Фиксированные референсы для числовых полей КК (шаблон «Тромбогель»). */
-const THROMBOGEL_QC_REFS: {
-  pltWhole: FieldReferenceRange;
-  wbcWhole: FieldReferenceRange;
-  rbcWhole: FieldReferenceRange;
-  hbWhole: FieldReferenceRange;
-  pltPrp: FieldReferenceRange;
-  wbcPrp: FieldReferenceRange;
-  rbcPrp: FieldReferenceRange;
-  hbPrp: FieldReferenceRange;
-} = {
-  pltWhole: { min: 150, max: 450 },
-  wbcWhole: { min: 4.0, max: 10.0 },
-  rbcWhole: { min: 3.8, max: 5.5 },
-  hbWhole: { min: 120, max: 160 },
-  pltPrp: { min: 800, max: 1800 },
-  wbcPrp: { min: 0.5, max: 8.0 },
-  rbcPrp: { min: 0, max: 0.5 },
-  hbPrp: { min: 0, max: 8 },
-};
-
-export const THROMBOGEL_TEMPLATE: ProcessTemplate = {
-  id: "tpl-thrombogel",
-  name: "Тромбогель",
-  stages: [
-    {
-      id: "stg-reg",
-      name: "Регистрация биоматериала",
-      type: "registration",
-      isSystem: true,
-      isSopStage: true,
-      allowedRoles: [],
-      steps: [
-        {
-          id: "step-reg-1",
-          name: "1. Регистрация",
-          hasDeviations: true,
-          consumables: [],
-          equipment: [],
-          fields: [
-            { id: "sec-common", label: "Общие данные", type: "section_header", required: false },
-            { id: "seq", label: "Порядковый номер", type: "number", required: false },
-            { id: "fio", label: "ФИО", type: "text", required: true, placeholder: "Введите ФИО" },
-            { id: "dob", label: "Дата рождения", type: "date", required: true },
-            {
-              id: "age",
-              label: "Возраст",
-              type: "number",
-              required: false,
-              computedFrom: "dob",
-              computeRule: "age_from_date",
-            },
-            {
-              id: "department",
-              label: "Отделение",
-              type: "select",
-              required: false,
-              options: ["Хирургия", "Терапия", "Травматология"],
-            },
-            { id: "ib", label: "N ИБ", type: "text", required: false },
-            { id: "diagnosis", label: "Диагноз", type: "text", required: false },
-            { id: "productId", label: "ID продукта", type: "text", required: false },
-            { id: "executor", label: "ФИО исполнителя", type: "text", required: false },
-
-            {
-              id: "sec-blood",
-              label: "Забор крови",
-              type: "section_header",
-              required: false,
-              sopRef: "СОП 2.1.1",
-              sopFileName: "SOP_2.1.1_zabor_krovi.docx",
-            },
-            { id: "bloodVolume", label: "Объём забранной крови", type: "number", unit: "мл", required: false },
-            {
-              id: "containerType",
-              label: "Тип контейнера",
-              type: "select",
-              required: false,
-              options: ["гемакон", "пробирки"],
-            },
-
-            { id: "sec-qc", label: "Входной контроль качества", type: "section_header", required: false },
-            {
-              id: "integrity",
-              label: "Целостность",
-              type: "select",
-              required: false,
-              options: ["не нарушена", "нарушена"],
-            },
-            { id: "volumeOk", label: "Объём", type: "select", required: false, options: ["соответствует", "не соответствует"] },
-            { id: "hemolysis", label: "Гемолиз", type: "select", required: false, options: ["нет", "да"] },
-            {
-              id: "assignedStatus",
-              label: "Присвоен статус",
-              type: "select",
-              required: false,
-              options: ["Разрешено", "Брак"],
-            },
-
-            { id: "sec-balance", label: "Материальный баланс", type: "section_header", required: false },
-            { id: "syringe20", label: "Шприцы 20", type: "number", unit: "шт", required: false },
-            { id: "syringe30", label: "Шприцы 30", type: "number", unit: "шт", required: false },
-            { id: "hemacon", label: "Гемакон", type: "number", unit: "шт", required: false },
-            { id: "gauze", label: "Стерильные марлевые салфетки", type: "number", unit: "шт", required: false },
-            { id: "alcohol", label: "Спирт", type: "number", unit: "мл", required: false },
-            { id: "citrate", label: "Цитрат Na", type: "number", unit: "мл", required: false },
-
-            { id: "sec-dev", label: "Отклонения", type: "section_header", required: false },
-            { id: "devFlag", label: "Отклонения", type: "select", required: false, options: ["Нет", "Да"] },
-            { id: "devNotes", label: "Примечания", type: "text", required: false },
-          ],
-        },
-      ],
-    },
-    {
-      id: "stg-prod",
-      name: "Производство",
-      type: "production",
-      isSystem: true,
-      isSopStage: true,
-      allowedRoles: [],
-      steps: [
-        {
-          id: "step-prod-1",
-          name: "1. Получение обогащённой тромбоцитами плазмы",
-          sopRef: "СОП 3.1",
-          sopFileName: "SOP_PRP_plasma.pdf",
-          hasDeviations: true,
-          fields: [
-            { id: "centrifugation1", label: "Центрифугирование", type: "checkbox", required: false },
-            { id: "plasmaToTubes", label: "Отбор плазмы в 50 мл пробирки", type: "checkbox", required: false },
-            { id: "plasmaVolume", label: "Объём отобранной плазмы", type: "number", unit: "мл", required: false },
-            { id: "centrifugation2", label: "Центрифугирование (повторное)", type: "checkbox", required: false },
-            { id: "supernatant", label: "Отбор надосадочной плазмы", type: "checkbox", required: false },
-            { id: "supernatantVolume", label: "Объём надосадочной плазмы", type: "number", unit: "мл", required: false },
-          ],
-          consumables: [
-            { id: "c-tubes50", name: "Пробирки 50 мл", unit: "шт" },
-            { id: "c-pip5", name: "Пипетки 5 мл", unit: "шт" },
-            { id: "c-pip10", name: "Пипетки 10 мл", unit: "шт" },
-            { id: "c-pip25", name: "Пипетки 25 мл", unit: "шт" },
-            { id: "c-labels", name: "Термоэтикетки", unit: "шт" },
-            { id: "c-epp", name: "Пробирки Эппендорф", unit: "шт" },
-            { id: "c-syr20", name: "Шприцы 20 мл", unit: "шт" },
-            { id: "c-scalpel", name: "Скальпель", unit: "шт" },
-            { id: "c-aero", name: "Флаконы для бак. посева на аэробы", unit: "шт" },
-            { id: "c-ana", name: "Флаконы для бак. посева на анаэробы", unit: "шт" },
-          ],
-          equipment: [
-            { id: "e-laminar", name: "Ламинарный шкаф" },
-            { id: "e-centrifuge", name: "Центрифуга" },
-            { id: "e-strip", name: "Стриппетер" },
-          ],
-        },
-        {
-          id: "step-prod-2",
-          name: "2. Получение тромбогеля",
-          sopRef: "СОП 3.2",
-          sopFileName: "SOP_thrombogel.pdf",
-          hasDeviations: true,
-          fields: [
-            { id: "resusp", label: "Ресуспендирование осадка", type: "checkbox", required: false },
-            { id: "resuspVol", label: "Объём ресуспендирования", type: "number", unit: "мл", required: false },
-            { id: "marking", label: "Маркировка", type: "checkbox", required: false },
-            { id: "bact", label: "Бакпосев", type: "checkbox", required: false },
-            { id: "cbc", label: "ОАК", type: "checkbox", required: false },
-            { id: "extra", label: "Дополнительные исследования", type: "text", required: false },
-            { id: "quarantine", label: "Карантинное хранение", type: "checkbox", required: false },
-            { id: "aliquots", label: "Количество аликвот", type: "number", unit: "шт", required: false },
-          ],
-          consumables: [
-            { id: "c-tubes50", name: "Пробирки 50 мл", unit: "шт" },
-            { id: "c-pip5", name: "Пипетки 5 мл", unit: "шт" },
-            { id: "c-pip10", name: "Пипетки 10 мл", unit: "шт" },
-            { id: "c-pip25", name: "Пипетки 25 мл", unit: "шт" },
-            { id: "c-labels", name: "Термоэтикетки", unit: "шт" },
-            { id: "c-epp", name: "Пробирки Эппендорф", unit: "шт" },
-            { id: "c-syr20", name: "Шприцы 20 мл", unit: "шт" },
-            { id: "c-scalpel", name: "Скальпель", unit: "шт" },
-            { id: "c-aero", name: "Флаконы для бак. посева на аэробы", unit: "шт" },
-            { id: "c-ana", name: "Флаконы для бак. посева на анаэробы", unit: "шт" },
-          ],
-          equipment: [
-            { id: "e-laminar", name: "Ламинарный шкаф" },
-            { id: "e-centrifuge", name: "Центрифуга" },
-            { id: "e-strip", name: "Стриппетер" },
-          ],
-        },
-      ],
-    },
-    {
-      id: "stg-qc",
-      name: "Контроль качества",
-      type: "quality_control",
-      isSystem: true,
-      isSopStage: true,
-      allowedRoles: [],
-      steps: [
-        {
-          id: "step-qc-1",
-          name: "1. Результаты контроля качества",
-          hasDeviations: true,
-          consumables: [],
-          equipment: [],
-          fields: [
-            {
-              id: "pltWhole",
-              label: "Кол-во Тц в цельной крови",
-              type: "number",
-              unit: "10^9/л",
-              required: false,
-              referenceRange: THROMBOGEL_QC_REFS.pltWhole,
-            },
-            {
-              id: "wbcWhole",
-              label: "Кол-во Лц в цельной крови",
-              type: "number",
-              unit: "10^9/л",
-              required: false,
-              referenceRange: THROMBOGEL_QC_REFS.wbcWhole,
-            },
-            {
-              id: "rbcWhole",
-              label: "Кол-во Эр в цельной крови",
-              type: "number",
-              unit: "10^12/л",
-              required: false,
-              referenceRange: THROMBOGEL_QC_REFS.rbcWhole,
-            },
-            {
-              id: "hbWhole",
-              label: "Hb в цельной крови",
-              type: "number",
-              unit: "г/л",
-              required: false,
-              referenceRange: THROMBOGEL_QC_REFS.hbWhole,
-            },
-            {
-              id: "pltPrp",
-              label: "Кол-во Тц в PRP",
-              type: "number",
-              unit: "10^9/л",
-              required: false,
-              referenceRange: THROMBOGEL_QC_REFS.pltPrp,
-            },
-            {
-              id: "wbcPrp",
-              label: "Кол-во Лц в PRP",
-              type: "number",
-              unit: "10^9/л",
-              required: false,
-              referenceRange: THROMBOGEL_QC_REFS.wbcPrp,
-            },
-            {
-              id: "rbcPrp",
-              label: "Кол-во Эр в PRP",
-              type: "number",
-              unit: "10^12/л",
-              required: false,
-              referenceRange: THROMBOGEL_QC_REFS.rbcPrp,
-            },
-            {
-              id: "hbPrp",
-              label: "Hb в PRP",
-              type: "number",
-              unit: "г/л",
-              required: false,
-              referenceRange: THROMBOGEL_QC_REFS.hbPrp,
-            },
-            {
-              id: "sterility",
-              label: "Посев на стерильность",
-              type: "select",
-              required: false,
-              options: ["стерильно", "нестерильно"],
-            },
-            { id: "extraQc", label: "Дополнительные показатели", type: "text", required: false },
-            {
-              id: "qcComment",
-              label: "Комментарий",
-              type: "text",
-              required: false,
-              multiline: true,
-              placeholder: "При необходимости укажите комментарий…",
-            },
-          ],
-        },
-      ],
-    },
-    {
-      id: "stg-release",
-      name: "Выдача",
-      type: "release",
-      isSystem: true,
-      isSopStage: true,
-      allowedRoles: [],
-      steps: [
-        {
-          id: "step-release-1",
-          name: "1. Выдача готового продукта",
-          hasDeviations: true,
-          consumables: [],
-          equipment: [],
-          fields: [
-            { id: "productIdRef", label: "ID продукта", type: "text", required: false, refStageIndex: 0, refFieldId: "productId" },
-            { id: "fioRef", label: "ФИО пациента", type: "text", required: false, refStageIndex: 0, refFieldId: "fio" },
-            { id: "ibRef", label: "N ИБ", type: "text", required: false, refStageIndex: 0, refFieldId: "ib" },
-            {
-              id: "where",
-              label: "Куда выдано",
-              type: "select",
-              required: true,
-              options: ["Операционная", "Перевязочная", "Эндоскопический кабинет"],
-            },
-            {
-              id: "devSummary",
-              label: "Отклонения (сводка)",
-              type: "text",
-              required: false,
-              refDeviations: [0],
-            },
-          ],
-        },
-      ],
-    },
-  ],
-};
+/**
+ * Шаблон «Тромбогель NEW» из конструктора ver2: тело в `thrombogelNewSeed.json`
+ * (экспорт из localStorage). После очистки storage подставляется с id `tpl-thrombogel-new`.
+ */
+export const THROMBOGEL_NEW_TEMPLATE: ProcessTemplate =
+  thrombogelNewSeed as ProcessTemplate;
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -625,9 +304,10 @@ function getTemplateStage(
 }
 
 export const DEFAULT_SYSTEM_FIELD_REGISTRY: SystemFieldRegistry = (() => {
-  const regFields = getTemplateStage(THROMBOGEL_TEMPLATE, "registration")?.steps[0]
+  const regFields = getTemplateStage(THROMBOGEL_NEW_TEMPLATE, "registration")
+    ?.steps[0]
     ?.fields;
-  const relFields = getTemplateStage(THROMBOGEL_TEMPLATE, "release")?.steps[0]
+  const relFields = getTemplateStage(THROMBOGEL_NEW_TEMPLATE, "release")?.steps[0]
     ?.fields;
   return {
     version: 1,
@@ -697,15 +377,7 @@ export function createTemplateWithSystemStages(
   };
 }
 
-/**
- * Шаблон «Тромбогель NEW» из конструктора ver2: тело в `thrombogelNewSeed.json`
- * (экспорт из localStorage). После очистки storage подставляется с id `tpl-thrombogel-new`.
- */
-export const THROMBOGEL_NEW_TEMPLATE: ProcessTemplate =
-  thrombogelNewSeed as ProcessTemplate;
-
 export const INITIAL_PROCESS_TEMPLATES: ProcessTemplate[] = [
-  THROMBOGEL_TEMPLATE,
   THROMBOGEL_NEW_TEMPLATE,
 ];
 
@@ -815,13 +487,10 @@ export function mergeProductionTemplatesWithBaseline(
     if (!st) return clone(bt);
     return {
       ...st,
-      // Эталон — каноническое имя из кода; прочие baseline-шаблоны — имя из storage (переименование в UI).
       name:
-        bt.id === "tpl-thrombogel"
-          ? bt.name
-          : typeof st.name === "string" && st.name.trim().length > 0
-            ? st.name
-            : bt.name,
+        typeof st.name === "string" && st.name.trim().length > 0
+          ? st.name
+          : bt.name,
       stages: mergeProductionStages(st.stages, bt.stages),
     };
   });
@@ -862,7 +531,7 @@ export function reconcileRuntimeV2Templates(
 }
 
 export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {
-  const tpl = THROMBOGEL_TEMPLATE;
+  const tpl = THROMBOGEL_NEW_TEMPLATE;
 
   const inProgress = buildOrderFromTemplate(tpl, {
     id: "po-001",

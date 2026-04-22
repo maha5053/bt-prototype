@@ -187,8 +187,7 @@ export function ProductionListPage() {
 }
 
 function ProductionListContent() {
-  const { orders, templates, createOrder, deleteOrder } = useProduction();
-  const { currentUserId } = useCurrentUser();
+  const { orders, templates, deleteOrder } = useProduction();
   const navigate = useNavigate();
   const [showCreate, setShowCreate] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
@@ -336,26 +335,16 @@ function ProductionListContent() {
   };
 
   const handleCreate = () => {
-    const baselineId = "tpl-thrombogel";
     const activeTemplates = templates.filter((t) => !t.archivedAt);
-    const baseline = activeTemplates.find((t) => t.id === baselineId) ?? null;
     const runtimePrefix = "tpl-runtime-v2-";
     const newTemplates = activeTemplates.filter(
-      (t) => t.id !== baselineId && !t.id.startsWith(runtimePrefix),
+      (t) => !t.id.startsWith(runtimePrefix),
     );
-    const chosen =
-      selectedTemplateId ||
-      (baseline ? baseline.id : newTemplates[0]?.id ?? "");
+    const chosen = selectedTemplateId || (newTemplates[0]?.id ?? "");
     if (!chosen) return;
 
     setShowCreate(false);
     setSelectedTemplateId("");
-
-    if (chosen === baselineId) {
-      const order = createOrder(chosen, currentUserId);
-      navigate(`/proizvodstvo/${order.id}`);
-      return;
-    }
 
     // New (constructor ver2) flow: create order id and navigate to /:orderId-new
     const orderId = `po-${Date.now()}`;
@@ -820,29 +809,15 @@ function ProductionListContent() {
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-blue-400"
               >
                 <option value="">Выберите…</option>
-                <optgroup label="Эталон">
-                  {templates
-                    .filter((t) => !t.archivedAt && t.id === "tpl-thrombogel")
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                </optgroup>
-                <optgroup label="Новые">
-                  {templates
-                    .filter(
-                      (t) =>
-                        !t.archivedAt &&
-                        t.id !== "tpl-thrombogel" &&
-                        !t.id.startsWith("tpl-runtime-v2-"),
-                    )
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} · этапов: {t.stages.length}
-                      </option>
-                    ))}
-                </optgroup>
+                {templates
+                  .filter(
+                    (t) => !t.archivedAt && !t.id.startsWith("tpl-runtime-v2-"),
+                  )
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} · этапов: {t.stages.length}
+                    </option>
+                  ))}
               </select>
             </label>
 

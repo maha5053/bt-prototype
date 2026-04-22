@@ -1,12 +1,12 @@
 import type { StageTemplate, StepTemplate, FieldDefinition } from "../mocks/productionData";
-import { THROMBOGEL_TEMPLATE } from "../mocks/productionData";
+import { THROMBOGEL_NEW_TEMPLATE } from "../mocks/productionData";
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function stageByType(type: StageTemplate["type"]): StageTemplate {
-  const st = THROMBOGEL_TEMPLATE.stages.find((s) => s.type === type);
+  const st = THROMBOGEL_NEW_TEMPLATE.stages.find((s) => s.type === type);
   if (!st) throw new Error(`Baseline stage not found: ${type}`);
   return st;
 }
