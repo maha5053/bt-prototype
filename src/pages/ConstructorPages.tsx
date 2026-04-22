@@ -16,6 +16,7 @@ import type {
   FieldDefinition,
   FieldType,
 } from "../mocks/productionData";
+import { createTemplateWithSystemStages } from "../mocks/productionData";
 
 type ActionInputConfig = {
   label: string;
@@ -255,7 +256,6 @@ export function ConstructorEditorView({
   const { templateId } = useParams<{ templateId: string }>();
   const navigate = useNavigate();
   const { templates, updateTemplate, createTemplate, orders } = useProduction();
-  const didAutoCreateRef = useRef(false);
   const templateNameInputRef = useRef<HTMLInputElement | null>(null);
   const [editingStepById, setEditingStepById] = useState<Record<string, boolean>>(
     {},
@@ -271,6 +271,7 @@ export function ConstructorEditorView({
   );
   const [isTemplateNameEditing, setIsTemplateNameEditing] = useState(false);
   const [templateNameDraft, setTemplateNameDraft] = useState("");
+  const [draftTemplate, setDraftTemplate] = useState<ProcessTemplate | null>(null);
   const [collapsedStepById, setCollapsedStepById] = useState<
     Record<string, boolean>
   >({});
@@ -296,18 +297,25 @@ export function ConstructorEditorView({
     StageTemplate["type"]
   >("registration");
 
-  useEffect(() => {
-    if (templateId) return;
-    if (didAutoCreateRef.current) return;
-    didAutoCreateRef.current = true;
-    const created = createTemplate("Новый шаблон");
-    navigate(`${basePath}/${created.id}`, { replace: true });
-  }, [templateId, createTemplate, navigate, basePath]);
-
-  const template = useMemo(
+  const persistedTemplate = useMemo(
     () => templates.find((t) => t.id === templateId) ?? null,
     [templates, templateId],
   );
+
+  // Ленивое создание: на /novyy держим черновик в памяти и создаём сущность в storage
+  // только после первой пользовательской правки.
+  useEffect(() => {
+    if (templateId) {
+      setDraftTemplate(null);
+      return;
+    }
+    setDraftTemplate((prev) => {
+      if (prev) return prev;
+      return createTemplateWithSystemStages({ id: "draft", name: "Новый шаблон" });
+    });
+  }, [templateId]);
+
+  const template = templateId ? persistedTemplate : draftTemplate;
 
   useEffect(() => {
     if (!template) return;
@@ -376,6 +384,14 @@ export function ConstructorEditorView({
   }, [templateId]);
 
   if (!template) {
+    // Для /novyy сначала ждём инициализацию черновика.
+    if (!templateId) {
+      return (
+        <div className="p-6 md:p-8">
+          <p className="text-sm text-slate-500">Загрузка…</p>
+        </div>
+      );
+    }
     return (
       <div className="p-6 md:p-8">
         <p className="text-sm text-slate-500">Шаблон не найден.</p>
@@ -385,7 +401,7 @@ export function ConstructorEditorView({
 
   const used = orders.filter((o) => o.templateId === template.id).length;
   const isArchived = Boolean(template.archivedAt);
-  const locked = isArchived || used > 0;
+  const locked = templateId ? isArchived || used > 0 : false;
   if (locked) {
     return (
       <div className="p-6 md:p-8">
@@ -413,6 +429,19 @@ export function ConstructorEditorView({
   }
 
   const patchTemplate = (updater: (prev: ProcessTemplate) => ProcessTemplate) => {
+    // Если мы на /novyy, создаём сущность только после первой правки.
+    if (!templateId) {
+      const nextDraft = updater(template);
+      const safeName = nextDraft.name?.trim() ? nextDraft.name.trim() : "Новый шаблон";
+      const created = createTemplate(safeName);
+      const persisted: ProcessTemplate = { ...nextDraft, id: created.id, name: safeName };
+      updateTemplate(persisted);
+      setDraftTemplate(null);
+      navigate(`${basePath}/${created.id}`, { replace: true });
+      setLastSavedAt(new Date().toISOString());
+      return;
+    }
+
     updateTemplate(updater(template));
     setLastSavedAt(new Date().toISOString());
   };
@@ -823,27 +852,7 @@ export function ConstructorEditorView({
   return (
     <div className="p-6 md:p-8">
       <div className="mb-6">
-        <div className="flex items-center gap-3">
-          <Link
-            to={basePath}
-            className="text-sm text-slate-500 transition hover:text-slate-700"
-            title="К списку шаблонов"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </Link>
-          <div className="min-w-0">
+        <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-slate-500">
               <span>Администрирование</span>
               <span className="text-slate-300">/</span>
@@ -856,62 +865,85 @@ export function ConstructorEditorView({
               </Link>
             </div>
 
-            {isTemplateNameEditing ? (
-              <input
-                ref={templateNameInputRef}
-                className="mt-1 w-full max-w-2xl rounded-md border border-slate-300 bg-white px-3 py-2 text-base font-semibold text-slate-900 outline-none focus:border-blue-400"
-                value={templateNameDraft}
-                onChange={(e) => setTemplateNameDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") {
-                    setTemplateNameDraft(template?.name ?? "");
-                    setIsTemplateNameEditing(false);
-                    return;
-                  }
-                  if (e.key !== "Enter") return;
-                  e.preventDefault();
-                  const next = templateNameDraft.trim();
-                  if (template && next.length > 0) {
-                    patchTemplate((prev) => ({ ...prev, name: next }));
-                  }
-                  setIsTemplateNameEditing(false);
-                }}
-                onBlur={() => {
-                  const next = templateNameDraft.trim();
-                  if (template && next.length > 0) {
-                    patchTemplate((prev) => ({ ...prev, name: next }));
-                  }
-                  setIsTemplateNameEditing(false);
-                }}
-                aria-label="Название шаблона"
-              />
-            ) : (
-              <button
-                type="button"
-                className="group mt-1 inline-flex max-w-2xl items-center gap-2 rounded-md px-1 py-0.5 text-left text-xl font-semibold text-slate-900 hover:bg-slate-100"
-                onClick={() => setIsTemplateNameEditing(true)}
-                aria-label="Редактировать название шаблона"
-                title="Редактировать название"
+            <div className="mt-1 flex items-center gap-3">
+              <Link
+                to={basePath}
+                className="shrink-0 rounded-md p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                title="К списку шаблонов"
+                aria-label="Назад к списку шаблонов"
               >
-                <span className="min-w-0 truncate">
-                  {template?.name?.trim() ? template.name.trim() : "Без названия"}
-                </span>
                 <svg
-                  className="size-4 shrink-0 text-slate-400 transition group-hover:text-slate-700"
-                  viewBox="0 0 24 24"
+                  className="h-5 w-5"
                   fill="none"
+                  viewBox="0 0 24 24"
                   stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                  strokeWidth={2}
                   aria-hidden
                 >
-                  <path d="M12 20h9" />
-                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15 19l-7-7 7-7"
+                  />
                 </svg>
-              </button>
-            )}
-          </div>
+              </Link>
+
+              {isTemplateNameEditing ? (
+                <input
+                  ref={templateNameInputRef}
+                  className="w-full max-w-2xl rounded-md border border-slate-300 bg-white px-3 py-2 text-base font-semibold text-slate-900 outline-none focus:border-blue-400"
+                  value={templateNameDraft}
+                  onChange={(e) => setTemplateNameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      setTemplateNameDraft(template?.name ?? "");
+                      setIsTemplateNameEditing(false);
+                      return;
+                    }
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    const next = templateNameDraft.trim();
+                    if (template && next.length > 0) {
+                      patchTemplate((prev) => ({ ...prev, name: next }));
+                    }
+                    setIsTemplateNameEditing(false);
+                  }}
+                  onBlur={() => {
+                    const next = templateNameDraft.trim();
+                    if (template && next.length > 0) {
+                      patchTemplate((prev) => ({ ...prev, name: next }));
+                    }
+                    setIsTemplateNameEditing(false);
+                  }}
+                  aria-label="Название шаблона"
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="group inline-flex max-w-2xl items-center gap-2 rounded-md px-1 py-0.5 text-left text-xl font-semibold text-slate-900 hover:bg-slate-100"
+                  onClick={() => setIsTemplateNameEditing(true)}
+                  aria-label="Редактировать название шаблона"
+                  title="Редактировать название"
+                >
+                  <span className="min-w-0 truncate">
+                    {template?.name?.trim() ? template.name.trim() : "Без названия"}
+                  </span>
+                  <svg
+                    className="size-4 shrink-0 text-slate-400 transition group-hover:text-slate-700"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden
+                  >
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                  </svg>
+                </button>
+              )}
+            </div>
         </div>
       </div>
 
