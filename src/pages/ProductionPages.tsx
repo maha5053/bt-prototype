@@ -274,18 +274,11 @@ function ProductionListContent() {
   }, [orders, listSortKey, listSortDir]);
 
   const productOptions = useMemo(() => {
-    const byId = new Map<string, string>();
-    for (const t of templates) {
-      byId.set(t.id, t.name);
-    }
-    for (const o of orders) {
-      if (!byId.has(o.templateId)) {
-        byId.set(o.templateId, o.templateName);
-      }
-    }
-    return [...byId.entries()]
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    // Deduplicate by *name* so runtime/baseline templates don't show duplicates.
+    const names = new Set<string>();
+    for (const t of templates) names.add(t.name);
+    for (const o of orders) names.add(o.templateName);
+    return [...names].sort((a, b) => a.localeCompare(b, "ru"));
   }, [templates, orders]);
 
   const stageOptions = useMemo(() => {
@@ -310,7 +303,7 @@ function ProductionListContent() {
       if (statusFilter !== "all" && order.status !== statusFilter) {
         return false;
       }
-      if (productFilter !== "all" && order.templateId !== productFilter) {
+      if (productFilter !== "all" && order.templateName !== productFilter) {
         return false;
       }
       if (stageFilter !== "all") {
@@ -473,8 +466,8 @@ function ProductionListContent() {
                   className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                 >
                   <option value="all">Все</option>
-                  {productOptions.map(({ id, name }) => (
-                    <option key={id} value={id}>
+                  {productOptions.map((name) => (
+                    <option key={name} value={name}>
                       {name}
                     </option>
                   ))}
