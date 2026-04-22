@@ -2,6 +2,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -1166,7 +1167,13 @@ function ProductionOrderContent() {
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
                 <h1 className="min-w-0 truncate text-2xl font-bold leading-tight text-slate-900 md:text-3xl">
-                  {order.templateName}
+                  <span className="whitespace-nowrap">Заказ № </span>
+                  <span className="font-bold">
+                    {order.id.replace(/^po-/, "")}
+                  </span>{" "}
+                  <span className="font-semibold text-slate-600">
+                    ({order.templateName})
+                  </span>
                 </h1>
                 <span
                   className={[
@@ -1350,9 +1357,20 @@ function ProductionOrderContent() {
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-slate-900">
-                {stageTitle}
+            <div className="min-w-0">
+              <div className="flex items-start gap-3">
+                <div
+                  className="mt-1 h-10 w-1 rounded-full bg-blue-200"
+                  aria-hidden
+                />
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    Этап
+                  </div>
+                  <div className="mt-0.5 text-lg font-semibold leading-snug tracking-tight text-slate-900">
+                    {stageTitle}
+                  </div>
+                </div>
               </div>
               {viewedStepCompletion ? (
                 <div className="mt-1 text-xs text-slate-500">
@@ -1857,6 +1875,18 @@ function scrollToProductionField(fieldId: string) {
   }, 250);
 }
 
+const PRODUCTION_OPEN_FIELD_EVENT = "bio-production-open-field";
+
+function requestOpenProductionField(fieldId: string) {
+  window.dispatchEvent(
+    new CustomEvent(PRODUCTION_OPEN_FIELD_EVENT, {
+      detail: { fieldId },
+    }),
+  );
+  // Wait a tick so the group can expand before scrolling/focusing.
+  window.setTimeout(() => scrollToProductionField(fieldId), 0);
+}
+
 /** Прокрутка области контента приложения (`main` в AppLayout) к началу после смены этапа. */
 function scrollProductionOrderMainToTop() {
   const run = () => {
@@ -1888,7 +1918,7 @@ function MissingRequiredFieldsHint({
           {i > 0 ? ", " : null}
           <button
             type="button"
-            onClick={() => scrollToProductionField(f.id)}
+            onClick={() => requestOpenProductionField(f.id)}
             className="cursor-pointer text-slate-700 underline decoration-slate-300 underline-offset-2 transition hover:text-slate-900"
           >
             {f.label}
@@ -1896,6 +1926,138 @@ function MissingRequiredFieldsHint({
         </span>
       ))}
       {fields.length > 3 ? "…" : ""}
+    </div>
+  );
+}
+
+function NestedRailBlock({
+  tone = "default",
+  className = "",
+  showRail = true,
+  children,
+}: {
+  tone?: "default" | "muted";
+  className?: string;
+  showRail?: boolean;
+  children: React.ReactNode;
+}) {
+  const railColor = tone === "muted" ? "bg-slate-200" : "bg-slate-200";
+  const padCls = showRail ? "pl-4" : "pl-0";
+  return (
+    <div className={["relative", padCls, className].join(" ")}>
+      {showRail ? (
+        <div
+          className={[
+            "pointer-events-none absolute inset-y-0 left-0 w-px",
+            railColor,
+          ].join(" ")}
+          aria-hidden
+        />
+      ) : null}
+      <div className="relative">{children}</div>
+    </div>
+  );
+}
+
+function useLocalStorageBool(key: string, defaultValue: boolean) {
+  const [value, setValue] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw === null) return defaultValue;
+      if (raw === "1") return true;
+      if (raw === "0") return false;
+      return defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, value ? "1" : "0");
+    } catch {
+      // ignore storage failures (private mode, quota, etc.)
+    }
+  }, [key, value]);
+
+  return [value, setValue] as const;
+}
+
+function CollapsibleSection({
+  storageKey,
+  defaultOpen,
+  forceOpen,
+  title,
+  subtitle,
+  right,
+  children,
+}: {
+  storageKey: string;
+  defaultOpen: boolean;
+  forceOpen?: boolean;
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useLocalStorageBool(storageKey, defaultOpen);
+  const effectiveOpen = Boolean(forceOpen) || open;
+  const contentId = useId();
+
+  useEffect(() => {
+    if (!forceOpen) return;
+    if (open) return;
+    setOpen(true);
+  }, [forceOpen, open, setOpen]);
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <button
+        type="button"
+        aria-expanded={effectiveOpen}
+        aria-controls={contentId}
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full cursor-pointer items-start justify-between gap-3 rounded-xl px-4 py-3 text-left transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
+      >
+        <span className="min-w-0">
+          <span className="flex min-w-0 items-center gap-2">
+            <svg
+              className={[
+                "mt-0.5 size-4 shrink-0 text-slate-400 transition",
+                effectiveOpen ? "" : "-rotate-90",
+              ].join(" ")}
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <span className="min-w-0 truncate text-sm font-semibold text-slate-900">
+              {title}
+            </span>
+          </span>
+          {subtitle ? (
+            <span className="mt-0.5 block text-xs text-slate-500">
+              {subtitle}
+            </span>
+          ) : null}
+        </span>
+        {right ? <span className="shrink-0">{right}</span> : null}
+      </button>
+      <div
+        id={contentId}
+        className={[
+          "px-4 pb-4",
+          effectiveOpen ? "block" : "hidden",
+          "print:block",
+        ].join(" ")}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -2635,97 +2797,110 @@ function StepsStage({
       ) : null}
 
       <section className="min-w-0">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <div className="text-base font-semibold text-slate-900">
-                {activeStepTpl
-                  ? stepHeading(activeStepIndex, activeStepTpl.name)
-                  : "Шаг"}
+        {!isSingleStepStage ? (
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <div className="text-base font-semibold text-slate-900">
+                  {activeStepTpl
+                    ? stepHeading(activeStepIndex, activeStepTpl.name)
+                    : "Шаг"}
+                </div>
+                <SopAttachmentLink
+                  sopRef={activeStepTpl?.sopRef}
+                  sopFileName={activeStepTpl?.sopFileName}
+                  attachmentPdf={activeStepTpl?.attachmentPdf}
+                  allowMockDocumentLink={false}
+                />
               </div>
-              <SopAttachmentLink
-                sopRef={activeStepTpl?.sopRef}
-                sopFileName={activeStepTpl?.sopFileName}
-                attachmentPdf={activeStepTpl?.attachmentPdf}
-                allowMockDocumentLink={false}
-              />
-            </div>
-            {!showStepsSidebar ? (
               <div className="mt-1 text-xs text-slate-500">
                 Завершено {completedStepCount} из {stepTotal}
               </div>
-            ) : null}
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        <div className="space-y-4">
-          <FormFields
-            order={order}
-            stepTemplate={stepsTpl[activeStepIndex]}
-            stepExecution={stepsExec[activeStepIndex]}
-            canEdit={
-              canEdit &&
-              !activeStepLocked &&
-              !stageMarkedComplete &&
-              stepsExec[activeStepIndex]?.status !== "completed"
-            }
-            onChange={(fieldId, value) => onChangeField(activeStepIndex, fieldId, value)}
-            onChangeConsumableQty={(consumableId, qty) =>
-              onChangeConsumableQty(activeStepIndex, consumableId, qty)
-            }
-            onChangeEquipment={(equipmentId, applied) =>
-              onChangeEquipment(activeStepIndex, equipmentId, applied)
-            }
-            stageType={stageTemplate.type}
-            productionStepMajor={
-              parseProductionStepMajor(stepsTpl[activeStepIndex]?.name ?? "") ??
-              activeStepIndex + 1
-            }
-          />
+        <NestedRailBlock className="mt-1" showRail={false}>
+          <div className="space-y-4">
+            <FormFields
+              order={order}
+              stepTemplate={stepsTpl[activeStepIndex]}
+              stepExecution={stepsExec[activeStepIndex]}
+              canEdit={
+                canEdit &&
+                !activeStepLocked &&
+                !stageMarkedComplete &&
+                stepsExec[activeStepIndex]?.status !== "completed"
+              }
+              onChange={(fieldId, value) =>
+                onChangeField(activeStepIndex, fieldId, value)
+              }
+              onChangeConsumableQty={(consumableId, qty) =>
+                onChangeConsumableQty(activeStepIndex, consumableId, qty)
+              }
+              onChangeEquipment={(equipmentId, applied) =>
+                onChangeEquipment(activeStepIndex, equipmentId, applied)
+              }
+              stageType={stageTemplate.type}
+              productionStepMajor={
+                parseProductionStepMajor(stepsTpl[activeStepIndex]?.name ?? "") ??
+                activeStepIndex + 1
+              }
+            />
 
-          {stageTemplate.type === "release" && activeStepExec ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-              <div className="text-sm font-semibold text-slate-900">
-                Одобрение технологического процесса
-              </div>
-              {activeStepExec.techProcessApprovedBy ? (
-                <div className="mt-2 space-y-1 text-sm text-slate-800">
-                  <p>
-                    <span className="text-slate-500">Одобрил:</span>{" "}
-                    <span className="font-medium text-slate-900">
-                      {activeStepExec.techProcessApprovedBy}
-                    </span>
-                  </p>
-                  {activeStepExec.techProcessApprovedAt ? (
-                    <p className="text-xs text-slate-500">
-                      {formatRuDateTime(activeStepExec.techProcessApprovedAt)}
+            {stageTemplate.type === "release" && activeStepExec ? (
+              <CollapsibleSection
+                storageKey={`bio:order-groups:${order.id}:release:${activeStepTpl?.id ?? "step"}:tech-approval`}
+                defaultOpen={releaseNeedsTechApproval || !activeStepExec.techProcessApprovedBy}
+                title="Одобрение технологического процесса"
+                subtitle={
+                  activeStepExec.techProcessApprovedBy
+                    ? `Одобрил: ${activeStepExec.techProcessApprovedBy}`
+                    : "Требуется одобрение"
+                }
+              >
+                <div className="space-y-2">
+                  {activeStepExec.techProcessApprovedBy ? (
+                    <div className="space-y-1 text-sm text-slate-800">
+                      <p>
+                        <span className="text-slate-500">Одобрил:</span>{" "}
+                        <span className="font-medium text-slate-900">
+                          {activeStepExec.techProcessApprovedBy}
+                        </span>
+                      </p>
+                      {activeStepExec.techProcessApprovedAt ? (
+                        <p className="text-xs text-slate-500">
+                          {formatRuDateTime(activeStepExec.techProcessApprovedAt)}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-600">
+                      Технологический процесс пока не одобрён. Без одобрения
+                      завершить шаг нельзя.
+                    </p>
+                  )}
+                  {canApproveReleaseTechProcess ? (
+                    <button
+                      type="button"
+                      onClick={onApproveReleaseTechProcess}
+                      className="mt-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
+                    >
+                      Одобрить технологический процесс
+                    </button>
+                  ) : null}
+                  {canEdit &&
+                  releaseNeedsTechApproval &&
+                  !hasApprovalPermission ? (
+                    <p className="text-xs text-slate-600">
+                      Одобрение может выполнить пользователь с правом «Одобрение».
                     </p>
                   ) : null}
                 </div>
-              ) : (
-                <p className="mt-2 text-sm text-slate-600">
-                  Технологический процесс пока не одобрён. Без одобрения
-                  завершить шаг нельзя.
-                </p>
-              )}
-              {canApproveReleaseTechProcess ? (
-                <button
-                  type="button"
-                  onClick={onApproveReleaseTechProcess}
-                  className="mt-3 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
-                >
-                  Одобрить технологический процесс
-                </button>
-              ) : null}
-              {canEdit &&
-              releaseNeedsTechApproval &&
-              !hasApprovalPermission ? (
-                <p className="mt-2 text-xs text-slate-600">
-                  Одобрение может выполнить пользователь с правом «Одобрение».
-                </p>
-              ) : null}
-            </div>
-          ) : null}
+              </CollapsibleSection>
+            ) : null}
+          </div>
+        </NestedRailBlock>
 
           {canEdit ? (
             <div className="mt-4 flex flex-col items-end gap-2">
@@ -2779,7 +2954,6 @@ function StepsStage({
               </div>
             </div>
           ) : null}
-        </div>
       </section>
     </div>
     {confirmKind !== null && isReleaseIssueFinal ? (
@@ -2905,114 +3079,157 @@ function QualityControlStage({
   const qcTextareaCls =
     "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-400 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600 min-h-[6rem] resize-y";
 
+  const [requestedFieldId, setRequestedFieldId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onReq = (ev: Event) => {
+      const ce = ev as CustomEvent<{ fieldId?: string }>;
+      const id = ce?.detail?.fieldId;
+      if (!id) return;
+      setRequestedFieldId(id);
+    };
+    window.addEventListener(PRODUCTION_OPEN_FIELD_EVENT, onReq as EventListener);
+    return () =>
+      window.removeEventListener(
+        PRODUCTION_OPEN_FIELD_EVENT,
+        onReq as EventListener,
+      );
+  }, []);
+
+  const forceOpenNotes = Boolean(
+    requestedFieldId &&
+      qcMultilineFields.some((f) => f.id === requestedFieldId),
+  );
+
   return (
     <>
     <div>
-      <div className="mb-3 text-sm text-slate-600">
-        {editable ? "Введите показатели и подтвердите результаты." : "Просмотр результатов."}
-      </div>
-
-      <div className="overflow-x-auto rounded-xl border border-slate-200">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-4 py-2.5 font-medium">Показатель</th>
-              <th className="px-4 py-2.5 font-medium">Норма</th>
-              <th className="px-4 py-2.5 font-medium">Значение</th>
-              <th className="px-4 py-2.5 font-medium">Ед.</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {qcTableFields.map((f) => {
-              const value = stepExecution.fieldValues[f.id];
-              const out = qcValueOutOfRange(value, f.referenceRange);
-              return (
-                <tr
-                  key={f.id}
-                  data-production-field={f.id}
-                  className="hover:bg-slate-50"
-                >
-                  <td className="px-4 py-2.5 text-slate-700">{f.label}</td>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-slate-600 tabular-nums">
-                    {formatQcReferenceCell(f.referenceRange)}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <FieldInput
-                      field={f}
-                      value={value}
-                      disabled={!editable}
-                      onChange={(v) => onChangeField(0, f.id, v)}
-                      className={
-                        out
-                          ? "font-medium text-red-600 disabled:text-red-600"
-                          : undefined
-                      }
-                    />
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-500">{f.unit ?? "—"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {qcMultilineFields.length > 0 ? (
-        <div className="mt-4 space-y-4">
-          {qcMultilineFields.map((f) => {
-            const value = stepExecution.fieldValues[f.id];
-            const str =
-              typeof value === "string"
-                ? value
-                : value == null
-                  ? ""
-                  : String(value);
-            return (
-              <label key={f.id} className="block" data-production-field={f.id}>
-                <div className="mb-1 text-sm font-semibold text-slate-900">
-                  {f.label}
-                </div>
-                <textarea
-                  rows={4}
-                  value={str}
-                  onChange={(e) => onChangeField(0, f.id, e.target.value)}
-                  readOnly={!editable}
-                  disabled={false}
-                  placeholder={f.placeholder}
-                  className={[
-                    qcTextareaCls,
-                    !editable ? "border-slate-100 bg-slate-50" : "",
-                  ].join(" ")}
-                  aria-label={f.label}
-                />
-              </label>
-            );
-          })}
-        </div>
-      ) : null}
-
       {editable ? (
-        <div className="mt-4 flex flex-col items-end gap-2">
-          {confirmDisabled && missingRequired.length > 0 ? (
-            <MissingRequiredFieldsHint fields={missingRequired} />
-          ) : null}
-          <button
-            type="button"
-            onClick={() => {
-              if (confirmDisabled) return;
-              setQcConfirmOpen(true);
-            }}
-            title={confirmTitle}
-            disabled={confirmDisabled}
-            className={[
-              "rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700",
-              confirmDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
-            ].join(" ")}
-          >
-            Подтвердить результаты
-          </button>
+        <div className="mb-3 text-sm text-slate-600">
+          Введите показатели и подтвердите результаты.
         </div>
       ) : null}
+
+      <div className="space-y-3">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-4 py-2.5 font-medium">Показатель</th>
+                <th className="px-4 py-2.5 font-medium">Норма</th>
+                <th className="px-4 py-2.5 font-medium">Значение</th>
+                <th className="px-4 py-2.5 font-medium">Ед.</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {qcTableFields.map((f) => {
+                const value = stepExecution.fieldValues[f.id];
+                const out = qcValueOutOfRange(value, f.referenceRange);
+                return (
+                  <tr
+                    key={f.id}
+                    data-production-field={f.id}
+                    className="hover:bg-slate-50"
+                  >
+                    <td className="px-4 py-2.5 text-slate-700">{f.label}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-slate-600 tabular-nums">
+                      {formatQcReferenceCell(f.referenceRange)}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <FieldInput
+                        field={f}
+                        value={value}
+                        disabled={!editable}
+                        onChange={(v) => onChangeField(0, f.id, v)}
+                        className={
+                          out
+                            ? "font-medium text-red-600 disabled:text-red-600"
+                            : undefined
+                        }
+                      />
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-500">
+                      {f.unit ?? "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {qcMultilineFields.length > 0 ? (
+          <CollapsibleSection
+            storageKey={`bio:order-groups:qc:${stageExecution.stageTemplateId}:${stepTemplate.id}:notes`}
+            defaultOpen
+            forceOpen={forceOpenNotes}
+            title="Комментарий"
+          >
+            <NestedRailBlock tone="muted" showRail={false}>
+              <div className="space-y-4">
+                {qcMultilineFields.map((f) => {
+                  const value = stepExecution.fieldValues[f.id];
+                  const str =
+                    typeof value === "string"
+                      ? value
+                      : value == null
+                        ? ""
+                        : String(value);
+                  return (
+                    <label
+                      key={f.id}
+                      className="block"
+                      data-production-field={f.id}
+                    >
+                      <div className="mb-1 text-sm font-semibold text-slate-900">
+                        {f.label}
+                      </div>
+                      <textarea
+                        rows={4}
+                        value={str}
+                        onChange={(e) => onChangeField(0, f.id, e.target.value)}
+                        readOnly={!editable}
+                        disabled={false}
+                        placeholder={f.placeholder}
+                        className={[
+                          qcTextareaCls,
+                          !editable ? "border-slate-100 bg-slate-50" : "",
+                        ].join(" ")}
+                        aria-label={f.label}
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            </NestedRailBlock>
+          </CollapsibleSection>
+        ) : null}
+
+        {editable ? (
+          <div className="mt-1 flex flex-col items-end gap-2">
+            {confirmDisabled && missingRequired.length > 0 ? (
+              <MissingRequiredFieldsHint fields={missingRequired} />
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                if (confirmDisabled) return;
+                setQcConfirmOpen(true);
+              }}
+              title={confirmTitle}
+              disabled={confirmDisabled}
+              className={[
+                "rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700",
+                confirmDisabled
+                  ? "cursor-not-allowed opacity-60"
+                  : "cursor-pointer",
+              ].join(" ")}
+            >
+              Подтвердить результаты
+            </button>
+          </div>
+        ) : null}
+      </div>
     </div>
     <IrreversibleConfirmModal
       open={qcConfirmOpen}
@@ -3221,20 +3438,6 @@ function FormFields({
     return stepExecution.fieldValues[field.id] ?? null;
   };
 
-  const renderSectionHeader = (field: FieldDefinition) => (
-    <div className="pt-2">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <div className="text-sm font-semibold text-slate-900">{field.label}</div>
-        <SopAttachmentLink
-          sopRef={field.sopRef}
-          sopFileName={field.sopFileName}
-          tabIndex={-1}
-        />
-      </div>
-      <div className="mt-2 h-px bg-slate-100" />
-    </div>
-  );
-
   const renderFieldRow = (field: FieldDefinition) => {
     const isReadonly =
       !canEdit ||
@@ -3427,20 +3630,111 @@ function FormFields({
       </div>
     ) : null;
 
+  const [requestedFieldId, setRequestedFieldId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onReq = (ev: Event) => {
+      const ce = ev as CustomEvent<{ fieldId?: string }>;
+      const id = ce?.detail?.fieldId;
+      if (!id) return;
+      setRequestedFieldId(id);
+    };
+    window.addEventListener(PRODUCTION_OPEN_FIELD_EVENT, onReq as EventListener);
+    return () =>
+      window.removeEventListener(
+        PRODUCTION_OPEN_FIELD_EVENT,
+        onReq as EventListener,
+      );
+  }, []);
+
+  const visibleFields = useMemo(() => {
+    return stepTemplate.fields.filter((field) => {
+      if (field.id === "seq" || field.id === "executor") return false;
+      if (stageType === "release" && isReleaseSupersededSignerField(field)) {
+        return false;
+      }
+      return true;
+    });
+  }, [stepTemplate.fields, stageType]);
+
+  const { fieldGroups, fieldToGroupId } = useMemo(() => {
+    type Group = {
+      id: string;
+      title: string;
+      headerField: FieldDefinition | null;
+      fields: FieldDefinition[];
+    };
+
+    const groups: Group[] = [];
+    const map: Record<string, string> = {};
+
+    let current: Group | null = null;
+    const ensureDefault = () => {
+      if (current) return;
+      current = {
+        id: "grp-default",
+        title: "Данные",
+        headerField: null,
+        fields: [],
+      };
+      groups.push(current);
+    };
+
+    for (const f of visibleFields) {
+      if (f.type === "section_header") {
+        current = {
+          id: `grp-${f.id}`,
+          title: f.label?.trim() ? f.label.trim() : "Раздел",
+          headerField: f,
+          fields: [],
+        };
+        groups.push(current);
+        continue;
+      }
+      ensureDefault();
+      current!.fields.push(f);
+      map[f.id] = current!.id;
+    }
+
+    // If there are no non-header fields, keep empty groups array.
+    return { fieldGroups: groups.filter((g) => g.fields.length > 0), fieldToGroupId: map };
+  }, [visibleFields]);
+
+  const requestedGroupId = requestedFieldId
+    ? fieldToGroupId[requestedFieldId] ?? null
+    : null;
+
   const fieldsBody =
-    stageType === "production" ? null : (
+    stageType === "production" ? null : fieldGroups.length === 0 ? (
+      <div className="text-sm text-slate-500">Нет полей для этого шага.</div>
+    ) : (
       <div className="space-y-3">
-        {stepTemplate.fields.map((field) => {
-          if (field.id === "seq" || field.id === "executor") {
-            return null;
-          }
-          if (stageType === "release" && isReleaseSupersededSignerField(field)) {
-            return null;
-          }
-          if (field.type === "section_header") {
-            return <div key={field.id}>{renderSectionHeader(field)}</div>;
-          }
-          return renderFieldRow(field);
+        {fieldGroups.map((g) => {
+          const storageKey = `bio:order-groups:${order.id}:${stageType}:${stepTemplate.id}:${g.id}`;
+          const forceOpen = requestedGroupId === g.id;
+          const right = g.headerField ? (
+            <SopAttachmentLink
+              sopRef={g.headerField.sopRef}
+              sopFileName={g.headerField.sopFileName}
+              tabIndex={-1}
+            />
+          ) : null;
+          return (
+            <CollapsibleSection
+              key={g.id}
+              storageKey={storageKey}
+              defaultOpen
+              forceOpen={forceOpen}
+              title={g.title}
+              right={right}
+            >
+              <NestedRailBlock tone="muted" showRail={false}>
+                <div className="space-y-3">
+                  {g.fields.map((field) => renderFieldRow(field))}
+                </div>
+              </NestedRailBlock>
+            </CollapsibleSection>
+          );
         })}
       </div>
     );
@@ -3452,164 +3746,188 @@ function FormFields({
 
   return (
     <div className="space-y-3">
-      {actionsBody}
+      {stageType === "production" && actionsBody ? (
+        <CollapsibleSection
+          storageKey={`bio:order-groups:${order.id}:production:${stepTemplate.id}:actions`}
+          defaultOpen
+          title="Действия"
+        >
+          <NestedRailBlock tone="muted" showRail={false}>
+            {actionsBody}
+          </NestedRailBlock>
+        </CollapsibleSection>
+      ) : (
+        actionsBody
+      )}
       {fieldsBody}
 
       {stageType === "release" ? (
-        <div className="space-y-3 border-t border-slate-100 pt-3">
-          <div className="block">
-            <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <div className="text-xs font-medium text-slate-600">
-                Технологический процесс выполнил
+        <CollapsibleSection
+          storageKey={`bio:order-groups:${order.id}:release:${stepTemplate.id}:meta`}
+          defaultOpen
+          title="Сведения этапа"
+        >
+          <NestedRailBlock tone="muted" showRail={false}>
+            <div className="space-y-3">
+              <div className="block">
+                <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <div className="text-xs font-medium text-slate-600">
+                    Технологический процесс выполнил
+                  </div>
+                  {productionCompletersBadge ? (
+                    <span
+                      className="inline-flex max-w-full shrink-0 items-center truncate rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-900 ring-1 ring-inset ring-sky-300/60"
+                      title={productionCompletersBadge.title}
+                    >
+                      {productionCompletersBadge.text}
+                    </span>
+                  ) : null}
+                </div>
+                <input
+                  type="text"
+                  readOnly
+                  tabIndex={-1}
+                  value={getProductionStageCompletersDisplay(order)}
+                  className={CROSS_STAGE_READONLY_INPUT_CLS}
+                  aria-label="Технологический процесс выполнил"
+                />
               </div>
-              {productionCompletersBadge ? (
-                <span
-                  className="inline-flex max-w-full shrink-0 items-center truncate rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-900 ring-1 ring-inset ring-sky-300/60"
-                  title={productionCompletersBadge.title}
-                >
-                  {productionCompletersBadge.text}
-                </span>
-              ) : null}
+              <div className="block">
+                <div className="mb-1 text-xs font-medium text-slate-600">
+                  Одобрил
+                </div>
+                <input
+                  type="text"
+                  readOnly
+                  tabIndex={-1}
+                  value={stepExecution.techProcessApprovedBy?.trim() || "—"}
+                  className={releaseReadonlyInputCls}
+                  aria-label="Одобрил"
+                />
+              </div>
             </div>
-            <input
-              type="text"
-              readOnly
-              tabIndex={-1}
-              value={getProductionStageCompletersDisplay(order)}
-              className={CROSS_STAGE_READONLY_INPUT_CLS}
-              aria-label="Технологический процесс выполнил"
-            />
-          </div>
-          <div className="block">
-            <div className="mb-1 text-xs font-medium text-slate-600">
-              Одобрил
-            </div>
-            <input
-              type="text"
-              readOnly
-              tabIndex={-1}
-              value={
-                stepExecution.techProcessApprovedBy?.trim() || "—"
-              }
-              className={releaseReadonlyInputCls}
-              aria-label="Одобрил"
-            />
-          </div>
-        </div>
+          </NestedRailBlock>
+        </CollapsibleSection>
       ) : null}
 
       {stepTemplate.consumables.length > 0 ? (
-        <div className="pt-4">
-          <div className="mb-2 text-sm font-semibold text-slate-900">
-            Расходные материалы
-          </div>
-          <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200">
-            <table className="w-max max-w-full border-collapse text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="px-4 py-2.5 font-medium">Наименование</th>
-                  <th className="px-4 py-2.5 font-medium">Кол-во</th>
-                  <th className="px-4 py-2.5 font-medium">Ед.</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {stepTemplate.consumables.map((c) => {
-                  const rawQty = stepExecution.consumableValues?.[c.id];
-                  const qty =
-                    typeof rawQty === "number" && Number.isFinite(rawQty)
-                      ? Math.max(0, rawQty)
-                      : 0;
-                  const rowDisabled = !canEdit;
-                  const inputCls =
-                    "w-24 rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm outline-none transition focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500";
-                  return (
-                    <tr key={c.id} className="hover:bg-slate-50/80">
-                      <td className="max-w-md whitespace-normal px-4 py-2.5 text-slate-700">
-                        {c.name}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 align-middle">
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min={0}
-                          step={1}
-                          value={qty}
-                          onKeyDown={(e) => {
-                            if (rowDisabled) return;
-                            if (
-                              e.key === "-" ||
-                              e.key === "e" ||
-                              e.key === "E" ||
-                              e.key === "+"
-                            ) {
-                              e.preventDefault();
-                            }
-                          }}
-                          onChange={(e) => {
-                            if (rowDisabled) return;
-                            const t = e.target.value;
-                            if (t === "") {
-                              onChangeConsumableQty(c.id, 0);
-                              return;
-                            }
-                            const n = Number(t);
-                            if (!Number.isFinite(n) || n < 0) return;
-                            onChangeConsumableQty(c.id, Math.floor(n));
-                          }}
-                          disabled={rowDisabled}
-                          className={inputCls}
-                          aria-label={`Количество: ${c.name}`}
-                        />
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-2.5 align-middle text-xs tabular-nums text-slate-500">
-                        {c.unit}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <CollapsibleSection
+          storageKey={`bio:order-groups:${order.id}:${stageType}:${stepTemplate.id}:consumables`}
+          defaultOpen
+          title="Расходные материалы"
+        >
+          <NestedRailBlock tone="muted" showRail={false}>
+            <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-max max-w-full border-collapse text-left text-sm">
+                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-2.5 font-medium">Наименование</th>
+                    <th className="px-4 py-2.5 font-medium">Кол-во</th>
+                    <th className="px-4 py-2.5 font-medium">Ед.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {stepTemplate.consumables.map((c) => {
+                    const rawQty = stepExecution.consumableValues?.[c.id];
+                    const qty =
+                      typeof rawQty === "number" && Number.isFinite(rawQty)
+                        ? Math.max(0, rawQty)
+                        : 0;
+                    const rowDisabled = !canEdit;
+                    const inputCls =
+                      "w-24 rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm outline-none transition focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500";
+                    return (
+                      <tr key={c.id} className="hover:bg-slate-50/80">
+                        <td className="max-w-md whitespace-normal px-4 py-2.5 text-slate-700">
+                          {c.name}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 align-middle">
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            step={1}
+                            value={qty}
+                            onKeyDown={(e) => {
+                              if (rowDisabled) return;
+                              if (
+                                e.key === "-" ||
+                                e.key === "e" ||
+                                e.key === "E" ||
+                                e.key === "+"
+                              ) {
+                                e.preventDefault();
+                              }
+                            }}
+                            onChange={(e) => {
+                              if (rowDisabled) return;
+                              const t = e.target.value;
+                              if (t === "") {
+                                onChangeConsumableQty(c.id, 0);
+                                return;
+                              }
+                              const n = Number(t);
+                              if (!Number.isFinite(n) || n < 0) return;
+                              onChangeConsumableQty(c.id, Math.floor(n));
+                            }}
+                            disabled={rowDisabled}
+                            className={inputCls}
+                            aria-label={`Количество: ${c.name}`}
+                          />
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-2.5 align-middle text-xs tabular-nums text-slate-500">
+                          {c.unit}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </NestedRailBlock>
+        </CollapsibleSection>
       ) : null}
 
       {stepTemplate.equipment.length > 0 ? (
-        <div className="pt-4">
-          <div className="mb-2 text-sm font-semibold text-slate-900">
-            Оборудование
-          </div>
-          <ul className="space-y-2">
-            {stepTemplate.equipment.map((eItem) => {
-              const applied = Boolean(
-                stepExecution.equipmentValues?.[eItem.id],
-              );
-              const rowDisabled = !canEdit;
-              return (
-                <li key={eItem.id}>
-                  <label
-                    className={[
-                      "flex items-start gap-3",
-                      rowDisabled ? "cursor-not-allowed" : "cursor-pointer",
-                    ].join(" ")}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={applied}
-                      onChange={(ev) =>
-                        onChangeEquipment(eItem.id, ev.target.checked)
-                      }
-                      disabled={rowDisabled}
-                      className="mt-0.5 size-4 shrink-0 rounded border-slate-300 text-blue-600"
-                    />
-                    <span className="min-w-0 text-xs font-medium text-slate-600">
-                      {eItem.name}
-                    </span>
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+        <CollapsibleSection
+          storageKey={`bio:order-groups:${order.id}:${stageType}:${stepTemplate.id}:equipment`}
+          defaultOpen
+          title="Оборудование"
+        >
+          <NestedRailBlock tone="muted" showRail={false}>
+            <ul className="space-y-2">
+              {stepTemplate.equipment.map((eItem) => {
+                const applied = Boolean(
+                  stepExecution.equipmentValues?.[eItem.id],
+                );
+                const rowDisabled = !canEdit;
+                return (
+                  <li key={eItem.id}>
+                    <label
+                      className={[
+                        "flex items-start gap-3",
+                        rowDisabled ? "cursor-not-allowed" : "cursor-pointer",
+                      ].join(" ")}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={applied}
+                        onChange={(ev) =>
+                          onChangeEquipment(eItem.id, ev.target.checked)
+                        }
+                        disabled={rowDisabled}
+                        className="mt-0.5 size-4 shrink-0 rounded border-slate-300 text-blue-600"
+                      />
+                      <span className="min-w-0 text-xs font-medium text-slate-600">
+                        {eItem.name}
+                      </span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          </NestedRailBlock>
+        </CollapsibleSection>
       ) : null}
     </div>
   );
