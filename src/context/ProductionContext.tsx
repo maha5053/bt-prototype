@@ -128,7 +128,7 @@ export type UpdateFieldValueInput =
       stepIndex: number;
       updatedBy: string;
       consumableId: string;
-      consumableQty: number;
+      consumableQty: number | null;
     }
   | {
       orderId: string;
@@ -451,9 +451,12 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
             [input.fieldId]: input.value,
           };
         } else if ("consumableId" in input) {
-          const qty = Number.isFinite(input.consumableQty)
-            ? Math.max(0, Math.floor(input.consumableQty))
-            : 0;
+          const qty =
+            input.consumableQty == null
+              ? null
+              : Number.isFinite(input.consumableQty)
+                ? Math.max(0, Math.floor(input.consumableQty))
+                : null;
           nextStep.consumableValues = {
             ...(nextStep.consumableValues ?? {}),
             [input.consumableId]: qty,

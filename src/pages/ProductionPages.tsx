@@ -2524,7 +2524,7 @@ function StepsStage({
   onChangeConsumableQty: (
     stepIndex: number,
     consumableId: string,
-    qty: number,
+    qty: number | null,
   ) => void;
   onChangeEquipment: (
     stepIndex: number,
@@ -2595,8 +2595,12 @@ function StepsStage({
 
   const missingRequiredFields = (() => {
     if (!activeStepTpl || !activeStepExec) return [];
+    const devFlagRaw = activeStepExec.fieldValues["devFlag"];
+    const deviationNotesRequired =
+      devFlagRaw === "Да" || devFlagRaw === "да" || devFlagRaw === true;
     return activeStepTpl.fields.filter((f) => {
-      if (!f.required) return false;
+      const required = Boolean(f.required) || (f.id === "devNotes" && deviationNotesRequired);
+      if (!required) return false;
       if (f.type === "section_header") return false;
       if (
         stageTemplate.type === "release" &&
@@ -3357,7 +3361,7 @@ function FormFields({
   stepExecution: ProductionOrder["stages"][number]["steps"][number] | undefined;
   canEdit: boolean;
   onChange: (fieldId: string, value: FieldValue) => void;
-  onChangeConsumableQty: (consumableId: string, qty: number) => void;
+  onChangeConsumableQty: (consumableId: string, qty: number | null) => void;
   onChangeEquipment: (equipmentId: string, applied: boolean) => void;
   stageType: StageType;
   productionStepMajor: number;
@@ -3440,6 +3444,16 @@ function FormFields({
     return stepExecution.fieldValues[field.id] ?? null;
   };
 
+  // Conditional required field:
+  // If "Отклонения" = "Да" (devFlag), then "Примечания" (devNotes) must be filled.
+  const deviationNotesRequired = (() => {
+    const raw = stepExecution.fieldValues["devFlag"];
+    return raw === "Да" || raw === "да" || raw === true;
+  })();
+
+  const isFieldRequired = (field: FieldDefinition) =>
+    Boolean(field.required) || (field.id === "devNotes" && deviationNotesRequired);
+
   const renderFieldRow = (field: FieldDefinition) => {
     const isReadonly =
       !canEdit ||
@@ -3483,7 +3497,7 @@ function FormFields({
           <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-1">
             <span className="text-xs font-medium text-slate-600">
               {field.label}
-              {field.required ? <span className="text-red-500"> *</span> : null}
+              {isFieldRequired(field) ? <span className="text-red-500"> *</span> : null}
             </span>
             {refBadgeEl}
           </span>
@@ -3496,7 +3510,7 @@ function FormFields({
         <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <div className="text-xs font-medium text-slate-600">
             {field.label}
-            {field.required ? <span className="text-red-500"> *</span> : null}
+            {isFieldRequired(field) ? <span className="text-red-500"> *</span> : null}
             {field.unit ? (
               <span className="ml-1 text-[11px] font-normal text-slate-400">
                 ({field.unit})
@@ -3567,7 +3581,7 @@ function FormFields({
         <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <div className="text-xs font-medium text-slate-600">
             {field.label}
-            {field.required ? <span className="text-red-500"> *</span> : null}
+            {isFieldRequired(field) ? <span className="text-red-500"> *</span> : null}
             {field.unit ? (
               <span className="ml-1 text-[11px] font-normal text-slate-400">
                 ({field.unit})
@@ -3616,7 +3630,7 @@ function FormFields({
             inputCfg?.type === "number"
               ? typeof inputRaw === "number" && Number.isFinite(inputRaw)
                 ? inputRaw
-                : 0
+                : null
               : typeof inputRaw === "string"
                 ? inputRaw
                 : "";
@@ -3663,7 +3677,7 @@ function FormFields({
                         inputMode="numeric"
                         min={0}
                         step={1}
-                        value={inputValue as number}
+                        value={typeof inputValue === "number" ? inputValue : ""}
                         onKeyDown={(e) => {
                           if (disabled) return;
                           if (
@@ -3679,7 +3693,7 @@ function FormFields({
                           if (disabled) return;
                           const t = e.target.value;
                           if (t === "") {
-                            onChange(inputFieldId, 0);
+                            onChange(inputFieldId, null);
                             return;
                           }
                           const n = Number(t);
@@ -3920,11 +3934,9 @@ function FormFields({
                       const numericValue =
                         typeof value === "number" && Number.isFinite(value)
                           ? value
-                          : value == null
-                            ? 0
-                            : Number(value);
+                          : null;
                       const safeValue =
-                        Number.isFinite(numericValue) && numericValue >= 0
+                        typeof numericValue === "number" && numericValue >= 0
                           ? numericValue
                           : 0;
                       return (
@@ -3942,7 +3954,7 @@ function FormFields({
                               inputMode="numeric"
                               min={0}
                               step={1}
-                              value={safeValue}
+                              value={numericValue == null ? "" : safeValue}
                               onKeyDown={(e) => {
                                 if (isReadonly) return;
                                 if (
@@ -3958,7 +3970,7 @@ function FormFields({
                                 if (isReadonly) return;
                                 const t = e.target.value;
                                 if (t === "") {
-                                  onChange(f.id, 0);
+                                  onChange(f.id, null);
                                   return;
                                 }
                                 const n = Number(t);
@@ -4168,7 +4180,7 @@ function FormFields({
                     const qty =
                       typeof rawQty === "number" && Number.isFinite(rawQty)
                         ? Math.max(0, rawQty)
-                        : 0;
+                        : null;
                     const rowDisabled = !canEdit;
                     const inputCls =
                       "w-24 rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm outline-none transition focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500";
@@ -4183,7 +4195,7 @@ function FormFields({
                             inputMode="numeric"
                             min={0}
                             step={1}
-                            value={qty}
+                            value={qty == null ? "" : qty}
                             onKeyDown={(e) => {
                               if (rowDisabled) return;
                               if (
@@ -4199,7 +4211,7 @@ function FormFields({
                               if (rowDisabled) return;
                               const t = e.target.value;
                               if (t === "") {
-                                onChangeConsumableQty(c.id, 0);
+                                onChangeConsumableQty(c.id, null);
                                 return;
                               }
                               const n = Number(t);

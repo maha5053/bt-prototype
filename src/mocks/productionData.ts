@@ -165,7 +165,7 @@ export interface StepExecution {
   name: string;
   status: ExecutionStatus;
   fieldValues: Record<string, FieldValue>;
-  consumableValues: Record<string, number>;
+  consumableValues: Record<string, number | null>;
   equipmentValues: Record<string, boolean>;
   deviationFlag: boolean | null;
   deviationNotes: string;
@@ -223,8 +223,8 @@ function emptyStepExecution(step: StepTemplate): StepExecution {
     fieldValues[f.id] = null;
   }
 
-  const consumableValues: Record<string, number> = {};
-  for (const c of step.consumables) consumableValues[c.id] = 0;
+  const consumableValues: Record<string, number | null> = {};
+  for (const c of step.consumables) consumableValues[c.id] = null;
 
   const equipmentValues: Record<string, boolean> = {};
   for (const e of step.equipment) equipmentValues[e.id] = false;
