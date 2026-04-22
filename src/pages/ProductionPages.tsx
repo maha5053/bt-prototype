@@ -3516,7 +3516,13 @@ function FormFields({
     );
   };
 
-  const renderFieldCustom = (field: FieldDefinition, inputClassName?: string) => {
+  type FieldSentiment = "positive" | "negative";
+
+  const renderFieldCustom = (
+    field: FieldDefinition,
+    inputClassName?: string,
+    sentiment?: FieldSentiment,
+  ) => {
     const isReadonly =
       !canEdit ||
       Boolean(field.refDeviations?.length) ||
@@ -3530,6 +3536,32 @@ function FormFields({
         ? refFieldCrossStageBadge(order, field.refStageIndex)
         : null;
 
+    const sentimentBadge =
+      sentiment === "positive" ? (
+        <span
+          className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-900 ring-1 ring-inset ring-emerald-600/20"
+          title="Показатель в норме"
+        >
+          <span aria-hidden>✓</span>
+          <span>ок</span>
+        </span>
+      ) : sentiment === "negative" ? (
+        <span
+          className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-900 ring-1 ring-inset ring-red-600/20"
+          title="Показатель не соответствует"
+        >
+          <span aria-hidden>✕</span>
+          <span>внимание</span>
+        </span>
+      ) : null;
+
+    const sentimentInputCls =
+      sentiment === "positive"
+        ? "border-emerald-300 bg-emerald-50/50 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 disabled:bg-emerald-50/40"
+        : sentiment === "negative"
+          ? "border-red-300 bg-red-50/50 focus:border-red-400 focus:ring-2 focus:ring-red-400/20 disabled:bg-red-50/40"
+          : undefined;
+
     return (
       <label key={field.id} className="block" data-production-field={field.id}>
         <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -3542,6 +3574,7 @@ function FormFields({
               </span>
             ) : null}
           </div>
+          {sentimentBadge}
           {crossRef ? (
             <span
               className="inline-flex max-w-full shrink-0 items-center truncate rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-900 ring-1 ring-inset ring-sky-300/60"
@@ -3557,7 +3590,7 @@ function FormFields({
           disabled={isReadonly}
           onChange={(v) => onChange(field.id, v)}
           tone={crossRef ? "crossStageRef" : "default"}
-          className={inputClassName}
+          className={[inputClassName, sentimentInputCls].filter(Boolean).join(" ")}
         />
       </label>
     );
@@ -3774,6 +3807,8 @@ function FormFields({
             stageType === "registration" && g.headerField?.id === "sec-common";
           const isRegistrationBloodGroup =
             stageType === "registration" && g.headerField?.id === "sec-blood";
+          const isRegistrationIncomingQcGroup =
+            stageType === "registration" && g.headerField?.id === "sec-qc";
 
           const renderCommonDataGrid = () => {
             const byId = new Map(g.fields.map((f) => [f.id, f] as const));
@@ -3856,6 +3891,44 @@ function FormFields({
             );
           };
 
+          const resolveIncomingQcSentiment = (
+            fieldId: string,
+            rawValue: FieldValue,
+          ): FieldSentiment | undefined => {
+            if (typeof rawValue !== "string") return undefined;
+            const v = rawValue.trim().toLowerCase();
+            if (!v) return undefined;
+            if (fieldId === "integrity") {
+              if (v === "не нарушена") return "positive";
+              if (v === "нарушена") return "negative";
+            }
+            if (fieldId === "volumeOk") {
+              if (v === "соответствует") return "positive";
+              if (v === "не соответствует") return "negative";
+            }
+            if (fieldId === "hemolysis") {
+              if (v === "нет") return "positive";
+              if (v === "да") return "negative";
+            }
+            if (fieldId === "assignedStatus") {
+              if (v === "разрешено") return "positive";
+              if (v === "брак") return "negative";
+            }
+            return undefined;
+          };
+
+          const renderIncomingQcStack = () => (
+            <div className="space-y-3">
+              {g.fields.map((f) => {
+                const sentiment = resolveIncomingQcSentiment(
+                  f.id,
+                  resolveValue(f),
+                );
+                return renderFieldCustom(f, undefined, sentiment);
+              })}
+            </div>
+          );
+
           return (
             <CollapsibleSection
               key={g.id}
@@ -3870,6 +3943,8 @@ function FormFields({
                   renderCommonDataGrid()
                 ) : isRegistrationBloodGroup ? (
                   renderBloodCollectionGrid()
+                ) : isRegistrationIncomingQcGroup ? (
+                  renderIncomingQcStack()
                 ) : (
                   <div className="space-y-3">
                     {g.fields.map((field) => renderFieldRow(field))}
