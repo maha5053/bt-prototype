@@ -743,29 +743,44 @@ function mergeStepActions(
   });
 }
 
+function mergeOneStepWithBaseline(
+  sstep: StepTemplate,
+  bstep: StepTemplate,
+): StepTemplate {
+  return {
+    ...sstep,
+    name:
+      typeof sstep.name === "string" && sstep.name.trim().length > 0
+        ? sstep.name
+        : bstep.name,
+    sopRef: bstep.sopRef,
+    sopFileName: bstep.sopFileName,
+    hasDeviations: bstep.hasDeviations,
+    consumables: clone(sstep.consumables ?? bstep.consumables),
+    equipment: clone(sstep.equipment ?? bstep.equipment),
+    fields: mergeFieldDefinitions(sstep.fields, bstep.fields),
+    actions: mergeStepActions(sstep.actions, bstep.actions),
+    groups: !bstep.groups?.length
+      ? undefined
+      : sstep.groups?.length
+        ? sstep.groups
+        : clone(bstep.groups),
+  };
+}
+
 function mergeProductionSteps(
-  storedSteps: StepTemplate[],
+  storedSteps: StepTemplate[] | undefined,
   baselineSteps: StepTemplate[],
 ): StepTemplate[] {
-  return baselineSteps.map((bstep) => {
-    const sstep = storedSteps.find((s) => s.id === bstep.id);
-    if (!sstep) return clone(bstep);
-    return {
-      ...sstep,
-      name: bstep.name,
-      sopRef: bstep.sopRef,
-      sopFileName: bstep.sopFileName,
-      hasDeviations: bstep.hasDeviations,
-      consumables: bstep.consumables,
-      equipment: bstep.equipment,
-      fields: mergeFieldDefinitions(sstep.fields, bstep.fields),
-      actions: mergeStepActions(sstep.actions, bstep.actions),
-      groups: !bstep.groups?.length
-        ? undefined
-        : sstep.groups?.length
-          ? sstep.groups
-          : clone(bstep.groups),
-    };
+  // Нет шагов в storage (старые данные / не инициализировано) — эталон из кода.
+  if (storedSteps == null) {
+    return baselineSteps.map((b) => clone(b));
+  }
+  // Порядок и набор шагов — из storage; иначе удалённые в конструкторе шаги снова подмешиваются из baseline.
+  return storedSteps.map((sstep) => {
+    const bstep = baselineSteps.find((b) => b.id === sstep.id);
+    if (!bstep) return clone(sstep);
+    return mergeOneStepWithBaseline(sstep, bstep);
   });
 }
 

@@ -98,8 +98,6 @@
                 "label": "Забор крови",
                 "type": "section_header",
                 "required": false,
-                "sopRef": "СОП 2.1.1",
-                "sopFileName": "SOP_2.1.1_zabor_krovi.docx",
                 "isSystem": true
               },
               {
@@ -270,8 +268,6 @@
           {
             "id": "step-prod-1",
             "name": "Получение плазмы",
-            "sopRef": "СОП 3.1",
-            "sopFileName": "SOP_PRP_plasma.pdf",
             "hasDeviations": true,
             "fields": [],
             "consumables": [
@@ -379,61 +375,52 @@
           {
             "id": "step-prod-2",
             "name": "2. Получение тромбогеля",
-            "sopRef": "СОП 3.2",
-            "sopFileName": "SOP_thrombogel.pdf",
             "hasDeviations": true,
-            "fields": [
-              {
-                "id": "resusp",
-                "label": "Ресуспендирование осадка",
-                "type": "checkbox",
-                "required": false
-              },
-              {
-                "id": "resuspVol",
-                "label": "Объём ресуспендирования",
-                "type": "number",
-                "unit": "мл",
-                "required": false
-              },
-              {
-                "id": "marking",
-                "label": "Маркировка",
-                "type": "checkbox",
-                "required": false
-              },
-              {
-                "id": "bact",
-                "label": "Бакпосев",
-                "type": "checkbox",
-                "required": false
-              },
-              {
-                "id": "cbc",
-                "label": "ОАК",
-                "type": "checkbox",
-                "required": false
-              },
-              {
-                "id": "extra",
-                "label": "Дополнительные исследования",
-                "type": "text",
-                "required": false
-              },
-              {
-                "id": "quarantine",
-                "label": "Карантинное хранение",
-                "type": "checkbox",
-                "required": false
-              },
-              {
-                "id": "aliquots",
-                "label": "Количество аликвот",
-                "type": "number",
-                "unit": "шт",
-                "required": false
-              }
-            ],
+        "fields": [],
+        "actions": [
+          {
+            "id": "act-tn2-resusp",
+            "text": "Ресуспендирование осадка",
+            "required": true,
+            "input": {
+              "label": "Объём ресуспендирования (мл)",
+              "type": "number"
+            }
+          },
+          {
+            "id": "act-tn2-marking",
+            "text": "Маркировка",
+            "required": true
+          },
+          {
+            "id": "act-tn2-bact",
+            "text": "Бакпосев",
+            "required": true
+          },
+          {
+            "id": "act-tn2-cbc",
+            "text": "ОАК",
+            "required": true
+          },
+          {
+            "id": "act-tn2-extra",
+            "text": "Дополнительные исследования",
+            "required": false,
+            "input": {
+              "label": "Дополнительные исследования",
+              "type": "text"
+            }
+          },
+          {
+            "id": "act-tn2-quarantine",
+            "text": "Карантинное хранение",
+            "required": false,
+            "input": {
+              "label": "Количество аликвот (шт)",
+              "type": "number"
+            }
+          }
+        ],
             "consumables": [
               {
                 "id": "c-tubes50",
@@ -615,20 +602,6 @@
                   "стерильно",
                   "нестерильно"
                 ]
-              },
-              {
-                "id": "extraQc",
-                "label": "Дополнительные показатели",
-                "type": "text",
-                "required": false
-              },
-              {
-                "id": "qcComment",
-                "label": "Комментарий",
-                "type": "text",
-                "required": false,
-                "multiline": true,
-                "placeholder": "При необходимости укажите комментарий…"
               }
             ]
           }

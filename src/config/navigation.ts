@@ -38,7 +38,6 @@ export const SIDEBAR_BY_SECTION: Record<
   ],
   admin: [
     { path: "/admin/polzovateli", label: "Пользователи" },
-    { path: "/admin/konstruktor", label: "Конструктор ver1" },
     { path: "/admin/konstruktor-ver2", label: "Конструктор ver2" },
   ],
 };

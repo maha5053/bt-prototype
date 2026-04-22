@@ -120,7 +120,10 @@ const router = createBrowserRouter(
             },
             { path: "konstruktor", element: <ConstructorListPage /> },
             { path: "konstruktor-ver2", element: <ConstructorV2ListPage /> },
-            { path: "konstruktor/novyy", element: <ConstructorEditorPage /> },
+            {
+              path: "konstruktor/novyy",
+              element: <Navigate to="/admin/konstruktor" replace />,
+            },
             {
               path: "konstruktor/:templateId",
               element: <ConstructorEditorPage />,

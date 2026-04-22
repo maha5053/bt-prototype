@@ -901,8 +901,12 @@ export function ConstructorEditorView({
                       (step, idx) => (
                       <div
                         key={step.id}
-                        className="rounded-lg border border-slate-200 bg-white p-3"
+                        className="relative overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
                       >
+                        <div
+                          className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-blue-200"
+                          aria-hidden
+                        />
                         {(() => {
                           const isEditing = allowSteps(stage.type)
                             ? (editingStepById[step.id] ?? false)
@@ -917,7 +921,7 @@ export function ConstructorEditorView({
                                   role="button"
                                   tabIndex={0}
                                   className={[
-                                    "flex flex-wrap items-center justify-between gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60",
+                                    "flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60",
                                     isEditing ? "cursor-default" : "cursor-pointer",
                                   ].join(" ")}
                                   aria-expanded={!isCollapsed || isEditing}
@@ -939,7 +943,7 @@ export function ConstructorEditorView({
                                   }}
                                   title="Свернуть/развернуть шаг"
                                 >
-                                <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-800">
+                                <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-900">
                                   <svg
                                     className={[
                                       "size-4 shrink-0 text-slate-400 transition",
@@ -955,7 +959,7 @@ export function ConstructorEditorView({
                                       clipRule="evenodd"
                                     />
                                   </svg>
-                                  <span className="text-xs font-semibold text-slate-500">
+                                  <span className="rounded-full bg-slate-200/60 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
                                     Шаг {idx + 1}
                                   </span>
                                   <span className="min-w-0 truncate">{step.name}</span>
@@ -1529,26 +1533,37 @@ export function ConstructorEditorView({
                                       </div>
                                     </div>
                                   ) : stage.type === "production" ? (
-                                    <div className="space-y-3">
-                                      <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-3">
-                                        <div className="mb-2 text-sm font-semibold text-slate-800">
-                                          Действия
+                                    <div className="space-y-3 px-3 pb-3">
+                                      <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                            Действия
+                                          </div>
+                                          <div className="text-[11px] font-medium text-slate-500">
+                                            {(step.actions ?? []).length} шт.
+                                          </div>
                                         </div>
-                                        {(step.actions ?? []).length === 0 ? (
-                                        <div className="mt-3 rounded-md border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-600">
-                                          Действий пока нет.
-                                        </div>
-                                      ) : (
-                                        <div className="mt-3 space-y-2">
+                                        <div className="mt-2 border-l-2 border-slate-200 pl-4">
+                                          {(step.actions ?? []).length === 0 ? (
+                                            <div className="mt-3 rounded-md border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-600">
+                                              Действий пока нет.
+                                            </div>
+                                          ) : (
+                                            <div className="mt-3 space-y-2">
                                           {(step.actions ?? []).map((action, aIdx) => {
                                             const a = action as EditableStepActionTemplate;
+                                            const required = a.required ?? true;
                                             const isActionEditing =
                                               editingActionById[action.id] ?? false;
                                             return (
                                               <div
                                                 key={action.id}
-                                                className="rounded-md border border-slate-200 bg-white p-3"
+                                                className="relative rounded-md border border-slate-200 bg-white p-3 pl-7"
                                               >
+                                                <div
+                                                  className="pointer-events-none absolute left-3 top-5 size-2 rounded-full bg-blue-500 ring-2 ring-white"
+                                                  aria-hidden
+                                                />
                                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                                   <div className="min-w-0 text-sm font-semibold text-slate-800">
                                                     <span className="mr-2 text-xs font-semibold text-slate-500">
@@ -1557,6 +1572,12 @@ export function ConstructorEditorView({
                                                     <span className="truncate">
                                                       {a.text.trim() ? a.text : "—"}
                                                     </span>
+                                                    {required ? (
+                                                      <span className="text-[12px] font-bold text-red-500">
+                                                        {" "}
+                                                        *
+                                                      </span>
+                                                    ) : null}
                                                     {a.input ? (
                                                       <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                                                         поле:{" "}
@@ -1840,8 +1861,9 @@ export function ConstructorEditorView({
                                               </div>
                                             );
                                           })}
+                                            </div>
+                                          )}
                                         </div>
-                                      )}
 
                                       <div className="mt-3">
                                         <button

@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ProductionProvider, useProduction } from "../context/ProductionContext";
 import type { StageTemplate } from "../mocks/productionData";
 import { ConstructorEditorView } from "./ConstructorPages";
+import { ProductionTemplatesDevTools } from "../components/ProductionTemplatesDevTools";
 
 /** Стабильные ссылки — иначе у `ConstructorEditorView` каждый рендер новые пропсы и эффекты срабатывают постоянно. */
 const CONSTRUCTOR_V2_STAGE_ORDER: StageTemplate["type"][] = [
@@ -182,6 +183,8 @@ function ConstructorV2ListContent() {
           </tbody>
         </table>
       </div>
+
+      <ProductionTemplatesDevTools />
     </div>
   );
 }

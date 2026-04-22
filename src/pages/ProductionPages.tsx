@@ -2612,6 +2612,8 @@ function StepsStage({
               <SopAttachmentLink
                 sopRef={activeStepTpl?.sopRef}
                 sopFileName={activeStepTpl?.sopFileName}
+                attachmentPdf={activeStepTpl?.attachmentPdf}
+                allowMockDocumentLink={false}
               />
             </div>
             {!showStepsSidebar ? (
@@ -2994,11 +2996,6 @@ function QualityControlStage({
   );
 }
 
-type ProductionChecklistSegment =
-  | { kind: "section"; field: FieldDefinition }
-  | { kind: "action"; minor: number; fields: FieldDefinition[] }
-  | { kind: "trailing"; fields: FieldDefinition[] };
-
 type ConstructorActionInputConfig = {
   label: string;
   type: "text" | "number";
@@ -3019,83 +3016,57 @@ function actionInputFieldId(actionId: string): string {
   return `action:${actionId}:value`;
 }
 
-function isHiddenProductionMetaField(field: FieldDefinition): boolean {
-  return field.id === "seq" || field.id === "executor";
-}
-
-/** Группы «чек-листа»: чекбокс + следующие не-checkbox поля до следующего чекбокса/секции. */
-function buildProductionChecklistSegments(
-  fields: FieldDefinition[],
-): ProductionChecklistSegment[] {
-  const segments: ProductionChecklistSegment[] = [];
-  let minor = 0;
-  let i = 0;
-
-  while (i < fields.length) {
-    const f = fields[i]!;
-    if (isHiddenProductionMetaField(f)) {
-      i++;
-      continue;
-    }
-
-    if (f.type === "section_header") {
-      segments.push({ kind: "section", field: f });
-      i++;
-      continue;
-    }
-
-    if (f.type === "checkbox") {
-      minor += 1;
-      const chunk: FieldDefinition[] = [f];
-      i++;
-      while (i < fields.length) {
-        const nf = fields[i]!;
-        if (isHiddenProductionMetaField(nf)) {
-          i++;
-          continue;
-        }
-        if (nf.type === "section_header" || nf.type === "checkbox") break;
-        chunk.push(nf);
-        i++;
-      }
-      segments.push({ kind: "action", minor, fields: chunk });
-      continue;
-    }
-
-    const chunk: FieldDefinition[] = [];
-    while (i < fields.length) {
-      const nf = fields[i]!;
-      if (isHiddenProductionMetaField(nf)) {
-        i++;
-        continue;
-      }
-      if (nf.type === "section_header" || nf.type === "checkbox") break;
-      chunk.push(nf);
-      i++;
-    }
-    if (chunk.length > 0) {
-      segments.push({ kind: "trailing", fields: chunk });
-    }
-  }
-
-  return segments;
-}
-
 function sopMockDocumentHref(): string {
   return `${import.meta.env.BASE_URL}mocks/sop/test-sop.pdf`;
 }
 
-/** СОП / файл: как на регистрации — ссылка открывает моковый PDF в новой вкладке. */
+/** СОП / файл: вложение шага из конструктора (data URL) или моковый PDF по имени из seed (секции формы). */
 function SopAttachmentLink({
   sopRef,
   sopFileName,
+  attachmentPdf,
+  allowMockDocumentLink = true,
   tabIndex,
 }: {
   sopRef?: string;
   sopFileName?: string;
+  /** PDF из конструктора процессов (вложение шага). */
+  attachmentPdf?: { fileName: string; dataUrl: string };
+  /**
+   * false — шапка шага производства: без PDF-вложения ничего не показываем.
+   * true — заголовки секций формы: без вложения остаётся моковая ссылка по seed.
+   */
+  allowMockDocumentLink?: boolean;
   /** Для вложенных подписей формы — не забирать фокус с клавиатуры (как у section_header). */
   tabIndex?: number;
 }) {
+  const hasStepAttachment =
+    attachmentPdf &&
+    typeof attachmentPdf.dataUrl === "string" &&
+    attachmentPdf.dataUrl.length > 0 &&
+    typeof attachmentPdf.fileName === "string" &&
+    attachmentPdf.fileName.trim().length > 0;
+
+  if (hasStepAttachment) {
+    return (
+      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs text-slate-500">
+        {sopRef ? <span className="font-medium text-slate-600">{sopRef}</span> : null}
+        {sopRef ? <span className="text-slate-300">·</span> : null}
+        <a
+          href={attachmentPdf!.dataUrl}
+          target="_blank"
+          rel="noreferrer"
+          tabIndex={tabIndex}
+          className="underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
+        >
+          {attachmentPdf!.fileName}
+        </a>
+      </div>
+    );
+  }
+
+  if (!allowMockDocumentLink) return null;
+
   if (!sopRef && !sopFileName) return null;
   const href = sopMockDocumentHref();
   return (
@@ -3305,11 +3276,6 @@ function FormFields({
     );
   };
 
-  const checklistSegments =
-    stageType === "production"
-      ? buildProductionChecklistSegments(stepTemplate.fields)
-      : null;
-
   const constructorActions =
     stageType === "production"
       ? ((stepTemplate.actions ?? []) as unknown as ConstructorStepAction[])
@@ -3428,56 +3394,13 @@ function FormFields({
     ) : null;
 
   const fieldsBody =
-    stageType === "production" && checklistSegments ? (
-      <div className="space-y-4">
-        {checklistSegments.map((seg, segIdx) => {
-          if (seg.kind === "section") {
-            return (
-              <div key={seg.field.id}>{renderSectionHeader(seg.field)}</div>
-            );
-          }
-          if (seg.kind === "action") {
-            return (
-              <div
-                key={`action-${seg.minor}-${seg.fields[0]!.id}`}
-                className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 shadow-sm"
-              >
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                  Действие {productionStepMajor}.{seg.minor}
-                </div>
-                <div className="space-y-3">
-                  {seg.fields.map((f) => renderFieldRow(f))}
-                </div>
-              </div>
-            );
-          }
-          const precededByAction = checklistSegments
-            .slice(0, segIdx)
-            .some((s) => s.kind === "action");
-          return (
-            <div
-              key={`trail-${seg.fields.map((f) => f.id).join("-")}`}
-              className={
-                precededByAction
-                  ? "space-y-3 border-t border-slate-200 pt-4"
-                  : "space-y-3"
-              }
-            >
-              {seg.fields.map((f) => renderFieldRow(f))}
-            </div>
-          );
-        })}
-      </div>
-    ) : (
+    stageType === "production" ? null : (
       <div className="space-y-3">
         {stepTemplate.fields.map((field) => {
           if (field.id === "seq" || field.id === "executor") {
             return null;
           }
-          if (
-            stageType === "release" &&
-            isReleaseSupersededSignerField(field)
-          ) {
+          if (stageType === "release" && isReleaseSupersededSignerField(field)) {
             return null;
           }
           if (field.type === "section_header") {
