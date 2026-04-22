@@ -3809,6 +3809,10 @@ function FormFields({
             stageType === "registration" && g.headerField?.id === "sec-blood";
           const isRegistrationIncomingQcGroup =
             stageType === "registration" && g.headerField?.id === "sec-qc";
+          const isRegistrationBalanceGroup =
+            stageType === "registration" && g.headerField?.id === "sec-balance";
+          const isRegistrationDeviationGroup =
+            stageType === "registration" && g.headerField?.id === "sec-dev";
 
           const renderCommonDataGrid = () => {
             const byId = new Map(g.fields.map((f) => [f.id, f] as const));
@@ -3891,6 +3895,93 @@ function FormFields({
             );
           };
 
+          const renderBalanceTable = () => {
+            const inputCls =
+              "w-24 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500";
+            return (
+              <div className="max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                <table className="w-max min-w-full border-collapse text-left text-sm">
+                  <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-4 py-2.5 font-medium">Наименование</th>
+                      <th className="px-4 py-2.5 font-medium">Кол-во</th>
+                      <th className="px-4 py-2.5 font-medium">Ед.</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {g.fields.map((f) => {
+                      const isReadonly =
+                        !canEdit ||
+                        Boolean(f.refDeviations?.length) ||
+                        typeof f.refStageIndex === "number" ||
+                        Boolean(f.computeRule) ||
+                        f.id === "productId";
+                      const value = resolveValue(f);
+                      const numericValue =
+                        typeof value === "number" && Number.isFinite(value)
+                          ? value
+                          : value == null
+                            ? 0
+                            : Number(value);
+                      const safeValue =
+                        Number.isFinite(numericValue) && numericValue >= 0
+                          ? numericValue
+                          : 0;
+                      return (
+                        <tr
+                          key={f.id}
+                          data-production-field={f.id}
+                          className="hover:bg-slate-50/80"
+                        >
+                          <td className="max-w-md whitespace-normal px-4 py-2.5 text-slate-700">
+                            {f.label}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2.5 align-middle">
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={0}
+                              step={1}
+                              value={safeValue}
+                              onKeyDown={(e) => {
+                                if (isReadonly) return;
+                                if (
+                                  e.key === "-" ||
+                                  e.key === "e" ||
+                                  e.key === "E" ||
+                                  e.key === "+"
+                                ) {
+                                  e.preventDefault();
+                                }
+                              }}
+                              onChange={(e) => {
+                                if (isReadonly) return;
+                                const t = e.target.value;
+                                if (t === "") {
+                                  onChange(f.id, 0);
+                                  return;
+                                }
+                                const n = Number(t);
+                                if (!Number.isFinite(n) || n < 0) return;
+                                onChange(f.id, Math.floor(n));
+                              }}
+                              disabled={isReadonly}
+                              className={inputCls}
+                              aria-label={f.label}
+                            />
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2.5 align-middle text-xs tabular-nums text-slate-500">
+                            {f.unit ?? "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          };
+
           const resolveIncomingQcSentiment = (
             fieldId: string,
             rawValue: FieldValue,
@@ -3929,6 +4020,29 @@ function FormFields({
             </div>
           );
 
+          const resolveDeviationSentiment = (rawValue: FieldValue): FieldSentiment | undefined => {
+            if (typeof rawValue !== "string") return undefined;
+            const v = rawValue.trim().toLowerCase();
+            if (v === "нет") return "positive";
+            if (v === "да") return "negative";
+            return undefined;
+          };
+
+          const renderDeviationStack = () => (
+            <div className="space-y-3">
+              {g.fields.map((f) => {
+                if (f.id === "devFlag") {
+                  return renderFieldCustom(
+                    f,
+                    undefined,
+                    resolveDeviationSentiment(resolveValue(f)),
+                  );
+                }
+                return renderFieldCustom(f);
+              })}
+            </div>
+          );
+
           return (
             <CollapsibleSection
               key={g.id}
@@ -3945,6 +4059,10 @@ function FormFields({
                   renderBloodCollectionGrid()
                 ) : isRegistrationIncomingQcGroup ? (
                   renderIncomingQcStack()
+                ) : isRegistrationBalanceGroup ? (
+                  renderBalanceTable()
+                ) : isRegistrationDeviationGroup ? (
+                  renderDeviationStack()
                 ) : (
                   <div className="space-y-3">
                     {g.fields.map((field) => renderFieldRow(field))}

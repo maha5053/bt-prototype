@@ -247,6 +247,7 @@
                 "id": "devNotes",
                 "label": "Примечания",
                 "type": "text",
+                "multiline": true,
                 "required": false,
                 "isSystem": true
               }
