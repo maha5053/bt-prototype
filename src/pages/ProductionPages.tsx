@@ -202,6 +202,12 @@ function ProductionListContent() {
     useState<ProductionListSortKey>("date");
   const [listSortDir, setListSortDir] = useState<"asc" | "desc">("desc");
 
+  // Row actions menu (kebab)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ left: number; top: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
   const toggleListSort = (key: ProductionListSortKey) => {
     setPage(1);
     if (listSortKey === key) {
@@ -210,6 +216,25 @@ function ProductionListContent() {
       setListSortKey(key);
       setListSortDir(key === "date" ? "desc" : "asc");
     }
+  };
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+        setMenuPosition(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenuId]);
+
+  const handleMenuOpen = (id: string, button: HTMLButtonElement) => {
+    const rect = button.getBoundingClientRect();
+    setMenuPosition({ left: rect.left, top: rect.bottom });
+    setOpenMenuId(id);
   };
 
   /** Активная колонка — ↑/↓; остальные — серая ↕ («можно сортировать»). */
@@ -348,7 +373,18 @@ function ProductionListContent() {
     setSelectedTemplateId("");
 
     // New (constructor ver2) flow: create order id and navigate to /:orderId-new
-    const orderId = String(Date.now());
+    const orderId = (() => {
+      let max = 0n;
+      for (const o of orders) {
+        const raw = o.id.replace(/^po-?/i, "");
+        if (!/^\d+$/.test(raw)) continue;
+        const n = BigInt(raw);
+        if (n > max) max = n;
+      }
+      const next = max + 1n;
+      // Keep legacy formatting: at least 3 digits.
+      return next.toString().padStart(3, "0");
+    })();
     navigate(`/proizvodstvo/${orderId}-new?templateId=${encodeURIComponent(chosen)}`);
   };
 
@@ -446,7 +482,7 @@ function ProductionListContent() {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
-                  Текущий этап
+                  Этап
                 </label>
                 <select
                   value={stageFilter}
@@ -521,6 +557,11 @@ function ProductionListContent() {
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
                 <th
+                  className="w-10 px-2 py-3 font-medium"
+                  scope="col"
+                  aria-label="Действия"
+                />
+                <th
                   className="px-4 py-3 font-medium"
                   scope="col"
                   aria-sort={
@@ -536,8 +577,28 @@ function ProductionListContent() {
                     className="inline-flex items-center gap-1 font-medium text-slate-600 hover:text-slate-900"
                     onClick={() => toggleListSort("number")}
                   >
-                    Номер
+                    №
                     {listSortColumnHint("number")}
+                  </button>
+                </th>
+                <th
+                  className="px-4 py-3 font-medium"
+                  scope="col"
+                  aria-sort={
+                    listSortKey === "date"
+                      ? listSortDir === "asc"
+                        ? "ascending"
+                        : "descending"
+                      : "none"
+                  }
+                >
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 font-medium text-slate-600 hover:text-slate-900"
+                    onClick={() => toggleListSort("date")}
+                  >
+                    Дата создания
+                    {listSortColumnHint("date")}
                   </button>
                 </th>
                 <th
@@ -566,32 +627,11 @@ function ProductionListContent() {
                 <th className="px-4 py-3 font-medium whitespace-nowrap" scope="col">
                   № ИБ
                 </th>
-                <th
-                  className="px-4 py-3 font-medium"
-                  scope="col"
-                  aria-sort={
-                    listSortKey === "date"
-                      ? listSortDir === "asc"
-                        ? "ascending"
-                        : "descending"
-                      : "none"
-                  }
-                >
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1 font-medium text-slate-600 hover:text-slate-900"
-                    onClick={() => toggleListSort("date")}
-                  >
-                    Дата регистрации
-                    {listSortColumnHint("date")}
-                  </button>
-                </th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap">
                   Статус
                 </th>
-                <th className="px-4 py-3 font-medium">Текущий этап</th>
+                <th className="px-4 py-3 font-medium">Этап</th>
                 <th className="px-4 py-3 font-medium">Создатель</th>
-                <th className="px-4 py-3 font-medium text-right">Действия</th>
               </tr>
             </thead>
             <tbody>
@@ -633,8 +673,94 @@ function ProductionListContent() {
                       onClick={() => handleOpenOrder(order.id)}
                       className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50/80"
                     >
+                      <td className="w-10 px-2 py-3 align-middle">
+                        <button
+                          type="button"
+                          ref={(el) => {
+                            buttonRefs.current[order.id] = el;
+                          }}
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            if (openMenuId === order.id) {
+                              setOpenMenuId(null);
+                              setMenuPosition(null);
+                            } else {
+                              handleMenuOpen(order.id, ev.currentTarget);
+                            }
+                          }}
+                          className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                          aria-label="Действия"
+                          title="Действия"
+                        >
+                          <svg
+                            className="size-5"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            aria-hidden
+                          >
+                            <circle cx="12" cy="6" r="2" />
+                            <circle cx="12" cy="12" r="2" />
+                            <circle cx="12" cy="18" r="2" />
+                          </svg>
+                        </button>
+                        {openMenuId === order.id && menuPosition ? (
+                          <div
+                            ref={menuRef}
+                            className="fixed z-50 mt-1 w-56 rounded-lg border border-slate-200 bg-white py-1 shadow-xl"
+                            style={{
+                              left: `${menuPosition.left}px`,
+                              top: `${menuPosition.top}px`,
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              disabled={!deleteEnabled}
+                              onClick={() => {
+                                if (!deleteEnabled) return;
+                                const ok = window.confirm(
+                                  "Удалить заказ? Данные будут удалены без возможности восстановления.",
+                                );
+                                if (!ok) return;
+                                deleteOrder(order.id);
+                                setOpenMenuId(null);
+                                setMenuPosition(null);
+                              }}
+                              className={[
+                                "flex w-full items-center gap-2 px-3 py-2 text-sm",
+                                deleteEnabled
+                                  ? "text-red-700 hover:bg-red-50"
+                                  : "cursor-not-allowed text-slate-300",
+                              ].join(" ")}
+                              title={
+                                deleteEnabled
+                                  ? "Удалить заказ"
+                                  : "Удаление доступно только на этапе регистрации"
+                              }
+                            >
+                              <svg
+                                className="size-4"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden
+                              >
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                              </svg>
+                              Удалить
+                            </button>
+                          </div>
+                        ) : null}
+                      </td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-600">
                         {order.id}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {formatRuDateTime(order.createdAt)}
                       </td>
                       <td className="px-4 py-3 text-slate-800 font-medium">
                         {order.templateName}
@@ -645,9 +771,6 @@ function ProductionListContent() {
                       <td className="px-4 py-3 font-mono text-xs text-slate-600">
                         {caseNumber || "—"}
                       </td>
-                      <td className="px-4 py-3 text-slate-600">
-                        {formatRuDateTime(order.createdAt)}
-                      </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={order.status} />
                       </td>
@@ -656,36 +779,6 @@ function ProductionListContent() {
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {order.createdBy}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end">
-                          <button
-                            type="button"
-                            disabled={!deleteEnabled}
-                            className={[
-                              "rounded-md border px-3 py-1.5 text-xs font-medium transition",
-                              deleteEnabled
-                                ? "border-red-300 text-red-700 hover:bg-red-50"
-                                : "cursor-not-allowed border-slate-200 text-slate-300",
-                            ].join(" ")}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!deleteEnabled) return;
-                              const ok = window.confirm(
-                                "Удалить заказ? Данные будут удалены без возможности восстановления.",
-                              );
-                              if (!ok) return;
-                              deleteOrder(order.id);
-                            }}
-                            title={
-                              deleteEnabled
-                                ? "Удалить заказ"
-                                : "Удаление доступно только на этапе регистрации"
-                            }
-                          >
-                            Удалить
-                          </button>
-                        </div>
                       </td>
                     </tr>
                   );
@@ -1280,7 +1373,7 @@ function ProductionOrderContent() {
                 <line x1="8" y1="2" x2="8" y2="6" />
                 <line x1="3" y1="10" x2="21" y2="10" />
               </svg>
-              <span>Дата регистрации: {formatRuDateTime(order.createdAt)}</span>
+              <span>Дата создания: {formatRuDateTime(order.createdAt)}</span>
             </span>
             </div>
           </div>
