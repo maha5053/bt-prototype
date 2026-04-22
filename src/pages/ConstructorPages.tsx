@@ -853,45 +853,38 @@ export function ConstructorEditorView({
     <div className="p-6 md:p-8">
       <div className="mb-6">
         <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-slate-500">
-              <span>Администрирование</span>
-              <span className="text-slate-300">/</span>
-              <Link
-                to={basePath}
-                className="rounded-sm underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
-                title="К списку шаблонов"
-              >
-                {headerTitle}
-              </Link>
-            </div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-slate-500">
+            <Link
+              to={basePath}
+              className="inline-flex items-center gap-2 rounded-md px-1.5 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+              title="К списку шаблонов"
+              aria-label="Назад к списку шаблонов"
+            >
+              <span aria-hidden>←</span>
+              <span>Назад</span>
+            </Link>
 
-            <div className="mt-1 flex items-center gap-3">
-              <Link
-                to={basePath}
-                className="shrink-0 rounded-md p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-                title="К списку шаблонов"
-                aria-label="Назад к списку шаблонов"
-              >
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  aria-hidden
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M15 19l-7-7 7-7"
-                  />
-                </svg>
-              </Link>
+            <span>Администрирование</span>
+            <span className="text-slate-300">›</span>
+            <Link
+              to={basePath}
+              className="rounded-sm underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
+              title="К списку шаблонов"
+            >
+              {headerTitle}
+            </Link>
+            <span className="text-slate-300">›</span>
+            <span className="max-w-[60ch] truncate text-slate-700">
+              {template?.name?.trim() ? template.name.trim() : "Без названия"}
+            </span>
+          </div>
 
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
               {isTemplateNameEditing ? (
                 <input
                   ref={templateNameInputRef}
-                  className="w-full max-w-2xl rounded-md border border-slate-300 bg-white px-3 py-2 text-base font-semibold text-slate-900 outline-none focus:border-blue-400"
+                  className="w-full max-w-2xl rounded-md border border-slate-300 bg-white px-3 py-2 text-lg font-bold text-slate-900 outline-none focus:border-blue-400"
                   value={templateNameDraft}
                   onChange={(e) => setTemplateNameDraft(e.target.value)}
                   onKeyDown={(e) => {
@@ -920,7 +913,7 @@ export function ConstructorEditorView({
               ) : (
                 <button
                   type="button"
-                  className="group inline-flex max-w-2xl items-center gap-2 rounded-md px-1 py-0.5 text-left text-xl font-semibold text-slate-900 hover:bg-slate-100"
+                  className="group inline-flex max-w-2xl items-center gap-2 rounded-md px-1 py-0.5 text-left text-2xl font-bold leading-tight text-slate-900 hover:bg-slate-100 md:text-3xl"
                   onClick={() => setIsTemplateNameEditing(true)}
                   aria-label="Редактировать название шаблона"
                   title="Редактировать название"
@@ -929,7 +922,7 @@ export function ConstructorEditorView({
                     {template?.name?.trim() ? template.name.trim() : "Без названия"}
                   </span>
                   <svg
-                    className="size-4 shrink-0 text-slate-400 transition group-hover:text-slate-700"
+                    className="size-4 shrink-0 text-slate-400 transition group-hover:text-slate-700 md:size-5"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -943,7 +936,17 @@ export function ConstructorEditorView({
                   </svg>
                 </button>
               )}
+
+              {lastSavedAt ? (
+                <span
+                  className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-600/20"
+                  title="Локальное автосохранение черновика"
+                >
+                  Сохранено {formatSavedClock(lastSavedAt)}
+                </span>
+              ) : null}
             </div>
+          </div>
         </div>
       </div>
 
@@ -980,15 +983,6 @@ export function ConstructorEditorView({
               </Tab>
             ))}
           </Tab.List>
-
-          {lastSavedAt ? (
-            <span
-              className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-900 ring-1 ring-emerald-600/20"
-              title="Локальное автосохранение черновика"
-            >
-              Сохранено {formatSavedClock(lastSavedAt)}
-            </span>
-          ) : null}
         </div>
 
         <Tab.Panels className="pt-4">
