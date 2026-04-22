@@ -1564,31 +1564,37 @@ export function ConstructorEditorView({
                                                   className="pointer-events-none absolute left-3 top-5 size-2 rounded-full bg-blue-500 ring-2 ring-white"
                                                   aria-hidden
                                                 />
-                                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                                  <div className="min-w-0 text-sm font-semibold text-slate-800">
-                                                    <span className="mr-2 text-xs font-semibold text-slate-500">
-                                                      Действие {aIdx + 1}
-                                                    </span>
-                                                    <span className="truncate">
+                                                <div className="flex items-start justify-between gap-3">
+                                                  <div className="min-w-0 flex-1 space-y-1">
+                                                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                                                      <span className="text-xs font-semibold text-slate-500">
+                                                        Действие {aIdx + 1}
+                                                      </span>
+                                                      {required ? (
+                                                        <span className="text-[12px] font-bold text-red-500">
+                                                          *
+                                                        </span>
+                                                      ) : null}
+                                                    </div>
+
+                                                    <div className="text-sm font-semibold leading-snug text-slate-800">
                                                       {a.text.trim() ? a.text : "—"}
-                                                    </span>
-                                                    {required ? (
-                                                      <span className="text-[12px] font-bold text-red-500">
-                                                        {" "}
-                                                        *
-                                                      </span>
-                                                    ) : null}
+                                                    </div>
+
                                                     {a.input ? (
-                                                      <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                                                      <div className="text-xs font-semibold text-slate-500">
                                                         поле:{" "}
-                                                        {a.input.label.trim()
-                                                          ? a.input.label.trim()
-                                                          : "без названия"}
-                                                      </span>
+                                                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                                                          {a.input.label.trim()
+                                                            ? a.input.label.trim()
+                                                            : "без названия"}
+                                                        </span>
+                                                      </div>
                                                     ) : null}
                                                   </div>
 
-                                                  <div className="flex items-center gap-2">
+                                                  <div className="shrink-0 self-start">
+                                                    <div className="flex items-center gap-2">
                                                     <button
                                                       type="button"
                                                       className="rounded-md border border-slate-300 bg-white p-2 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
@@ -1653,6 +1659,7 @@ export function ConstructorEditorView({
                                                         <path d="M14 11v6" />
                                                       </svg>
                                                     </button>
+                                                  </div>
                                                   </div>
                                                 </div>
 
