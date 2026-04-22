@@ -1161,50 +1161,134 @@ function ProductionOrderContent() {
 
   return (
     <div className="p-6 md:p-8">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="mb-6">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-slate-500">
           <Link
             to="/proizvodstvo"
-            className="text-sm text-slate-500 transition hover:text-slate-700"
+            className="inline-flex items-center gap-2 rounded-md px-1.5 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
             title="К журналу заказов"
+            aria-label="Назад к журналу заказов"
           >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
+            <span aria-hidden>←</span>
+            <span>Назад</span>
+          </Link>
+
+          <Link
+            to="/proizvodstvo"
+            className="rounded-sm underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
+            title="Журнал заказов"
+          >
+            Производство
+          </Link>
+          <span className="text-slate-300">›</span>
+          <span className="max-w-[60ch] truncate text-slate-700">
+            Заказ {order.id.replace(/^po-/, "")}
+          </span>
+        </div>
+
+        <div className="mt-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-3">
+              <h1 className="min-w-0 truncate text-2xl font-bold leading-tight text-slate-900 md:text-3xl">
+                {order.templateName}
+              </h1>
+              <span
+                className={[
+                  "inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1",
+                  order.status === "in_progress"
+                    ? "bg-emerald-50 text-emerald-900 ring-emerald-600/20"
+                    : order.status === "completed"
+                      ? "bg-slate-100 text-slate-800 ring-slate-300/60"
+                      : "bg-red-50 text-red-900 ring-red-600/20",
+                ].join(" ")}
+                title="Статус заказа"
+              >
+                {formatOrderStatus(order.status)}
+              </span>
+              {canEditStage && lastSavedAt ? (
+                <span
+                  className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-600/20"
+                  title="Локальное автосохранение черновика"
+                >
+                  Сохранено {formatSavedClock(lastSavedAt)}
+                </span>
+              ) : null}
+            </div>
+
+          </div>
+
+          <div className="flex max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-2 sm:max-w-[min(100%,44rem)]">
+            <StageActionsMenu
+              releasePrintHref={releasePrintHref}
+              printEnabled={printActEnabled}
+              printTitle={printMenuTitle}
+              rejectEnabled={rejectFromMenuEnabled}
+              rejectTitle={rejectMenuTitle}
+              onReject={() => {
+                resetRejectForm();
+                setShowReject(true);
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="mt-2">
+          <div className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-full bg-slate-50 px-3 py-1 text-sm text-slate-600 ring-1 ring-slate-200">
+            <span className="inline-flex items-center gap-2">
+              <svg
+                className="size-4 shrink-0 text-slate-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </Link>
-          <h1 className="text-xl font-semibold text-slate-800">
-            Заказ {order.id}
-            <span className="ml-2 text-base font-normal text-slate-500">
-              · {formatOrderStatus(order.status)}
+                aria-hidden
+              >
+                <path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3H4a1 1 0 0 0-1 1v5.59A2 2 0 0 0 3.83 11l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83Z" />
+                <circle cx="7.5" cy="7.5" r="1.5" />
+              </svg>
+              <span>Заказ</span>
+              <span className="font-medium text-slate-900">{order.id}</span>
             </span>
-          </h1>
-        </div>
-        <div className="flex max-w-full flex-wrap items-center justify-end gap-x-2 gap-y-1 sm:max-w-[min(100%,42rem)]">
-          <p className="text-right text-sm leading-snug text-slate-500">
-            {order.templateName} · Создал: {order.createdBy} · Дата регистрации:{" "}
-            {formatRuDateTime(order.createdAt)}
-          </p>
-          <StageActionsMenu
-            releasePrintHref={releasePrintHref}
-            printEnabled={printActEnabled}
-            printTitle={printMenuTitle}
-            rejectEnabled={rejectFromMenuEnabled}
-            rejectTitle={rejectMenuTitle}
-            onReject={() => {
-              resetRejectForm();
-              setShowReject(true);
-            }}
-          />
+            <span className="inline-flex items-center gap-2">
+              <svg
+                className="size-4 shrink-0 text-slate-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M20 21v-1a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v1" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+              <span>
+                Создал: <span className="text-slate-700">{order.createdBy}</span>
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-2">
+              <svg
+                className="size-4 shrink-0 text-slate-400"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              <span>Дата регистрации: {formatRuDateTime(order.createdAt)}</span>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -1302,14 +1386,6 @@ function ProductionOrderContent() {
                 </div>
               ) : null}
             </div>
-            {canEditStage && lastSavedAt ? (
-              <span
-                className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-900 ring-1 ring-emerald-600/20"
-                title="Локальное автосохранение черновика"
-              >
-                Сохранено {formatSavedClock(lastSavedAt)}
-              </span>
-            ) : null}
           </div>
         </div>
 
@@ -1721,88 +1797,71 @@ function StageActionsMenu({
   rejectEnabled: boolean;
   rejectTitle?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDocMouseDown = (e: MouseEvent) => {
-      const el = rootRef.current;
-      if (!el) return;
-      if (e.target instanceof Node && !el.contains(e.target)) {
-        setOpen(false);
-      }
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDocMouseDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onDocMouseDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
-
   return (
-    <div className="relative shrink-0" ref={rootRef}>
+    <div className="flex flex-wrap items-center justify-end gap-2">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label="Действия"
-        title="Действия"
+        disabled={!printEnabled}
+        title={printTitle}
+        className={[
+          "inline-flex h-9 items-center gap-2 rounded-full border px-4 text-sm font-medium shadow-sm transition",
+          printEnabled
+            ? "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            : "border-slate-200 bg-white text-slate-400 opacity-70",
+        ].join(" ")}
+        onClick={() => {
+          if (!printEnabled) return;
+          window.open(releasePrintHref, "_blank", "noopener,noreferrer");
+        }}
       >
-        <span className="text-lg leading-none">⋯</span>
-      </button>
-      {open ? (
-        <div
-          role="menu"
-          className="absolute right-0 z-20 mt-2 min-w-[13.5rem] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+        <svg
+          className="size-4 shrink-0"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
         >
-          <button
-            type="button"
-            role="menuitem"
-            disabled={!printEnabled}
-            title={printTitle}
-            className={[
-              "w-full cursor-pointer px-3 py-2 text-left text-sm transition disabled:cursor-pointer",
-              printEnabled
-                ? "text-slate-800 hover:bg-slate-50"
-                : "text-slate-400",
-            ].join(" ")}
-            onClick={() => {
-              if (!printEnabled) return;
-              setOpen(false);
-              window.open(releasePrintHref, "_blank", "noopener,noreferrer");
-            }}
-          >
-            Печать акта выдачи
-          </button>
-          <div className="my-0.5 border-t border-slate-100" role="separator" />
-          <button
-            type="button"
-            role="menuitem"
-            disabled={!rejectEnabled}
-            title={rejectTitle}
-            className={[
-              "w-full cursor-pointer px-3 py-2 text-left text-sm transition disabled:cursor-pointer",
-              rejectEnabled
-                ? "text-red-700 hover:bg-red-50"
-                : "text-slate-400",
-            ].join(" ")}
-            onClick={() => {
-              if (!rejectEnabled) return;
-              setOpen(false);
-              onReject();
-            }}
-          >
-            Забраковать
-          </button>
-        </div>
-      ) : null}
+          <path d="M6 9V2h12v7" />
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+          <path d="M6 14h12v8H6z" />
+        </svg>
+        Печать акта выдачи
+      </button>
+
+      <button
+        type="button"
+        disabled={!rejectEnabled}
+        title={rejectTitle}
+        className={[
+          "inline-flex h-9 items-center gap-2 rounded-full border px-4 text-sm font-medium shadow-sm transition",
+          rejectEnabled
+            ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+            : "border-slate-200 bg-white text-slate-400 opacity-70",
+        ].join(" ")}
+        onClick={() => {
+          if (!rejectEnabled) return;
+          onReject();
+        }}
+      >
+        <svg
+          className="size-4 shrink-0"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <circle cx="12" cy="12" r="10" />
+          <line x1="15" y1="9" x2="9" y2="15" />
+          <line x1="9" y1="9" x2="15" y2="15" />
+        </svg>
+        Забраковать
+      </button>
     </div>
   );
 }
