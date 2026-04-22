@@ -220,12 +220,16 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
         systemFieldRegistry: DEFAULT_SYSTEM_FIELD_REGISTRY,
       };
     }
+    const storedOrders =
+      Array.isArray(stored.orders) && stored.orders.length > 0
+        ? stored.orders
+        : [...INITIAL_PRODUCTION_ORDERS];
     const merged = {
       templates: mergeProductionTemplatesWithBaseline(
         stored.templates,
         INITIAL_PROCESS_TEMPLATES,
       ),
-      orders: stored.orders,
+      orders: storedOrders,
       systemFieldRegistry:
         stored.systemFieldRegistry ?? DEFAULT_SYSTEM_FIELD_REGISTRY,
     };

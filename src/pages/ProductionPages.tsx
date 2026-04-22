@@ -2046,7 +2046,7 @@ function CollapsibleSection({
             </span>
           </span>
           {subtitle ? (
-            <span className="mt-0.5 block text-xs text-slate-500">
+            <span className="mt-1.5 block text-xs leading-snug text-slate-500">
               {subtitle}
             </span>
           ) : null}
@@ -2866,7 +2866,9 @@ function StepsStage({
                 title="Одобрение технологического процесса"
                 subtitle={
                   activeStepExec.techProcessApprovedBy
-                    ? `Одобрил: ${activeStepExec.techProcessApprovedBy}`
+                    ? activeStepExec.techProcessApprovedAt
+                      ? formatRuDateTime(activeStepExec.techProcessApprovedAt)
+                      : "Одобрено"
                     : "Требуется одобрение"
                 }
               >
@@ -2879,11 +2881,6 @@ function StepsStage({
                           {activeStepExec.techProcessApprovedBy}
                         </span>
                       </p>
-                      {activeStepExec.techProcessApprovedAt ? (
-                        <p className="text-xs text-slate-500">
-                          {formatRuDateTime(activeStepExec.techProcessApprovedAt)}
-                        </p>
-                      ) : null}
                     </div>
                   ) : (
                     <p className="text-sm text-slate-600">

@@ -269,18 +269,6 @@ export function buildOrderFromTemplate(
   };
 }
 
-function seedRegistrationFioIb(
-  order: ProductionOrder,
-  fio: string,
-  ib: string,
-): void {
-  const reg = order.stages.find((s) => s.type === "registration");
-  const step = reg?.steps[0];
-  if (!step) return;
-  step.fieldValues.fio = fio;
-  step.fieldValues.ib = ib;
-}
-
 /**
  * Шаблон «Тромбогель NEW» из конструктора ver2: тело в `thrombogelNewSeed.json`
  * (экспорт из localStorage). После очистки storage подставляется с id `tpl-thrombogel-new`.
@@ -533,21 +521,182 @@ export function reconcileRuntimeV2Templates(
 export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {
   const tpl = THROMBOGEL_NEW_TEMPLATE;
 
-  const inProgress = buildOrderFromTemplate(tpl, {
-    id: "po-001",
-    createdAt: "2025-03-18T09:10:00.000Z",
-    createdBy: "Иванова Е.",
-  });
-  seedRegistrationFioIb(inProgress, "Иванов Иван Иванович", "1290047");
+  const makeDate = (iso: string) => iso;
+  const asDateOnly = (iso: string) => iso.slice(0, 10);
+
+  const choose = <T,>(arr: T[] | undefined, fallback: T): T =>
+    arr && arr.length > 0 ? arr[0]! : fallback;
+
+  const fillStepFieldValues = (
+    stepTemplate: StepTemplate,
+    stepExecution: StepExecution,
+    seed: {
+      fio: string;
+      ib: string;
+      dobIso: string;
+      department: string;
+      diagnosis: string;
+      productId: string;
+      executor: string;
+    },
+  ) => {
+    for (const f of stepTemplate.fields) {
+      if (f.type === "section_header") continue;
+
+      // computed: keep empty, UI computes from source
+      if (f.computeRule) {
+        stepExecution.fieldValues[f.id] = null;
+        continue;
+      }
+
+      // Cross refs: fill with derived but UI uses ref* anyway
+      if (typeof f.refStageIndex === "number" || f.refFieldId) {
+        const refStage = tpl.stages[f.refStageIndex ?? 0];
+        const refId = f.refFieldId ?? "";
+        stepExecution.fieldValues[f.id] = refStage && refId ? `${seed.productId}` : null;
+        continue;
+      }
+
+      if (f.id === "fio") {
+        stepExecution.fieldValues[f.id] = seed.fio;
+        continue;
+      }
+      if (f.id === "ib") {
+        stepExecution.fieldValues[f.id] = seed.ib;
+        continue;
+      }
+      if (f.id === "dob") {
+        stepExecution.fieldValues[f.id] = asDateOnly(seed.dobIso);
+        continue;
+      }
+      if (f.id === "department") {
+        stepExecution.fieldValues[f.id] = seed.department;
+        continue;
+      }
+      if (f.id === "diagnosis") {
+        stepExecution.fieldValues[f.id] = seed.diagnosis;
+        continue;
+      }
+      if (f.id === "productId") {
+        stepExecution.fieldValues[f.id] = seed.productId;
+        continue;
+      }
+      if (f.id === "executor") {
+        stepExecution.fieldValues[f.id] = seed.executor;
+        continue;
+      }
+      if (f.id === "devFlag") {
+        stepExecution.fieldValues[f.id] = "Да";
+        continue;
+      }
+      if (f.id === "devNotes") {
+        stepExecution.fieldValues[f.id] = "Отклонение: небольшая задержка доставки образца.";
+        continue;
+      }
+      if (f.id === "assignedStatus") {
+        stepExecution.fieldValues[f.id] = "Разрешено";
+        continue;
+      }
+
+      switch (f.type) {
+        case "text":
+          stepExecution.fieldValues[f.id] = `Тест: ${f.label}`;
+          break;
+        case "date":
+          stepExecution.fieldValues[f.id] = asDateOnly(seed.dobIso);
+          break;
+        case "select":
+          stepExecution.fieldValues[f.id] = choose(f.options, "—") as unknown as string;
+          break;
+        case "number":
+          stepExecution.fieldValues[f.id] = 12;
+          break;
+        case "checkbox":
+          stepExecution.fieldValues[f.id] = true;
+          break;
+        default:
+          stepExecution.fieldValues[f.id] = null;
+      }
+    }
+  };
+
+  const fillProductionStep = (
+    stepTemplate: StepTemplate,
+    stepExecution: StepExecution,
+    seedNum: number,
+    markDone: boolean,
+  ) => {
+    // Actions: done + optional value
+    for (const a of stepTemplate.actions ?? []) {
+      stepExecution.fieldValues[`action:${a.id}:done`] = markDone ? true : seedNum % 2 === 0;
+      if (a.input) {
+        stepExecution.fieldValues[`action:${a.id}:value`] =
+          a.input.type === "number" ? 10 + seedNum : `Комментарий ${seedNum}`;
+      }
+    }
+    // Consumables
+    for (const c of stepTemplate.consumables ?? []) {
+      stepExecution.consumableValues[c.id] = 1 + (seedNum % 5);
+    }
+    // Equipment
+    for (const e of stepTemplate.equipment ?? []) {
+      stepExecution.equipmentValues[e.id] = true;
+    }
+    // Keep other fields empty (production steps in this template don't have fields)
+  };
+
+  const seedAllStages = (order: ProductionOrder, seed: Parameters<typeof fillStepFieldValues>[2]) => {
+    tpl.stages.forEach((stTpl, stIdx) => {
+      const stExec = order.stages[stIdx];
+      if (!stExec) return;
+      stTpl.steps.forEach((stepTpl, stepIdx) => {
+        const stepExec = stExec.steps[stepIdx];
+        if (!stepExec) return;
+        fillStepFieldValues(stepTpl, stepExec, seed);
+        if (stTpl.type === "production") {
+          fillProductionStep(stepTpl, stepExec, stIdx * 10 + stepIdx + 1, false);
+        }
+        if (stTpl.type === "quality_control") {
+          // QC defaults: keep in-range numbers and explicit sterility
+          for (const f of stepTpl.fields) {
+            if (f.type === "section_header") continue;
+            if (f.type === "number") {
+              const rr = f.referenceRange;
+              if (rr && rr.min !== undefined && rr.max !== undefined) {
+                stepExec.fieldValues[f.id] = (rr.min + rr.max) / 2;
+              } else {
+                stepExec.fieldValues[f.id] = 5;
+              }
+            } else if (f.type === "select") {
+              stepExec.fieldValues[f.id] = choose(f.options, "стерильно") as unknown as string;
+            }
+          }
+        }
+        if (stTpl.type === "release") {
+          // required "where"
+          stepExec.fieldValues["where"] = "Операционная";
+          stepExec.fieldValues["devSummary"] = "Отклонения: см. примечания регистрации.";
+        }
+      });
+    });
+  };
 
   const completed = buildOrderFromTemplate(tpl, {
     id: "po-002",
-    createdAt: "2025-03-05T08:00:00.000Z",
+    createdAt: makeDate("2026-03-05T08:00:00.000Z"),
     createdBy: "Петров С.",
   });
-  seedRegistrationFioIb(completed, "Петрова Анна Николаевна", "5567823");
+  seedAllStages(completed, {
+    fio: "Петрова Анна Николаевна",
+    ib: "5567823",
+    dobIso: "1988-11-03T00:00:00.000Z",
+    department: "Хирургия",
+    diagnosis: "Посттравматический дефект мягких тканей",
+    productId: "20260305-001",
+    executor: "Петров С.",
+  });
   completed.status = "completed";
-  completed.completedAt = "2025-03-05T16:20:00.000Z";
+  completed.completedAt = makeDate("2026-03-05T16:20:00.000Z");
   completed.currentStageIndex = tpl.stages.length - 1;
   for (const st of completed.stages) {
     st.status = "completed";
@@ -557,49 +706,100 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {
       step.completedBy = completed.createdBy;
     }
   }
+  // Release stage: tech process approval (who/when)
+  const releaseStageIdx = tpl.stages.findIndex((s) => s.type === "release");
+  if (releaseStageIdx >= 0) {
+    const releaseStep = completed.stages[releaseStageIdx]?.steps?.[0];
+    if (releaseStep) {
+      releaseStep.techProcessApprovedAt = makeDate("2026-03-05T15:40:00.000Z");
+      releaseStep.techProcessApprovedBy = "Анна Смирнова";
+    }
+  }
+  // Ensure production actions are all done for completed order
+  tpl.stages.forEach((stTpl, stIdx) => {
+    if (stTpl.type !== "production") return;
+    const stExec = completed.stages[stIdx];
+    if (!stExec) return;
+    stTpl.steps.forEach((stepTpl, stepIdx) => {
+      const stepExec = stExec.steps[stepIdx];
+      if (!stepExec) return;
+      fillProductionStep(stepTpl, stepExec, stIdx * 10 + stepIdx + 1, true);
+    });
+  });
 
-  const rejected = buildOrderFromTemplate(tpl, {
-    id: "po-003",
-    createdAt: "2025-03-12T10:45:00.000Z",
+  const atProduction = buildOrderFromTemplate(tpl, {
+    id: "po-001",
+    createdAt: makeDate("2026-04-18T09:10:00.000Z"),
     createdBy: "Иванова Е.",
   });
-  seedRegistrationFioIb(rejected, "Сидоренко Олег Павлович", "3409128");
-  rejected.status = "rejected";
-  rejected.rejectedAt = "2025-03-12T11:05:00.000Z";
-  rejected.rejectedBy = "Иванова Е.";
-  rejected.rejectedReason = "Гемолиз образца при входном контроле";
-  rejected.rejectedPhase = "incoming_material";
-  rejected.rejectedAttachments = [];
-  rejected.rejectedStageIndex = 0;
-  rejected.rejectedStepTemplateId = "step-reg-1";
-  rejected.currentStageIndex = 0;
-  rejected.stages[0]!.status = "in_progress";
+  seedAllStages(atProduction, {
+    fio: "Иванов Иван Иванович",
+    ib: "1290047",
+    dobIso: "1979-05-14T00:00:00.000Z",
+    department: "Терапия",
+    diagnosis: "Послеоперационная рана",
+    productId: "20260418-002",
+    executor: "Иванова Е.",
+  });
+  atProduction.status = "in_progress";
+  atProduction.currentStageIndex = 1;
+  // registration completed
+  atProduction.stages[0]!.status = "completed";
+  atProduction.stages[0]!.completedAt = makeDate("2026-04-18T10:00:00.000Z");
+  atProduction.stages[0]!.completedBy = atProduction.createdBy;
+  for (const step of atProduction.stages[0]!.steps) {
+    step.status = "completed";
+    step.completedAt = atProduction.stages[0]!.completedAt;
+    step.completedBy = atProduction.createdBy;
+  }
+  // production in progress: first step in progress, second pending
+  atProduction.stages[1]!.status = "in_progress";
+  if (atProduction.stages[1]!.steps[0]) {
+    atProduction.stages[1]!.steps[0]!.status = "in_progress";
+    fillProductionStep(tpl.stages[1]!.steps[0]!, atProduction.stages[1]!.steps[0]!, 11, false);
+  }
+  if (atProduction.stages[1]!.steps[1]) {
+    atProduction.stages[1]!.steps[1]!.status = "pending";
+  }
+  // Next stages pending
 
   const atQualityControl = buildOrderFromTemplate(tpl, {
-    id: "po-004",
-    createdAt: "2025-03-22T07:30:00.000Z",
+    id: "po-003",
+    createdAt: makeDate("2026-04-22T07:30:00.000Z"),
     createdBy: "Козлова М.",
   });
-  seedRegistrationFioIb(atQualityControl, "Волкова Татьяна Игоревна", "9012345");
+  seedAllStages(atQualityControl, {
+    fio: "Волкова Татьяна Игоревна",
+    ib: "9012345",
+    dobIso: "1992-02-20T00:00:00.000Z",
+    department: "Травматология",
+    diagnosis: "Ожог II степени",
+    productId: "20260422-003",
+    executor: "Козлова М.",
+  });
+  atQualityControl.status = "in_progress";
   atQualityControl.currentStageIndex = 2;
+  // registration completed
   atQualityControl.stages[0]!.status = "completed";
-  atQualityControl.stages[0]!.completedAt = "2025-03-22T09:00:00.000Z";
+  atQualityControl.stages[0]!.completedAt = makeDate("2026-04-22T09:00:00.000Z");
   atQualityControl.stages[0]!.completedBy = atQualityControl.createdBy;
   for (const step of atQualityControl.stages[0]!.steps) {
     step.status = "completed";
     step.completedAt = atQualityControl.stages[0]!.completedAt;
     step.completedBy = atQualityControl.createdBy;
   }
+  // production completed
   atQualityControl.stages[1]!.status = "completed";
-  atQualityControl.stages[1]!.completedAt = "2025-03-22T11:30:00.000Z";
+  atQualityControl.stages[1]!.completedAt = makeDate("2026-04-22T11:30:00.000Z");
   atQualityControl.stages[1]!.completedBy = "Сидоров В.";
   for (const step of atQualityControl.stages[1]!.steps) {
     step.status = "completed";
     step.completedAt = atQualityControl.stages[1]!.completedAt;
     step.completedBy = atQualityControl.stages[1]!.completedBy;
   }
+  // QC in progress, fields already filled
   atQualityControl.stages[2]!.status = "in_progress";
 
-  return [inProgress, completed, rejected, atQualityControl].map(clone);
+  return [completed, atProduction, atQualityControl].map(clone);
 })();
 
