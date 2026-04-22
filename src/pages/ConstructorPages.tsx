@@ -844,8 +844,16 @@ export function ConstructorEditorView({
             </svg>
           </Link>
           <div className="min-w-0">
-            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-              {headerTitle}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-slate-500">
+              <span>Администрирование</span>
+              <span className="text-slate-300">/</span>
+              <Link
+                to={basePath}
+                className="rounded-sm underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
+                title="К списку шаблонов"
+              >
+                {headerTitle}
+              </Link>
             </div>
 
             {isTemplateNameEditing ? (
