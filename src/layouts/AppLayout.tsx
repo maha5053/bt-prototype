@@ -55,6 +55,11 @@ export function AppLayout() {
 
   const reserveDisclaimerPad = usePrototypeDisclaimerBottomPad();
 
+  const isSidebarItemActive = (itemPath: string) =>
+    pathname === itemPath ||
+    (pathname.startsWith(itemPath) &&
+      pathname.charAt(itemPath.length) === "/");
+
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [userPickerOpen, setUserPickerOpen] = useState(false);
   const [mobileOpenSections, setMobileOpenSections] = useState<
@@ -110,8 +115,7 @@ export function AppLayout() {
           <NavLink
             key={item.path}
             to={item.path}
-            end
-            className={sidebarLinkClass}
+            className={sidebarLinkClass({ isActive: isSidebarItemActive(item.path) })}
             onClick={closeMobileSidebar}
           >
             {item.label}
@@ -165,8 +169,9 @@ export function AppLayout() {
                   <NavLink
                     key={item.path}
                     to={item.path}
-                    end
-                    className={sidebarLinkClass}
+                    className={sidebarLinkClass({
+                      isActive: isSidebarItemActive(item.path),
+                    })}
                     onClick={closeMobileSidebar}
                   >
                     {item.label}
