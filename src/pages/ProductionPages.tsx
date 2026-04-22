@@ -2056,7 +2056,9 @@ function CollapsibleSection({
           "print:block",
         ].join(" ")}
       >
-        {children}
+        <div className="max-w-4xl">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -2454,7 +2456,7 @@ function ReleaseIssueConfirmModal({
           <dl className="mt-1 rounded-lg border border-slate-200 bg-slate-50/60 px-3">
             {row("Заказ", summary.orderId, true)}
             {row("Продукт", summary.productName)}
-            {row("ID продукта", summary.productId, true)}
+            {row("ID входящего образца", summary.productId, true)}
             {row("ФИО пациента", summary.patientName)}
             {row("№ ИБ", summary.caseNumber, true)}
             {row("Куда выдано", summary.destination)}
@@ -3443,7 +3445,8 @@ function FormFields({
       !canEdit ||
       Boolean(field.refDeviations?.length) ||
       typeof field.refStageIndex === "number" ||
-      Boolean(field.computeRule);
+      Boolean(field.computeRule) ||
+      field.id === "productId";
 
     const value = resolveValue(field);
     const crossRef =
@@ -3508,6 +3511,53 @@ function FormFields({
           disabled={isReadonly}
           onChange={(v) => onChange(field.id, v)}
           tone={crossRef ? "crossStageRef" : "default"}
+        />
+      </label>
+    );
+  };
+
+  const renderFieldCustom = (field: FieldDefinition, inputClassName?: string) => {
+    const isReadonly =
+      !canEdit ||
+      Boolean(field.refDeviations?.length) ||
+      typeof field.refStageIndex === "number" ||
+      Boolean(field.computeRule) ||
+      field.id === "productId";
+
+    const value = resolveValue(field);
+    const crossRef =
+      isCrossStageRefField(field) && field.refStageIndex !== undefined
+        ? refFieldCrossStageBadge(order, field.refStageIndex)
+        : null;
+
+    return (
+      <label key={field.id} className="block" data-production-field={field.id}>
+        <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <div className="text-xs font-medium text-slate-600">
+            {field.label}
+            {field.required ? <span className="text-red-500"> *</span> : null}
+            {field.unit ? (
+              <span className="ml-1 text-[11px] font-normal text-slate-400">
+                ({field.unit})
+              </span>
+            ) : null}
+          </div>
+          {crossRef ? (
+            <span
+              className="inline-flex max-w-full shrink-0 items-center truncate rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-900 ring-1 ring-inset ring-sky-300/60"
+              title={crossRef.title}
+            >
+              {crossRef.text}
+            </span>
+          ) : null}
+        </div>
+        <FieldInput
+          field={field}
+          value={value}
+          disabled={isReadonly}
+          onChange={(v) => onChange(field.id, v)}
+          tone={crossRef ? "crossStageRef" : "default"}
+          className={inputClassName}
         />
       </label>
     );
@@ -3719,6 +3769,93 @@ function FormFields({
               tabIndex={-1}
             />
           ) : null;
+
+          const isRegistrationCommonGroup =
+            stageType === "registration" && g.headerField?.id === "sec-common";
+          const isRegistrationBloodGroup =
+            stageType === "registration" && g.headerField?.id === "sec-blood";
+
+          const renderCommonDataGrid = () => {
+            const byId = new Map(g.fields.map((f) => [f.id, f] as const));
+            const fio = byId.get("fio") ?? null;
+            const dob = byId.get("dob") ?? null;
+            const age = byId.get("age") ?? null;
+            const department = byId.get("department") ?? null;
+            const ib = byId.get("ib") ?? null;
+            const diagnosis = byId.get("diagnosis") ?? null;
+            const productId = byId.get("productId") ?? null;
+
+            return (
+              <div className="grid gap-4 md:grid-cols-12">
+                {fio ? (
+                  <div className="md:col-span-12">{renderFieldCustom(fio)}</div>
+                ) : null}
+                {dob || age ? (
+                  <div className="md:col-span-12">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-end md:gap-4">
+                      {dob ? (
+                        <div className="min-w-0 md:shrink-0">
+                          {renderFieldCustom(dob, "md:w-[24ch] md:max-w-[24ch]")}
+                        </div>
+                      ) : null}
+                      {age ? (
+                        <div className="min-w-0 md:shrink-0">
+                          {renderFieldCustom(
+                            age,
+                            // Align with DOB width, keep input compact inside.
+                            "md:w-[24ch] md:max-w-[24ch] w-28 tabular-nums",
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+                {department || ib ? (
+                  <div className="md:col-span-12">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-end md:gap-4">
+                      {department ? (
+                        <div className="min-w-0 md:shrink-0">
+                          {renderFieldCustom(
+                            department,
+                            // Longest option: "Травматология" (~12ch). +50% запас + UI padding/chevron.
+                            "md:w-[24ch] md:max-w-[24ch]",
+                          )}
+                        </div>
+                      ) : null}
+                      {ib ? (
+                        <div className="min-w-0 md:flex-1">{renderFieldCustom(ib)}</div>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+                {diagnosis ? (
+                  <div className="md:col-span-12">{renderFieldCustom(diagnosis)}</div>
+                ) : null}
+                {productId ? (
+                  <div className="md:col-span-12">{renderFieldCustom(productId)}</div>
+                ) : null}
+              </div>
+            );
+          };
+
+          const renderBloodCollectionGrid = () => {
+            const byId = new Map(g.fields.map((f) => [f.id, f] as const));
+            const volume = byId.get("bloodVolume") ?? null;
+            const container = byId.get("containerType") ?? null;
+            return (
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:gap-4">
+                {volume ? (
+                  <div className="min-w-0 md:shrink-0">
+                    {renderFieldCustom(volume, "md:w-[24ch] md:max-w-[24ch]")}
+                  </div>
+                ) : null}
+                {container ? (
+                  <div className="min-w-0 md:flex-1">{renderFieldCustom(container)}</div>
+                ) : null}
+              </div>
+            );
+          };
+
           return (
             <CollapsibleSection
               key={g.id}
@@ -3729,9 +3866,15 @@ function FormFields({
               right={right}
             >
               <NestedRailBlock tone="muted" showRail={false}>
-                <div className="space-y-3">
-                  {g.fields.map((field) => renderFieldRow(field))}
-                </div>
+                {isRegistrationCommonGroup ? (
+                  renderCommonDataGrid()
+                ) : isRegistrationBloodGroup ? (
+                  renderBloodCollectionGrid()
+                ) : (
+                  <div className="space-y-3">
+                    {g.fields.map((field) => renderFieldRow(field))}
+                  </div>
+                )}
               </NestedRailBlock>
             </CollapsibleSection>
           );

@@ -46,6 +46,40 @@ function nextProductionOrderId(orders: ProductionOrder[]): string {
   return `po-${String(next).padStart(3, "0")}`;
 }
 
+function formatIncomingSampleId(now: Date, seqInYear: number): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}${m}${d}-${seqInYear}`;
+}
+
+function nextIncomingSampleId(orders: ProductionOrder[], createdAtIso: string): string {
+  const now = new Date(createdAtIso);
+  const year = now.getFullYear();
+  const countInYear = orders.filter((o) => {
+    if (!o.createdAt) return false;
+    const dt = new Date(o.createdAt);
+    return dt.getFullYear() === year;
+  }).length;
+  return formatIncomingSampleId(now, countInYear + 1);
+}
+
+function withIncomingSampleId(order: ProductionOrder, incomingId: string): ProductionOrder {
+  const regIdx = order.stages.findIndex((s) => s.type === "registration");
+  if (regIdx < 0) return order;
+  const regStage = order.stages[regIdx];
+  const step0 = regStage?.steps?.[0];
+  if (!regStage || !step0) return order;
+  const nextStages = [...order.stages];
+  const nextSteps = [...regStage.steps];
+  nextSteps[0] = {
+    ...step0,
+    fieldValues: { ...step0.fieldValues, productId: incomingId },
+  };
+  nextStages[regIdx] = { ...regStage, steps: nextSteps };
+  return { ...order, stages: nextStages };
+}
+
 function loadFromStorage():
   | {
       templates: ProcessTemplate[];
@@ -214,12 +248,16 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       let created: ProductionOrder | undefined;
       setState((prev) => {
         const id = nextProductionOrderId(prev.orders);
+        const createdAt = new Date().toISOString();
+        const incomingId = nextIncomingSampleId(prev.orders, createdAt);
         const newOrder = buildOrderFromTemplate(template, {
           id,
           createdBy,
+          createdAt,
         });
-        created = newOrder;
-        const next = { ...prev, orders: [newOrder, ...prev.orders] };
+        const withId = withIncomingSampleId(newOrder, incomingId);
+        created = withId;
+        const next = { ...prev, orders: [withId, ...prev.orders] };
         saveToStorage(next);
         return next;
       });
@@ -271,16 +309,20 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       let created: ProductionOrder | undefined;
       setState((prev) => {
         if (prev.orders.some((o) => o.id === orderId)) return prev;
+        const createdAt = new Date().toISOString();
+        const incomingId = nextIncomingSampleId(prev.orders, createdAt);
         const newOrder = buildOrderFromTemplate(runtimeTemplate, {
           id: orderId,
           createdBy,
+          createdAt,
         });
-        created = newOrder;
+        const withId = withIncomingSampleId(newOrder, incomingId);
+        created = withId;
         const hasRuntime = prev.templates.some((t) => t.id === runtimeTemplateId);
         const nextTemplates = hasRuntime
           ? prev.templates.map((t) => (t.id === runtimeTemplateId ? runtimeTemplate : t))
           : [runtimeTemplate, ...prev.templates];
-        const next = { ...prev, templates: nextTemplates, orders: [newOrder, ...prev.orders] };
+        const next = { ...prev, templates: nextTemplates, orders: [withId, ...prev.orders] };
         saveToStorage(next);
         return next;
       });

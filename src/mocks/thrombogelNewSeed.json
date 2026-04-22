@@ -31,7 +31,7 @@
               },
               {
                 "id": "fio",
-                "label": "ФИО",
+                "label": "ФИО пациента",
                 "type": "text",
                 "required": true,
                 "placeholder": "Введите ФИО",
@@ -67,7 +67,7 @@
               },
               {
                 "id": "ib",
-                "label": "N ИБ",
+                "label": "№ истории болезни",
                 "type": "text",
                 "required": false,
                 "isSystem": true
@@ -81,7 +81,7 @@
               },
               {
                 "id": "productId",
-                "label": "ID продукта",
+                "label": "ID входящего образца",
                 "type": "text",
                 "required": false,
                 "isSystem": true
@@ -622,7 +622,7 @@
             "fields": [
               {
                 "id": "productIdRef",
-                "label": "ID продукта",
+                "label": "ID входящего образца",
                 "type": "text",
                 "required": false,
                 "refStageIndex": 0,
@@ -640,7 +640,7 @@
               },
               {
                 "id": "ibRef",
-                "label": "N ИБ",
+                "label": "№ истории болезни",
                 "type": "text",
                 "required": false,
                 "refStageIndex": 0,

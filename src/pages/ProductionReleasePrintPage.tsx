@@ -108,7 +108,7 @@ function ProductionReleasePrintContent() {
             </tr>
             <tr>
               <th className="border border-black px-3 py-2 font-normal">
-                ID продукта
+                ID входящего образца
               </th>
               <td className="border border-black px-3 py-2">{summary.productId}</td>
             </tr>
