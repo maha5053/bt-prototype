@@ -256,6 +256,7 @@ export function ConstructorEditorView({
   const navigate = useNavigate();
   const { templates, updateTemplate, createTemplate, orders } = useProduction();
   const didAutoCreateRef = useRef(false);
+  const templateNameInputRef = useRef<HTMLInputElement | null>(null);
   const [editingStepById, setEditingStepById] = useState<Record<string, boolean>>(
     {},
   );
@@ -268,6 +269,8 @@ export function ConstructorEditorView({
   const [editingActionById, setEditingActionById] = useState<Record<string, boolean>>(
     {},
   );
+  const [isTemplateNameEditing, setIsTemplateNameEditing] = useState(false);
+  const [templateNameDraft, setTemplateNameDraft] = useState("");
   const [collapsedStepById, setCollapsedStepById] = useState<
     Record<string, boolean>
   >({});
@@ -305,6 +308,21 @@ export function ConstructorEditorView({
     () => templates.find((t) => t.id === templateId) ?? null,
     [templates, templateId],
   );
+
+  useEffect(() => {
+    if (!template) return;
+    if (isTemplateNameEditing) return;
+    setTemplateNameDraft(template.name ?? "");
+  }, [template, isTemplateNameEditing]);
+
+  useEffect(() => {
+    if (!isTemplateNameEditing) return;
+    const id = window.setTimeout(() => {
+      templateNameInputRef.current?.focus();
+      templateNameInputRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, [isTemplateNameEditing]);
 
   const orderedStages = useMemo(() => {
     if (!template) return [] as StageTemplate[];
@@ -825,21 +843,67 @@ export function ConstructorEditorView({
               />
             </svg>
           </Link>
-          <h1 className="text-xl font-semibold text-slate-800">
-            {headerTitle}
-          </h1>
-        </div>
-        <div className="mt-3 max-w-xl">
-          <label className="text-xs font-medium text-slate-600">
-            Название шаблона
-            <input
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800"
-              value={template.name}
-              onChange={(e) =>
-                patchTemplate((prev) => ({ ...prev, name: e.target.value }))
-              }
-            />
-          </label>
+          <div className="min-w-0">
+            <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
+              {headerTitle}
+            </div>
+
+            {isTemplateNameEditing ? (
+              <input
+                ref={templateNameInputRef}
+                className="mt-1 w-full max-w-2xl rounded-md border border-slate-300 bg-white px-3 py-2 text-base font-semibold text-slate-900 outline-none focus:border-blue-400"
+                value={templateNameDraft}
+                onChange={(e) => setTemplateNameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setTemplateNameDraft(template?.name ?? "");
+                    setIsTemplateNameEditing(false);
+                    return;
+                  }
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  const next = templateNameDraft.trim();
+                  if (template && next.length > 0) {
+                    patchTemplate((prev) => ({ ...prev, name: next }));
+                  }
+                  setIsTemplateNameEditing(false);
+                }}
+                onBlur={() => {
+                  const next = templateNameDraft.trim();
+                  if (template && next.length > 0) {
+                    patchTemplate((prev) => ({ ...prev, name: next }));
+                  }
+                  setIsTemplateNameEditing(false);
+                }}
+                aria-label="Название шаблона"
+              />
+            ) : (
+              <button
+                type="button"
+                className="group mt-1 inline-flex max-w-2xl items-center gap-2 rounded-md px-1 py-0.5 text-left text-xl font-semibold text-slate-900 hover:bg-slate-100"
+                onClick={() => setIsTemplateNameEditing(true)}
+                aria-label="Редактировать название шаблона"
+                title="Редактировать название"
+              >
+                <span className="min-w-0 truncate">
+                  {template?.name?.trim() ? template.name.trim() : "Без названия"}
+                </span>
+                <svg
+                  className="size-4 shrink-0 text-slate-400 transition group-hover:text-slate-700"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
