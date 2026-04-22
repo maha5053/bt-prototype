@@ -150,8 +150,8 @@ function compareProductionOrderNumbers(
   a: ProductionOrder,
   b: ProductionOrder,
 ): number {
-  const sa = a.id.replace(/^po-?/i, "");
-  const sb = b.id.replace(/^po-?/i, "");
+  const sa = a.id;
+  const sb = b.id;
   const na = /^\d+$/.test(sa) ? BigInt(sa) : null;
   const nb = /^\d+$/.test(sb) ? BigInt(sb) : null;
   if (na !== null && nb !== null) {
@@ -298,7 +298,7 @@ function ProductionListContent() {
       const fioQ = patientName.toLowerCase();
       const ibQ = caseNumber.toLowerCase();
       const idFull = order.id.toLowerCase();
-      const idShort = order.id.replace(/^po-?/i, "").toLowerCase();
+      const idShort = order.id.toLowerCase();
       return (
         fioQ.includes(q) ||
         ibQ.includes(q) ||
@@ -348,7 +348,7 @@ function ProductionListContent() {
     setSelectedTemplateId("");
 
     // New (constructor ver2) flow: create order id and navigate to /:orderId-new
-    const orderId = `po-${Date.now()}`;
+    const orderId = String(Date.now());
     navigate(`/proizvodstvo/${orderId}-new?templateId=${encodeURIComponent(chosen)}`);
   };
 
@@ -634,7 +634,7 @@ function ProductionListContent() {
                       className="cursor-pointer border-b border-slate-100 last:border-0 hover:bg-slate-50/80"
                     >
                       <td className="px-4 py-3 font-mono text-xs text-slate-600">
-                        {order.id.replace(/^po-/, "")}
+                        {order.id}
                       </td>
                       <td className="px-4 py-3 text-slate-800 font-medium">
                         {order.templateName}
@@ -938,7 +938,8 @@ function ProductionOrderContent() {
     return <ProductionStartV2Inline orderIdNew={orderId} createdBy={auditUserId} />;
   }
 
-  const order = orderId ? getOrderById(orderId) : null;
+  const normalizedOrderId = orderId ? orderId.replace(/^po-?/i, "") : null;
+  const order = normalizedOrderId ? getOrderById(normalizedOrderId) : null;
   const [activeStageIndex, setActiveStageIndex] = useState<number | null>(null);
   const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
   const [showReject, setShowReject] = useState(false);
@@ -1170,7 +1171,7 @@ function ProductionOrderContent() {
           </Link>
           <span className="text-slate-300">›</span>
           <span className="max-w-[60ch] truncate text-slate-700">
-            Заказ {order.id.replace(/^po-/, "")}
+            Заказ {order.id}
           </span>
         </div>
 
@@ -1181,7 +1182,7 @@ function ProductionOrderContent() {
                 <h1 className="min-w-0 truncate text-2xl font-bold leading-tight text-slate-900 md:text-3xl">
                   <span className="whitespace-nowrap">Заказ № </span>
                   <span className="font-bold">
-                    {order.id.replace(/^po-/, "")}
+                    {order.id}
                   </span>{" "}
                   <span className="font-semibold text-slate-600">
                     ({order.templateName})

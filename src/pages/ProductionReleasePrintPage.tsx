@@ -68,7 +68,7 @@ function ProductionReleasePrintContent() {
     );
   }
 
-  const actNumber = order.id.replace(/^po-?/i, "");
+  const actNumber = order.id;
   const actDateIso =
     releaseStage.completedAt ?? order.completedAt ?? order.createdAt;
   const actDate = formatRuDate(actDateIso);

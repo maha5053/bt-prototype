@@ -31,9 +31,9 @@ import {
 import { isReleaseTechProcessApproved } from "../lib/productionReleaseAct";
 import { PRODUCTION_STORAGE_KEY } from "../lib/productionStorageKey";
 
-const PO_ORDER_ID_RE = /^po-(\d+)$/i;
+const PO_ORDER_ID_RE = /^po-?(\d+)$/i;
 
-/** Next id po-NNN (min 3 digits via padStart); max over existing po-<digits> + 1. */
+/** Next id NNN (min 3 digits via padStart). Supports legacy po-NNN too. */
 function nextProductionOrderId(orders: ProductionOrder[]): string {
   let max = 0;
   for (const o of orders) {
@@ -43,7 +43,19 @@ function nextProductionOrderId(orders: ProductionOrder[]): string {
     if (Number.isFinite(n)) max = Math.max(max, n);
   }
   const next = max + 1;
-  return `po-${String(next).padStart(3, "0")}`;
+  return String(next).padStart(3, "0");
+}
+
+function normalizeOrderId(id: string): string {
+  return id.replace(/^po-?/i, "");
+}
+
+function normalizeOrdersIds(orders: ProductionOrder[]): ProductionOrder[] {
+  // Keep stable ordering; strip legacy prefix if present.
+  return orders.map((o) => {
+    const nextId = normalizeOrderId(o.id);
+    return nextId === o.id ? o : { ...o, id: nextId };
+  });
 }
 
 function formatIncomingSampleId(now: Date, seqInYear: number): string {
@@ -222,7 +234,7 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
     }
     const storedOrders =
       Array.isArray(stored.orders) && stored.orders.length > 0
-        ? stored.orders
+        ? normalizeOrdersIds(stored.orders)
         : [...INITIAL_PRODUCTION_ORDERS];
     const merged = {
       templates: mergeProductionTemplatesWithBaseline(

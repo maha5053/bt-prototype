@@ -258,7 +258,7 @@ export function buildOrderFromTemplate(
   }));
 
   return {
-    id: input?.id ?? `po-${Date.now()}`,
+    id: input?.id ?? String(Date.now()),
     templateId: template.id,
     templateName: template.name,
     status: "in_progress",
@@ -682,7 +682,7 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {
   };
 
   const completed = buildOrderFromTemplate(tpl, {
-    id: "po-002",
+    id: "002",
     createdAt: makeDate("2026-03-05T08:00:00.000Z"),
     createdBy: "Петров С.",
   });
@@ -728,7 +728,7 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {
   });
 
   const atProduction = buildOrderFromTemplate(tpl, {
-    id: "po-001",
+    id: "001",
     createdAt: makeDate("2026-04-18T09:10:00.000Z"),
     createdBy: "Иванова Е.",
   });
@@ -764,7 +764,7 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {
   // Next stages pending
 
   const atQualityControl = buildOrderFromTemplate(tpl, {
-    id: "po-003",
+    id: "003",
     createdAt: makeDate("2026-04-22T07:30:00.000Z"),
     createdBy: "Козлова М.",
   });
