@@ -1561,7 +1561,7 @@ export function ConstructorEditorView({
                                                 className="relative rounded-md border border-slate-200 bg-white p-3 pl-7"
                                               >
                                                 <div
-                                                  className="pointer-events-none absolute left-3 top-5 size-2 rounded-full bg-blue-500 ring-2 ring-white"
+                                                  className="pointer-events-none absolute left-3 top-[18px] size-2 rounded-full bg-blue-500 ring-2 ring-white"
                                                   aria-hidden
                                                 />
                                                 <div className="flex items-start justify-between gap-3">
