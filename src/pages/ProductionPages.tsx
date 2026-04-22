@@ -1028,6 +1028,11 @@ function ProductionOrderContent() {
   const stageTitle = formatStageLabel(
     stageTemplate?.name ?? stageExecution?.name ?? "Этап",
   );
+  const stageCount = template?.stages.length ?? order.stages.length;
+  const stageOrdinal = Math.min(
+    Math.max(1, effectiveActiveStageIndex + 1),
+    Math.max(1, stageCount),
+  );
 
   const isOrderReadonly = order.status !== "in_progress";
   const stageEditAllowed = stageTemplate
@@ -1365,7 +1370,7 @@ function ProductionOrderContent() {
                 />
                 <div className="min-w-0">
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                    Этап
+                    Этап {stageOrdinal} из {stageCount}
                   </div>
                   <div className="mt-0.5 text-lg font-semibold leading-snug tracking-tight text-slate-900">
                     {stageTitle}

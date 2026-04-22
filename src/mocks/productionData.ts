@@ -109,7 +109,7 @@ export interface StepTemplate {
   fields: FieldDefinition[];
   consumables: ConsumableItem[];
   equipment: EquipmentItem[];
-  hasDeviations: boolean;
+  hasDeviations?: boolean;
 }
 
 export interface StageTemplate {
@@ -118,7 +118,7 @@ export interface StageTemplate {
   type: StageType;
   isSystem?: boolean;
   isSopStage?: boolean;
-  allowedRoles: Role[];
+  allowedRoles?: Role[];
   steps: StepTemplate[];
 }
 
