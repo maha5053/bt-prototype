@@ -14,7 +14,7 @@ import {
   type UpdateFieldValueInput,
 } from "../context/ProductionContext";
 import { useCurrentUser } from "../context/CurrentUserContext";
-import { userHasStageEditPermission } from "../mocks/usersMock";
+import { canEditStage as canEditStageByPerm, canViewStage } from "../mocks/usersMock";
 import {
   PRODUCTION_REJECTION_PHASE_LABELS,
   type FieldDefinition,
@@ -1228,8 +1228,11 @@ function ProductionOrderContent() {
   );
 
   const isOrderReadonly = order.status !== "in_progress";
+  const stageViewAllowed = stageTemplate
+    ? canViewStage(permissions, stageTemplate.type)
+    : true;
   const stageEditAllowed = stageTemplate
-    ? userHasStageEditPermission(permissions, stageTemplate.type)
+    ? canEditStageByPerm(permissions, stageTemplate.type)
     : false;
   const canEditStage =
     !isOrderReadonly &&
@@ -1253,7 +1256,7 @@ function ProductionOrderContent() {
   const releaseStepForAction =
     stageTemplate?.type === "release" ? viewedStepExecution : undefined;
   const canApproveReleaseTechProcess =
-    permissions.approval &&
+    permissions.approval === "write" &&
     order.status === "in_progress" &&
     effectiveActiveStageIndex === order.currentStageIndex &&
     stageTemplate?.type === "release" &&
@@ -1316,7 +1319,7 @@ function ProductionOrderContent() {
   const currentWorkflowStage = order.stages[order.currentStageIndex];
   const canRejectByCurrentStagePermission = Boolean(
     currentWorkflowStage &&
-      userHasStageEditPermission(permissions, currentWorkflowStage.type),
+      canEditStageByPerm(permissions, currentWorkflowStage.type),
   );
   const rejectFromMenuEnabled =
     order.status === "in_progress" && canRejectByCurrentStagePermission;
@@ -1582,7 +1585,14 @@ function ProductionOrderContent() {
 
         {stageTemplate && stageExecution ? (
           <div className="p-4">
-            {stageTemplate.type === "quality_control" ? (
+            {!stageViewAllowed ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                <div className="font-semibold text-slate-900">Нет доступа</div>
+                <p className="mt-1 text-slate-600">
+                  У вашей группы нет прав на просмотр этого этапа.
+                </p>
+              </div>
+            ) : stageTemplate.type === "quality_control" ? (
               <QualityControlStage
                 stageTemplate={stageTemplate}
                 stageExecution={stageExecution}
@@ -1622,7 +1632,7 @@ function ProductionOrderContent() {
                 activeStepIndex={activeStepIndex}
                 onSelectStep={setActiveStepIndex}
                 canEdit={canEditStage}
-                hasApprovalPermission={permissions.approval}
+                hasApprovalPermission={permissions.approval === "write"}
                 canApproveReleaseTechProcess={canApproveReleaseTechProcess}
                 onApproveReleaseTechProcess={() => {
                   const n = stageTemplate.steps.length;

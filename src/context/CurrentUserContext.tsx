@@ -8,12 +8,20 @@ import {
 } from "react";
 import {
   MOCK_USERS,
-  getDefaultProductionPermissions,
-  getPermissionsForUser,
+  loadGroupPermissionMatrix,
   loadPermissionOverrides,
-  savePermissionOverrides,
-  type PermissionOverrides,
+  loadUserGroupMembership,
+  saveGroupPermissionMatrix,
+  saveUserGroupMembership,
+  type AccessLevel,
+  type GroupPermissionMatrix,
+  type PermissionKey,
   type ProductionPermissions,
+  type UserGroupId,
+  type UserGroupMembership,
+  getEffectivePermissionsForUser,
+  legacyOverridesToAccessPartial,
+  mergeUserPermissions,
 } from "../mocks/usersMock";
 
 const CURRENT_USER_STORAGE_KEY = "bio-current-user";
@@ -36,37 +44,25 @@ function persistUserId(userId: string) {
   }
 }
 
-function compactOverrideFromFull(
-  full: ProductionPermissions,
-): Partial<ProductionPermissions> {
-  const defaults = getDefaultProductionPermissions();
-  const partial: Partial<ProductionPermissions> = {};
-  (Object.keys(full) as (keyof ProductionPermissions)[]).forEach((k) => {
-    if (full[k] !== defaults[k]) partial[k] = full[k];
-  });
-  return partial;
-}
-
 type CurrentUserContextValue = {
   currentUserId: string;
   currentUser: (typeof MOCK_USERS)[number];
   permissions: ProductionPermissions;
-  permissionOverrides: PermissionOverrides;
+  groupPermissionMatrix: GroupPermissionMatrix;
+  userGroupMembership: UserGroupMembership;
   setCurrentUserId: (userId: string) => void;
-  setUserPermission: (
-    userId: string,
-    key: keyof ProductionPermissions,
-    value: boolean,
-  ) => void;
+  setGroupPermission: (groupId: UserGroupId, key: PermissionKey, value: AccessLevel) => void;
+  setUserGroups: (userId: string, groups: UserGroupId[]) => void;
 };
 
 const CurrentUserContext = createContext<CurrentUserContextValue | null>(null);
 
 export function CurrentUserProvider({ children }: { children: ReactNode }) {
   const [currentUserId, setCurrentUserIdState] = useState(loadStoredUserId);
-  const [permissionOverrides, setPermissionOverrides] = useState(
-    loadPermissionOverrides,
-  );
+  const [groupPermissionMatrix, setGroupPermissionMatrix] = useState(loadGroupPermissionMatrix);
+  const [userGroupMembership, setUserGroupMembership] = useState(loadUserGroupMembership);
+  // Legacy (per-user boolean overrides). Kept for migration only.
+  const [legacyPermissionOverrides] = useState(loadPermissionOverrides);
 
   const setCurrentUserId = useCallback((userId: string) => {
     if (!MOCK_USERS.some((u) => u.id === userId)) return;
@@ -74,39 +70,57 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
     persistUserId(userId);
   }, []);
 
-  const setUserPermission = useCallback(
-    (userId: string, key: keyof ProductionPermissions, value: boolean) => {
-      setPermissionOverrides((prev) => {
-        const prevMerged = getPermissionsForUser(userId, prev);
-        const nextFull = { ...prevMerged, [key]: value };
-        const partial = compactOverrideFromFull(nextFull);
-        const next: PermissionOverrides = { ...prev };
-        if (Object.keys(partial).length === 0) delete next[userId];
-        else next[userId] = partial;
-        savePermissionOverrides(next);
+  const setGroupPermission = useCallback(
+    (groupId: UserGroupId, key: PermissionKey, value: AccessLevel) => {
+      setGroupPermissionMatrix((prev) => {
+        const next: GroupPermissionMatrix = { ...prev, [groupId]: { ...prev[groupId] } };
+        next[groupId] = { ...mergeUserPermissions(next[groupId]), [key]: value };
+        saveGroupPermissionMatrix(next);
         return next;
       });
     },
     [],
   );
 
+  const setUserGroups = useCallback((userId: string, groups: UserGroupId[]) => {
+    setUserGroupMembership((prev) => {
+      const next: UserGroupMembership = { ...prev, [userId]: [...groups] };
+      saveUserGroupMembership(next);
+      return next;
+    });
+  }, []);
+
   const value = useMemo(() => {
     const currentUser =
       MOCK_USERS.find((u) => u.id === currentUserId) ?? MOCK_USERS[0]!;
-    const permissions = getPermissionsForUser(currentUserId, permissionOverrides);
+    const base = getEffectivePermissionsForUser(
+      currentUserId,
+      groupPermissionMatrix,
+      userGroupMembership,
+    );
+    // If legacy overrides exist, apply them as a last-mile override (true->write, false->read).
+    const legacyPartial = legacyOverridesToAccessPartial(
+      legacyPermissionOverrides[currentUserId],
+    );
+    const permissions = mergeUserPermissions({ ...base, ...legacyPartial });
     return {
       currentUserId,
       currentUser,
       permissions,
-      permissionOverrides,
+      groupPermissionMatrix,
+      userGroupMembership,
       setCurrentUserId,
-      setUserPermission,
+      setGroupPermission,
+      setUserGroups,
     };
   }, [
     currentUserId,
-    permissionOverrides,
+    groupPermissionMatrix,
+    legacyPermissionOverrides,
+    userGroupMembership,
     setCurrentUserId,
-    setUserPermission,
+    setGroupPermission,
+    setUserGroups,
   ]);
 
   return (

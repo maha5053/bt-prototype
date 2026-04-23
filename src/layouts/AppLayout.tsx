@@ -14,7 +14,7 @@ import { useCurrentUser } from "../context/CurrentUserContext";
 import {
   MOCK_USERS,
   formatProductionAccessSummary,
-  getPermissionsForUser,
+  getEffectivePermissionsForUser,
 } from "../mocks/usersMock";
 import { appHeaderClasses } from "./appLayoutHeaderStyles";
 
@@ -48,8 +48,13 @@ function initialMobileOpenSections(
 
 export function AppLayout() {
   const { pathname } = useLocation();
-  const { currentUser, currentUserId, setCurrentUserId, permissionOverrides } =
-    useCurrentUser();
+  const {
+    currentUser,
+    currentUserId,
+    setCurrentUserId,
+    groupPermissionMatrix,
+    userGroupMembership,
+  } = useCurrentUser();
   const section = topSectionFromPath(pathname);
   const sidebarItems = section ? SIDEBAR_BY_SECTION[section] : [];
 
@@ -263,7 +268,11 @@ export function AppLayout() {
                   >
                     {MOCK_USERS.map((u) => {
                       const access = formatProductionAccessSummary(
-                        getPermissionsForUser(u.id, permissionOverrides),
+                        getEffectivePermissionsForUser(
+                          u.id,
+                          groupPermissionMatrix,
+                          userGroupMembership,
+                        ),
                       );
                       const label = `${u.displayName} (${access})`;
                       return (
