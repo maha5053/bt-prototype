@@ -42,7 +42,7 @@ export function ConstructorV2EditorPage() {
   return (
     <ProductionProvider>
       <ConstructorEditorView
-        headerTitle="Конструктор ver2"
+        headerTitle="Продукты"
         basePath="/admin/konstruktor-ver2"
         stageTypeOrder={CONSTRUCTOR_V2_STAGE_ORDER}
         stageTypeLabel={CONSTRUCTOR_V2_STAGE_LABEL}
@@ -57,7 +57,7 @@ export function ConstructorV2ViewerPage() {
   return (
     <ProductionProvider>
       <ConstructorEditorView
-        headerTitle="Конструктор ver2 · Просмотр"
+        headerTitle="Продукты · Просмотр"
         basePath="/admin/konstruktor-ver2"
         stageTypeOrder={CONSTRUCTOR_V2_STAGE_ORDER}
         stageTypeLabel={CONSTRUCTOR_V2_STAGE_LABEL}
@@ -79,7 +79,7 @@ function ConstructorV2ListContent() {
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-800">
-            Конструктор ver2
+            Продукты
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             Управление шаблонами производственных процессов.
