@@ -30,7 +30,11 @@ import {
   ConstructorEditorPage,
   ConstructorListPage,
 } from "./pages/ConstructorPages";
-import { ConstructorV2EditorPage, ConstructorV2ListPage } from "./pages/ConstructorV2Pages";
+import {
+  ConstructorV2EditorPage,
+  ConstructorV2ListPage,
+  ConstructorV2ViewerPage,
+} from "./pages/ConstructorV2Pages";
 import { UsersAdminPage } from "./pages/UsersAdminPage";
 
 const router = createBrowserRouter(
@@ -131,6 +135,10 @@ const router = createBrowserRouter(
             {
               path: "konstruktor-ver2/:templateId",
               element: <ConstructorV2EditorPage />,
+            },
+            {
+              path: "konstruktor-ver2/:templateId/prosmotr",
+              element: <ConstructorV2ViewerPage />,
             },
           ],
         },

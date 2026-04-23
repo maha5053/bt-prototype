@@ -72,7 +72,6 @@ function ProductionReleasePrintContent() {
   const actDateIso =
     releaseStage.completedAt ?? order.completedAt ?? order.createdAt;
   const actDate = formatRuDate(actDateIso);
-  const issuedBy = releaseStage.completedBy ?? "—";
 
   return (
     <div className={shellCls}>
@@ -80,9 +79,6 @@ function ProductionReleasePrintContent() {
         <div className="mb-6 text-center">
           <p className="text-base font-semibold">
             Акт выдачи готового продукта № {actNumber} от {actDate}
-          </p>
-          <p className="mt-2 text-xs text-slate-700">
-            (прототип; данные из журнала заказа)
           </p>
         </div>
 
@@ -147,12 +143,6 @@ function ProductionReleasePrintContent() {
                 Технологический процесс одобрил
               </th>
               <td className="border border-black px-3 py-2">{summary.approvedBy}</td>
-            </tr>
-            <tr>
-              <th className="border border-black px-3 py-2 font-normal">
-                Этап «Выдача» завершил
-              </th>
-              <td className="border border-black px-3 py-2">{issuedBy}</td>
             </tr>
           </tbody>
         </table>

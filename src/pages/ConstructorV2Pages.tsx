@@ -53,6 +53,22 @@ export function ConstructorV2EditorPage() {
   );
 }
 
+export function ConstructorV2ViewerPage() {
+  return (
+    <ProductionProvider>
+      <ConstructorEditorView
+        headerTitle="Конструктор ver2 · Просмотр"
+        basePath="/admin/konstruktor-ver2"
+        stageTypeOrder={CONSTRUCTOR_V2_STAGE_ORDER}
+        stageTypeLabel={CONSTRUCTOR_V2_STAGE_LABEL}
+        allowGroupsByStageType={CONSTRUCTOR_V2_ALLOW_GROUPS}
+        allowStepsByStageType={CONSTRUCTOR_V2_ALLOW_STEPS}
+        readOnly
+      />
+    </ProductionProvider>
+  );
+}
+
 function ConstructorV2ListContent() {
   const { templates, deleteTemplate, archiveTemplate, orders } = useProduction();
   const navigate = useNavigate();
@@ -114,6 +130,15 @@ function ConstructorV2ListContent() {
                   <td className="px-4 py-3 text-slate-600">{used}</td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">
+                      <Link
+                        to={`/admin/konstruktor-ver2/${tpl.id}/prosmotr`}
+                        className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Открыть шаблон в режиме просмотра"
+                      >
+                        Просмотреть
+                      </Link>
                       {locked ? (
                         <span
                           className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-400"

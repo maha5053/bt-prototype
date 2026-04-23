@@ -245,6 +245,7 @@ export function ConstructorEditorView({
   stageTypeLabel = STAGE_TYPE_LABEL,
   allowGroupsByStageType,
   allowStepsByStageType,
+  readOnly = false,
 }: {
   headerTitle: string;
   basePath: string;
@@ -252,10 +253,12 @@ export function ConstructorEditorView({
   stageTypeLabel?: Partial<Record<StageTemplate["type"], string>>;
   allowGroupsByStageType?: Partial<Record<StageTemplate["type"], boolean>>;
   allowStepsByStageType?: Partial<Record<StageTemplate["type"], boolean>>;
+  readOnly?: boolean;
 }) {
   const { templateId } = useParams<{ templateId: string }>();
   const navigate = useNavigate();
   const { templates, updateTemplate, createTemplate, orders } = useProduction();
+  const controlsEnabled = !readOnly;
   const templateNameInputRef = useRef<HTMLInputElement | null>(null);
   const [editingStepById, setEditingStepById] = useState<Record<string, boolean>>(
     {},
@@ -402,7 +405,7 @@ export function ConstructorEditorView({
   const used = orders.filter((o) => o.templateId === template.id).length;
   const isArchived = Boolean(template.archivedAt);
   const locked = templateId ? isArchived || used > 0 : false;
-  if (locked) {
+  if (locked && !readOnly) {
     return (
       <div className="p-6 md:p-8">
         <div className="mb-4 flex items-center gap-3">
@@ -429,6 +432,7 @@ export function ConstructorEditorView({
   }
 
   const patchTemplate = (updater: (prev: ProcessTemplate) => ProcessTemplate) => {
+    if (readOnly) return;
     // Если мы на /novyy, создаём сущность только после первой правки.
     if (!templateId) {
       const nextDraft = updater(template);
@@ -910,7 +914,7 @@ export function ConstructorEditorView({
                   }}
                   aria-label="Название шаблона"
                 />
-              ) : (
+              ) : controlsEnabled ? (
                 <button
                   type="button"
                   className="group inline-flex max-w-2xl items-center gap-2 rounded-md px-1 py-0.5 text-left text-2xl font-bold leading-tight text-slate-900 hover:bg-slate-100 md:text-3xl"
@@ -935,6 +939,12 @@ export function ConstructorEditorView({
                     <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
                   </svg>
                 </button>
+              ) : (
+                <div className="max-w-2xl px-1 py-0.5 text-left text-2xl font-bold leading-tight text-slate-900 md:text-3xl">
+                  <span className="min-w-0 truncate">
+                    {template?.name?.trim() ? template.name.trim() : "Без названия"}
+                  </span>
+                </div>
               )}
 
               {lastSavedAt ? (
@@ -1075,8 +1085,9 @@ export function ConstructorEditorView({
                                   ) : null}
                                 </div>
 
-                                    <div className="flex items-center gap-2">
-                                      <button
+                                      {controlsEnabled ? (
+                                        <div className="flex items-center gap-2">
+                                          <button
                                         type="button"
                                         className="rounded-md border border-slate-300 bg-white p-2 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                                         onClick={(e) => {
@@ -1099,8 +1110,8 @@ export function ConstructorEditorView({
                                           <path d="M12 20h9" />
                                           <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
                                         </svg>
-                                      </button>
-                                      <button
+                                          </button>
+                                          <button
                                         type="button"
                                         className="rounded-md border border-red-300 bg-white p-2 text-red-700 hover:bg-red-50"
                                         onClick={(e) => {
@@ -1126,8 +1137,9 @@ export function ConstructorEditorView({
                                           <path d="M10 11v6" />
                                           <path d="M14 11v6" />
                                         </svg>
-                                      </button>
-                                    </div>
+                                          </button>
+                                        </div>
+                                      ) : null}
                                   </div>
                               ) : null}
 
@@ -1727,36 +1739,38 @@ export function ConstructorEditorView({
                                                         <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
                                                       </svg>
                                                     </button>
-                                                    <button
-                                                      type="button"
-                                                      className="rounded-md border border-red-300 bg-white p-2 text-red-700 hover:bg-red-50"
-                                                      onClick={() =>
-                                                        removeAction(
-                                                          stage,
-                                                          step.id,
-                                                          action.id,
-                                                        )
-                                                      }
-                                                      aria-label="Удалить действие"
-                                                      title="Удалить"
-                                                    >
-                                                      <svg
-                                                        className="size-4"
-                                                        viewBox="0 0 24 24"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        strokeWidth="2"
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        aria-hidden
+                                                    {controlsEnabled ? (
+                                                      <button
+                                                        type="button"
+                                                        className="rounded-md border border-red-300 bg-white p-2 text-red-700 hover:bg-red-50"
+                                                        onClick={() =>
+                                                          removeAction(
+                                                            stage,
+                                                            step.id,
+                                                            action.id,
+                                                          )
+                                                        }
+                                                        aria-label="Удалить действие"
+                                                        title="Удалить"
                                                       >
-                                                        <path d="M3 6h18" />
-                                                        <path d="M8 6V4h8v2" />
-                                                        <path d="M19 6l-1 14H6L5 6" />
-                                                        <path d="M10 11v6" />
-                                                        <path d="M14 11v6" />
-                                                      </svg>
-                                                    </button>
+                                                        <svg
+                                                          className="size-4"
+                                                          viewBox="0 0 24 24"
+                                                          fill="none"
+                                                          stroke="currentColor"
+                                                          strokeWidth="2"
+                                                          strokeLinecap="round"
+                                                          strokeLinejoin="round"
+                                                          aria-hidden
+                                                        >
+                                                          <path d="M3 6h18" />
+                                                          <path d="M8 6V4h8v2" />
+                                                          <path d="M19 6l-1 14H6L5 6" />
+                                                          <path d="M10 11v6" />
+                                                          <path d="M14 11v6" />
+                                                        </svg>
+                                                      </button>
+                                                    ) : null}
                                                   </div>
                                                   </div>
                                                 </div>
@@ -1805,7 +1819,7 @@ export function ConstructorEditorView({
                                                       Обязательное
                                                     </label>
 
-                                                        {!a.input ? (
+                                                        {controlsEnabled && !a.input ? (
                                                           <button
                                                             type="button"
                                                             className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -1970,15 +1984,17 @@ export function ConstructorEditorView({
                                           )}
                                         </div>
 
-                                      <div className="mt-3">
-                                        <button
-                                          type="button"
-                                          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                                          onClick={() => addAction(stage, step.id)}
-                                        >
-                                          + Действие
-                                        </button>
-                                      </div>
+                                      {controlsEnabled ? (
+                                        <div className="mt-3">
+                                          <button
+                                            type="button"
+                                            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                            onClick={() => addAction(stage, step.id)}
+                                          >
+                                            + Действие
+                                          </button>
+                                        </div>
+                                      ) : null}
                                       </div>
 
                                       <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-3">
@@ -1997,6 +2013,7 @@ export function ConstructorEditorView({
                                                 className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
                                               >
                                                 <span className="truncate">{c.name}</span>
+                                                {controlsEnabled ? (
                                                 <button
                                                   type="button"
                                                   className="rounded-md border border-red-300 bg-white p-2 text-red-700 hover:bg-red-50"
@@ -2028,12 +2045,13 @@ export function ConstructorEditorView({
                                                     <path d="M14 11v6" />
                                                   </svg>
                                                 </button>
+                                                ) : null}
                                               </div>
                                             ))}
                                           </div>
                                         )}
 
-                                        {addConsumableByStepId[step.id] ? (
+                                        {controlsEnabled && addConsumableByStepId[step.id] ? (
                                           <div className="mt-3">
                                             <Combobox
                                               value={null}
@@ -2127,7 +2145,7 @@ export function ConstructorEditorView({
                                               </button>
                                             </div>
                                           </div>
-                                        ) : (
+                                        ) : controlsEnabled ? (
                                           <div className="mt-3">
                                             <button
                                               type="button"
@@ -2137,7 +2155,7 @@ export function ConstructorEditorView({
                                               + Добавить расходный материал
                                             </button>
                                           </div>
-                                        )}
+                                        ) : null}
                                       </div>
 
                                       <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-3">
@@ -2156,6 +2174,7 @@ export function ConstructorEditorView({
                                                 className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
                                               >
                                                 <span className="truncate">{eq.name}</span>
+                                                {controlsEnabled ? (
                                                 <button
                                                   type="button"
                                                   className="rounded-md border border-red-300 bg-white p-2 text-red-700 hover:bg-red-50"
@@ -2187,12 +2206,13 @@ export function ConstructorEditorView({
                                                     <path d="M14 11v6" />
                                                   </svg>
                                                 </button>
+                                                ) : null}
                                               </div>
                                             ))}
                                           </div>
                                         )}
 
-                                        {addEquipmentByStepId[step.id] ? (
+                                        {controlsEnabled && addEquipmentByStepId[step.id] ? (
                                           <div className="mt-3">
                                             <Combobox
                                               value={null}
@@ -2286,7 +2306,7 @@ export function ConstructorEditorView({
                                               </button>
                                             </div>
                                           </div>
-                                        ) : (
+                                        ) : controlsEnabled ? (
                                           <div className="mt-3">
                                             <button
                                               type="button"
@@ -2296,7 +2316,7 @@ export function ConstructorEditorView({
                                               + Добавить оборудование
                                             </button>
                                           </div>
-                                        )}
+                                        ) : null}
                                       </div>
                                     </div>
                                   ) : allowGroups(stage.type) ? (
@@ -2515,19 +2535,21 @@ export function ConstructorEditorView({
                                                       <div className="text-sm font-semibold text-slate-800">
                                                         Поля группы
                                                       </div>
-                                                      <button
-                                                        type="button"
-                                                        className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                                                        onClick={() =>
-                                                          addGroupField(
-                                                            stage,
-                                                            step.id,
-                                                            group.id,
-                                                          )
-                                                        }
-                                                      >
-                                                        + Поле
-                                                      </button>
+                                                      {controlsEnabled ? (
+                                                        <button
+                                                          type="button"
+                                                          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                                          onClick={() =>
+                                                            addGroupField(
+                                                              stage,
+                                                              step.id,
+                                                              group.id,
+                                                            )
+                                                          }
+                                                        >
+                                                          + Поле
+                                                        </button>
+                                                      ) : null}
                                                     </div>
 
                                                     {(group.fields ?? []).length === 0 ? (
@@ -2596,37 +2618,39 @@ export function ConstructorEditorView({
                                                                     <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
                                                                   </svg>
                                                                 </button>
-                                                                <button
-                                                                  type="button"
-                                                                  className="rounded-md border border-red-300 bg-white p-2 text-red-700 hover:bg-red-50"
-                                                                  onClick={() =>
-                                                                    removeGroupField(
-                                                                      stage,
-                                                                      step.id,
-                                                                      group.id,
-                                                                      field.id,
-                                                                    )
-                                                                  }
-                                                                  aria-label="Удалить поле"
-                                                                  title="Удалить поле"
-                                                                >
-                                                                  <svg
-                                                                    className="size-4"
-                                                                    viewBox="0 0 24 24"
-                                                                    fill="none"
-                                                                    stroke="currentColor"
-                                                                    strokeWidth="2"
-                                                                    strokeLinecap="round"
-                                                                    strokeLinejoin="round"
-                                                                    aria-hidden
+                                                                {controlsEnabled ? (
+                                                                  <button
+                                                                    type="button"
+                                                                    className="rounded-md border border-red-300 bg-white p-2 text-red-700 hover:bg-red-50"
+                                                                    onClick={() =>
+                                                                      removeGroupField(
+                                                                        stage,
+                                                                        step.id,
+                                                                        group.id,
+                                                                        field.id,
+                                                                      )
+                                                                    }
+                                                                    aria-label="Удалить поле"
+                                                                    title="Удалить поле"
                                                                   >
-                                                                    <path d="M3 6h18" />
-                                                                    <path d="M8 6V4h8v2" />
-                                                                    <path d="M19 6l-1 14H6L5 6" />
-                                                                    <path d="M10 11v6" />
-                                                                    <path d="M14 11v6" />
-                                                                  </svg>
-                                                                </button>
+                                                                    <svg
+                                                                      className="size-4"
+                                                                      viewBox="0 0 24 24"
+                                                                      fill="none"
+                                                                      stroke="currentColor"
+                                                                      strokeWidth="2"
+                                                                      strokeLinecap="round"
+                                                                      strokeLinejoin="round"
+                                                                      aria-hidden
+                                                                    >
+                                                                      <path d="M3 6h18" />
+                                                                      <path d="M8 6V4h8v2" />
+                                                                      <path d="M19 6l-1 14H6L5 6" />
+                                                                      <path d="M10 11v6" />
+                                                                      <path d="M14 11v6" />
+                                                                    </svg>
+                                                                  </button>
+                                                                ) : null}
                                                               </div>
                                                             </div>
 
@@ -2754,15 +2778,17 @@ export function ConstructorEditorView({
                                         </div>
                                       )}
 
-                                      <div className="mt-3">
-                                        <button
-                                          type="button"
-                                          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                                          onClick={() => addGroup(stage, step)}
-                                        >
-                                          + Группа полей
-                                        </button>
-                                      </div>
+                                      {controlsEnabled ? (
+                                        <div className="mt-3">
+                                          <button
+                                            type="button"
+                                            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                            onClick={() => addGroup(stage, step)}
+                                          >
+                                            + Группа полей
+                                          </button>
+                                        </div>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                 </div>

@@ -3316,7 +3316,6 @@ function QualityControlStage({
     (f) =>
       f.type !== "section_header" && !(f.type === "text" && f.multiline),
   );
-  const qcMultilineFields = stepFields.filter((f) => f.type === "text" && f.multiline);
 
   const deviationFlagField =
     stepFields.find((f) => f.id === DEVIATION_FLAG_FIELD_ID) ?? null;
@@ -3331,31 +3330,6 @@ function QualityControlStage({
     if (v === "да") return "negative";
     return undefined;
   })();
-  const qcTextareaCls =
-    "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-400 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600 min-h-[6rem] resize-y";
-
-  const [requestedFieldId, setRequestedFieldId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const onReq = (ev: Event) => {
-      const ce = ev as CustomEvent<{ fieldId?: string }>;
-      const id = ce?.detail?.fieldId;
-      if (!id) return;
-      setRequestedFieldId(id);
-    };
-    window.addEventListener(PRODUCTION_OPEN_FIELD_EVENT, onReq as EventListener);
-    return () =>
-      window.removeEventListener(
-        PRODUCTION_OPEN_FIELD_EVENT,
-        onReq as EventListener,
-      );
-  }, []);
-
-  const forceOpenNotes = Boolean(
-    requestedFieldId &&
-      qcMultilineFields.some((f) => f.id === requestedFieldId),
-  );
-
   return (
     <>
     <div>
@@ -3412,53 +3386,6 @@ function QualityControlStage({
             </tbody>
           </table>
         </div>
-
-        {qcMultilineFields.length > 0 ? (
-          <CollapsibleSection
-            storageKey={`bio:order-groups:qc:${stageExecution.stageTemplateId}:${stepTemplate.id}:notes`}
-            defaultOpen
-            forceOpen={forceOpenNotes}
-            title="Комментарий"
-          >
-            <NestedRailBlock tone="muted" showRail={false}>
-              <div className="space-y-4">
-                {qcMultilineFields.map((f) => {
-                  const value = stepExecution.fieldValues[f.id];
-                  const str =
-                    typeof value === "string"
-                      ? value
-                      : value == null
-                        ? ""
-                        : String(value);
-                  return (
-                    <label
-                      key={f.id}
-                      className="block"
-                      data-production-field={f.id}
-                    >
-                      <div className="mb-1 text-sm font-semibold text-slate-900">
-                        {f.label}
-                      </div>
-                      <textarea
-                        rows={4}
-                        value={str}
-                        onChange={(e) => onChangeField(0, f.id, e.target.value)}
-                        readOnly={!editable}
-                        disabled={false}
-                        placeholder={f.placeholder}
-                        className={[
-                          qcTextareaCls,
-                          !editable ? "border-slate-100 bg-slate-50" : "",
-                        ].join(" ")}
-                        aria-label={f.label}
-                      />
-                    </label>
-                  );
-                })}
-              </div>
-            </NestedRailBlock>
-          </CollapsibleSection>
-        ) : null}
 
         {deviationFlagField && deviationNotesField ? (
           <CollapsibleSection
