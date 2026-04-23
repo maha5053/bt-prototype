@@ -126,6 +126,7 @@ function ConstructorV2ListContent() {
           <thead className="bg-slate-50 text-left text-slate-600">
             <tr>
               <th className="w-10 px-2 py-3 font-medium" aria-label="Действия" />
+              <th className="px-4 py-3 font-medium">ID</th>
               <th className="px-4 py-3 font-medium">Название</th>
               <th className="px-4 py-3 font-medium">Связанных заказов</th>
             </tr>
@@ -330,6 +331,9 @@ function ConstructorV2ListContent() {
                         </button>
                       </div>
                     ) : null}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-slate-600">
+                    {tpl.id}
                   </td>
                   <td className="px-4 py-3 font-medium text-slate-800">
                     <div className="flex items-center gap-2">
