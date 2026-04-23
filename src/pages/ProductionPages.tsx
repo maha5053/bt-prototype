@@ -1141,6 +1141,8 @@ function ProductionOrderContent() {
   );
   const rejectFileRef = useRef<HTMLInputElement>(null);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [suggestRejectOpen, setSuggestRejectOpen] = useState(false);
+  const pendingCompleteStageRef = useRef<null | (() => void)>(null);
 
   const resetRejectForm = useCallback(() => {
     setRejectTypicalReason("");
@@ -1238,6 +1240,54 @@ function ProductionOrderContent() {
     !isOrderReadonly &&
     effectiveActiveStageIndex === order.currentStageIndex &&
     stageEditAllowed;
+
+  const incomingQcHasNegative = useMemo(() => {
+    if (stageTemplate?.type !== "registration") return false;
+    const regStage = order.stages[effectiveActiveStageIndex];
+    const fv = regStage?.steps?.[0]?.fieldValues ?? {};
+    const norm = (v: unknown) =>
+      typeof v === "string" ? v.trim().toLowerCase() : "";
+    const integrity = norm(fv.integrity);
+    const volumeOk = norm(fv.volumeOk);
+    const hemolysis = norm(fv.hemolysis);
+    const assignedStatus = norm(fv.assignedStatus);
+    return (
+      integrity === "нарушена" ||
+      volumeOk === "не соответствует" ||
+      hemolysis === "да" ||
+      assignedStatus === "брак"
+    );
+  }, [order.stages, effectiveActiveStageIndex, stageTemplate?.type]);
+
+  const requestCompleteStage = useCallback(() => {
+    if (!canEditStage) return;
+    if (stageTemplate?.type === "registration" && incomingQcHasNegative) {
+      pendingCompleteStageRef.current = () => {
+        completeStage({
+          orderId: order.id,
+          stageIndex: effectiveActiveStageIndex,
+          completedBy: auditUserId,
+        });
+        scrollProductionOrderMainToTop();
+      };
+      setSuggestRejectOpen(true);
+      return;
+    }
+    completeStage({
+      orderId: order.id,
+      stageIndex: effectiveActiveStageIndex,
+      completedBy: auditUserId,
+    });
+    scrollProductionOrderMainToTop();
+  }, [
+    auditUserId,
+    canEditStage,
+    completeStage,
+    effectiveActiveStageIndex,
+    incomingQcHasNegative,
+    order.id,
+    stageTemplate?.type,
+  ]);
 
   const stepsTpl: StepTemplate[] = stageTemplate?.steps ?? [];
   const stepTpl = stepsTpl[activeStepIndex] ?? null;
@@ -1688,13 +1738,7 @@ function ProductionOrderContent() {
                   });
                 }}
                 onCompleteStage={() => {
-                  if (!canEditStage) return;
-                  completeStage({
-                    orderId: order.id,
-                    stageIndex: effectiveActiveStageIndex,
-                    completedBy: auditUserId,
-                  });
-                  scrollProductionOrderMainToTop();
+                  requestCompleteStage();
                 }}
               />
             )}
@@ -1979,6 +2023,27 @@ function ProductionOrderContent() {
           </div>
         </div>
       )}
+
+      <IrreversibleConfirmModal
+        open={suggestRejectOpen}
+        title="Обнаружены отклонения"
+        description="Во «Входном контроле качества» есть негативные показатели. Перевести заказ в брак?"
+        confirmLabel="Перевести в брак"
+        cancelLabel="Продолжить без брака"
+        onCancel={() => {
+          setSuggestRejectOpen(false);
+          const fn = pendingCompleteStageRef.current;
+          pendingCompleteStageRef.current = null;
+          fn?.();
+        }}
+        onConfirm={() => {
+          setSuggestRejectOpen(false);
+          pendingCompleteStageRef.current = null;
+          resetRejectForm();
+          setRejectPhase("incoming_material");
+          setShowReject(true);
+        }}
+      />
     </div>
   );
 }
@@ -2533,6 +2598,7 @@ function IrreversibleConfirmModal({
   title,
   description,
   confirmLabel = "Да, завершить",
+  cancelLabel = "Отмена",
   onConfirm,
   onCancel,
 }: {
@@ -2540,6 +2606,7 @@ function IrreversibleConfirmModal({
   title: string;
   description: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -2582,7 +2649,7 @@ function IrreversibleConfirmModal({
             onClick={onCancel}
             className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
           >
-            Отмена
+            {cancelLabel}
           </button>
           <button
             type="button"
