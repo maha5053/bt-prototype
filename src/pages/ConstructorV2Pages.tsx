@@ -133,7 +133,10 @@ function ConstructorV2ListContent() {
           </thead>
           <tbody>
             {visibleTemplates.map((tpl) => {
-              const used = orders.filter((o) => o.templateId === tpl.id).length;
+              const runtimeId = `tpl-runtime-v2-${tpl.id}`;
+              const used = orders.filter(
+                (o) => o.templateId === tpl.id || o.templateId === runtimeId,
+              ).length;
               const isArchived = Boolean(tpl.archivedAt);
               const isBaseline = tpl.id === "tpl-thrombogel";
               const locked = isBaseline || isArchived || used > 0;
