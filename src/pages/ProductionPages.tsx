@@ -2613,8 +2613,14 @@ function ReleaseIssueConfirmModal({
   if (!open) return null;
 
   const row = (term: string, value: string, mono = false) => (
-    <div className="grid grid-cols-[minmax(0,9.5rem)_1fr] gap-x-3 gap-y-1 border-b border-slate-100 py-2 text-sm last:border-b-0 sm:grid-cols-[11rem_1fr]">
-      <dt className="text-slate-500">{term}</dt>
+    <div className="grid grid-cols-[minmax(0,13.5rem)_1fr] gap-x-3 gap-y-1 border-b border-slate-100 py-2 text-sm last:border-b-0 sm:grid-cols-[16rem_1fr]">
+      <dt
+        className={[
+          "text-slate-500",
+        ].join(" ")}
+      >
+        {term}
+      </dt>
       <dd
         className={`min-w-0 break-words text-slate-900 ${term === "Отклонения" ? "whitespace-pre-wrap" : ""} ${mono ? "font-mono text-xs" : ""}`}
       >
@@ -2630,7 +2636,7 @@ function ReleaseIssueConfirmModal({
       role="presentation"
     >
       <div
-        className="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
+        className="mx-4 w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
