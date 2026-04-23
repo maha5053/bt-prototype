@@ -42,6 +42,106 @@ const REJECTION_PHASE_OPTIONS = Object.entries(
   PRODUCTION_REJECTION_PHASE_LABELS,
 ) as [ProductionRejectionPhase, string][];
 
+const DEVIATION_SECTION_HEADER_ID = "sec-dev";
+const DEVIATION_FLAG_FIELD_ID = "devFlag";
+const DEVIATION_NOTES_FIELD_ID = "devNotes";
+const DEVIATION_SUMMARY_FIELD_ID = "devSummary";
+
+const DEVIATION_FIELDS_BASELINE: FieldDefinition[] = [
+  {
+    id: DEVIATION_SECTION_HEADER_ID,
+    label: "Отклонения",
+    type: "section_header",
+    required: false,
+  },
+  {
+    id: DEVIATION_FLAG_FIELD_ID,
+    label: "Отклонения",
+    type: "select",
+    required: false,
+    options: ["Нет", "Да"],
+  },
+  {
+    id: DEVIATION_NOTES_FIELD_ID,
+    label: "Примечания",
+    type: "text",
+    multiline: true,
+    required: false,
+  },
+];
+
+function ensureDeviationFields(fields: FieldDefinition[]): FieldDefinition[] {
+  const ids = new Set(fields.map((f) => f.id));
+  const hasAny =
+    ids.has(DEVIATION_SECTION_HEADER_ID) ||
+    ids.has(DEVIATION_FLAG_FIELD_ID) ||
+    ids.has(DEVIATION_NOTES_FIELD_ID);
+  if (hasAny) return fields;
+  return [...fields, ...DEVIATION_FIELDS_BASELINE];
+}
+
+function ensureReleaseDeviationLayout(fields: FieldDefinition[]): FieldDefinition[] {
+  // Для выдачи хотим: "Отклонения (сводка)" внутри блока "Отклонения",
+  // а не в дефолтном блоке "Данные".
+  const ids = new Set(fields.map((f) => f.id));
+  const hasDevSummary = ids.has(DEVIATION_SUMMARY_FIELD_ID);
+  const hasDeviationBlock =
+    ids.has(DEVIATION_SECTION_HEADER_ID) ||
+    ids.has(DEVIATION_FLAG_FIELD_ID) ||
+    ids.has(DEVIATION_NOTES_FIELD_ID);
+  if (!hasDevSummary || hasDeviationBlock) {
+    // Already has deviation block or no summary field — just ensure baseline exists.
+    return ensureDeviationFields(fields);
+  }
+
+  const idx = fields.findIndex((f) => f.id === DEVIATION_SUMMARY_FIELD_ID);
+  if (idx < 0) return ensureDeviationFields(fields);
+  const head = fields.slice(0, idx);
+  const summary = fields[idx]!;
+  const tail = fields.slice(idx + 1);
+  const filteredTail = tail.filter(
+    (f) =>
+      f.id !== DEVIATION_SECTION_HEADER_ID &&
+      f.id !== DEVIATION_FLAG_FIELD_ID &&
+      f.id !== DEVIATION_NOTES_FIELD_ID,
+  );
+  const deviationBlock = DEVIATION_FIELDS_BASELINE;
+  return [
+    ...head,
+    deviationBlock[0]!, // section header
+    summary,
+    deviationBlock[1]!, // devFlag
+    deviationBlock[2]!, // devNotes
+    ...filteredTail,
+  ];
+}
+
+function collectAllDeviations(order: ProductionOrder): string {
+  const items: string[] = [];
+  for (const st of order.stages) {
+    if (!st?.steps?.length) continue;
+    for (const step of st.steps) {
+      const fv = step.fieldValues ?? {};
+      const devFlagRaw = fv[DEVIATION_FLAG_FIELD_ID];
+      const devNotesRaw = fv[DEVIATION_NOTES_FIELD_ID];
+      const devFlagYes =
+        devFlagRaw === "Да" || devFlagRaw === true || devFlagRaw === "да";
+      const devNotes = typeof devNotesRaw === "string" ? devNotesRaw.trim() : "";
+
+      if (step.deviationFlag) {
+        const note = step.deviationNotes?.trim();
+        items.push(note ? `${st.name}: ${note}` : `${st.name}: отклонение`);
+        continue;
+      }
+
+      if (devFlagYes || devNotes) {
+        items.push(devNotes ? `${st.name}: ${devNotes}` : `${st.name}: отклонение`);
+      }
+    }
+  }
+  return items.length ? items.join("\n") : "—";
+}
+
 /** Типовые причины брака (модалка подтверждения). */
 const REJECTION_TYPICAL_REASON_OPTIONS = [
   { id: "hemolysis", label: "Гемолиз" },
@@ -2670,6 +2770,21 @@ function StepsStage({
     sequentialLockEnabled && activeStepIndex > firstIncompleteIndex;
   const activeStepTpl = stepsTpl[activeStepIndex];
   const activeStepExec = stepsExec[activeStepIndex];
+  const activeStepTplFields = useMemo(() => {
+    if (!activeStepTpl) return [];
+    // Deviation block exists in registration baseline and must be available
+    // in every production step + quality control + release (issuance).
+    if (
+      stageTemplate.type === "production" ||
+      stageTemplate.type === "quality_control" ||
+      stageTemplate.type === "release"
+    ) {
+      return stageTemplate.type === "release"
+        ? ensureReleaseDeviationLayout(activeStepTpl.fields)
+        : ensureDeviationFields(activeStepTpl.fields);
+    }
+    return activeStepTpl.fields;
+  }, [activeStepTpl, stageTemplate.type]);
 
   const missingRequiredActions = (() => {
     if (stageTemplate.type !== "production") return false;
@@ -2694,11 +2809,13 @@ function StepsStage({
 
   const missingRequiredFields = (() => {
     if (!activeStepTpl || !activeStepExec) return [];
-    const devFlagRaw = activeStepExec.fieldValues["devFlag"];
+    const devFlagRaw = activeStepExec.fieldValues[DEVIATION_FLAG_FIELD_ID];
     const deviationNotesRequired =
       devFlagRaw === "Да" || devFlagRaw === "да" || devFlagRaw === true;
-    return activeStepTpl.fields.filter((f) => {
-      const required = Boolean(f.required) || (f.id === "devNotes" && deviationNotesRequired);
+    return activeStepTplFields.filter((f) => {
+      const required =
+        Boolean(f.required) ||
+        (f.id === DEVIATION_NOTES_FIELD_ID && deviationNotesRequired);
       if (!required) return false;
       if (f.type === "section_header") return false;
       if (
@@ -2929,7 +3046,14 @@ function StepsStage({
           <div className="space-y-4">
             <FormFields
               order={order}
-              stepTemplate={stepsTpl[activeStepIndex]}
+              stepTemplate={
+                activeStepTpl
+                  ? {
+                      ...activeStepTpl,
+                      fields: activeStepTplFields,
+                    }
+                  : stepsTpl[activeStepIndex]
+              }
               stepExecution={stepsExec[activeStepIndex]}
               canEdit={
                 canEdit &&
@@ -3124,6 +3248,10 @@ function QualityControlStage({
   const stepTemplate = stageTemplate.steps[0];
   const stepExecution = stageExecution.steps[0];
   const [qcConfirmOpen, setQcConfirmOpen] = useState(false);
+  const stepFields = useMemo(
+    () => (stepTemplate ? ensureDeviationFields(stepTemplate.fields) : []),
+    [stepTemplate],
+  );
 
   const editable = Boolean(
     stepTemplate &&
@@ -3132,10 +3260,18 @@ function QualityControlStage({
       stepExecution.status !== "completed",
   );
 
+  const deviationNotesRequired = (() => {
+    const raw = stepExecution?.fieldValues?.[DEVIATION_FLAG_FIELD_ID];
+    return raw === "Да" || raw === "да" || raw === true;
+  })();
+
   const missingRequired =
     stepTemplate && stepExecution
-      ? stepTemplate.fields.filter((f) => {
-          if (!f.required) return false;
+      ? stepFields.filter((f) => {
+          const required =
+            Boolean(f.required) ||
+            (f.id === DEVIATION_NOTES_FIELD_ID && deviationNotesRequired);
+          if (!required) return false;
           if (f.type === "section_header") return false;
           const raw = stepExecution.fieldValues[f.id];
           if (raw === null || raw === undefined) return true;
@@ -3171,13 +3307,25 @@ function QualityControlStage({
     return <div className="text-sm text-slate-500">Нет данных этапа КК.</div>;
   }
 
-  const qcTableFields = stepTemplate.fields.filter(
+  const qcTableFields = stepFields.filter(
     (f) =>
       f.type !== "section_header" && !(f.type === "text" && f.multiline),
   );
-  const qcMultilineFields = stepTemplate.fields.filter(
-    (f) => f.type === "text" && f.multiline,
-  );
+  const qcMultilineFields = stepFields.filter((f) => f.type === "text" && f.multiline);
+
+  const deviationFlagField =
+    stepFields.find((f) => f.id === DEVIATION_FLAG_FIELD_ID) ?? null;
+  const deviationNotesField =
+    stepFields.find((f) => f.id === DEVIATION_NOTES_FIELD_ID) ?? null;
+
+  const deviationSentiment = (() => {
+    const raw = stepExecution.fieldValues[DEVIATION_FLAG_FIELD_ID];
+    if (typeof raw !== "string") return undefined;
+    const v = raw.trim().toLowerCase();
+    if (v === "нет") return "positive";
+    if (v === "да") return "negative";
+    return undefined;
+  })();
   const qcTextareaCls =
     "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-400 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-600 min-h-[6rem] resize-y";
 
@@ -3302,6 +3450,62 @@ function QualityControlStage({
                     </label>
                   );
                 })}
+              </div>
+            </NestedRailBlock>
+          </CollapsibleSection>
+        ) : null}
+
+        {deviationFlagField && deviationNotesField ? (
+          <CollapsibleSection
+            storageKey={`bio:order-groups:qc:${stageExecution.stageTemplateId}:${stepTemplate.id}:${DEVIATION_SECTION_HEADER_ID}`}
+            defaultOpen
+            title="Отклонения"
+          >
+            <NestedRailBlock tone="muted" showRail={false}>
+              <div className="space-y-3">
+                <label className="block" data-production-field={deviationFlagField.id}>
+                  <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <div className="text-xs font-medium text-slate-600">
+                      {deviationFlagField.label}
+                    </div>
+                    {deviationSentiment === "positive" ? (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-900 ring-1 ring-inset ring-emerald-600/20"
+                        title="Показатель в норме"
+                      >
+                        <span aria-hidden>✓</span>
+                        <span>ок</span>
+                      </span>
+                    ) : deviationSentiment === "negative" ? (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-900 ring-1 ring-inset ring-red-600/20"
+                        title="Показатель не соответствует"
+                      >
+                        <span aria-hidden>✕</span>
+                        <span>внимание</span>
+                      </span>
+                    ) : null}
+                  </div>
+                  <FieldInput
+                    field={deviationFlagField}
+                    value={stepExecution.fieldValues[deviationFlagField.id]}
+                    disabled={!editable}
+                    onChange={(v) => onChangeField(0, deviationFlagField.id, v)}
+                  />
+                </label>
+
+                <label className="block" data-production-field={deviationNotesField.id}>
+                  <div className="mb-1 text-xs font-medium text-slate-600">
+                    {deviationNotesField.label}
+                    {deviationNotesRequired ? <span className="text-red-500"> *</span> : null}
+                  </div>
+                  <FieldInput
+                    field={deviationNotesField}
+                    value={stepExecution.fieldValues[deviationNotesField.id]}
+                    disabled={!editable}
+                    onChange={(v) => onChangeField(0, deviationNotesField.id, v)}
+                  />
+                </label>
               </div>
             </NestedRailBlock>
           </CollapsibleSection>
@@ -3466,7 +3670,18 @@ function FormFields({
     return <div className="text-sm text-slate-500">Нет данных шага.</div>;
   }
 
+  const deviationFields = useMemo(
+    () =>
+      stageType === "release"
+        ? ensureReleaseDeviationLayout(stepTemplate.fields)
+        : ensureDeviationFields(stepTemplate.fields),
+    [stageType, stepTemplate.fields],
+  );
+
   const resolveValue = (field: FieldDefinition): FieldValue => {
+    if (stageType === "release" && field.id === DEVIATION_SUMMARY_FIELD_ID) {
+      return collectAllDeviations(order);
+    }
     // ref field
     if (typeof field.refStageIndex === "number" && field.refFieldId) {
       const st = order.stages[field.refStageIndex];
@@ -3543,12 +3758,13 @@ function FormFields({
   // Conditional required field:
   // If "Отклонения" = "Да" (devFlag), then "Примечания" (devNotes) must be filled.
   const deviationNotesRequired = (() => {
-    const raw = stepExecution.fieldValues["devFlag"];
+    const raw = stepExecution.fieldValues[DEVIATION_FLAG_FIELD_ID];
     return raw === "Да" || raw === "да" || raw === true;
   })();
 
   const isFieldRequired = (field: FieldDefinition) =>
-    Boolean(field.required) || (field.id === "devNotes" && deviationNotesRequired);
+    Boolean(field.required) ||
+    (field.id === DEVIATION_NOTES_FIELD_ID && deviationNotesRequired);
 
   const renderFieldRow = (field: FieldDefinition) => {
     const isReadonly =
@@ -3615,13 +3831,31 @@ function FormFields({
           </div>
           {refBadgeEl}
         </div>
-        <FieldInput
-          field={field}
-          value={value}
-          disabled={isReadonly}
-          onChange={(v) => onChange(field.id, v)}
-          tone={crossRef ? "crossStageRef" : "default"}
-        />
+        {stageType === "release" && field.id === DEVIATION_SUMMARY_FIELD_ID ? (
+          <div
+            tabIndex={-1}
+            role="textbox"
+            aria-readonly="true"
+            aria-label={field.label}
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 shadow-sm"
+          >
+            <div className="whitespace-pre-wrap break-words">
+              {typeof value === "string"
+                ? value
+                : value == null
+                  ? ""
+                  : String(value)}
+            </div>
+          </div>
+        ) : (
+          <FieldInput
+            field={field}
+            value={value}
+            disabled={isReadonly}
+            onChange={(v) => onChange(field.id, v)}
+            tone={crossRef ? "crossStageRef" : "default"}
+          />
+        )}
       </label>
     );
   };
@@ -3841,14 +4075,20 @@ function FormFields({
   }, []);
 
   const visibleFields = useMemo(() => {
-    return stepTemplate.fields.filter((field) => {
+    const src =
+      stageType === "production" ||
+      stageType === "quality_control" ||
+      stageType === "release"
+        ? deviationFields
+        : stepTemplate.fields;
+    return src.filter((field) => {
       if (field.id === "seq" || field.id === "executor") return false;
       if (stageType === "release" && isReleaseSupersededSignerField(field)) {
         return false;
       }
       return true;
     });
-  }, [stepTemplate.fields, stageType]);
+  }, [deviationFields, stepTemplate.fields, stageType]);
 
   const { fieldGroups, fieldToGroupId } = useMemo(() => {
     type Group = {
@@ -3921,8 +4161,7 @@ function FormFields({
             stageType === "registration" && g.headerField?.id === "sec-qc";
           const isRegistrationBalanceGroup =
             stageType === "registration" && g.headerField?.id === "sec-balance";
-          const isRegistrationDeviationGroup =
-            stageType === "registration" && g.headerField?.id === "sec-dev";
+          const isDeviationGroup = g.headerField?.id === DEVIATION_SECTION_HEADER_ID;
 
           const renderCommonDataGrid = () => {
             const byId = new Map(g.fields.map((f) => [f.id, f] as const));
@@ -4139,7 +4378,34 @@ function FormFields({
           const renderDeviationStack = () => (
             <div className="space-y-3">
               {g.fields.map((f) => {
-                if (f.id === "devFlag") {
+                if (
+                  stageType === "release" &&
+                  f.id === DEVIATION_SUMMARY_FIELD_ID
+                ) {
+                  const v = resolveValue(f);
+                  const str =
+                    typeof v === "string" ? v : v == null ? "" : String(v);
+                  return (
+                    <label
+                      key={f.id}
+                      className="block"
+                      data-production-field={f.id}
+                    >
+                      <div className="mb-1 text-xs font-medium text-slate-600">
+                        {f.label}
+                      </div>
+                      <textarea
+                        rows={4}
+                        readOnly
+                        tabIndex={-1}
+                        value={str}
+                        className="w-full cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 shadow-sm whitespace-pre-wrap min-h-[5.5rem] resize-y"
+                        aria-label={f.label}
+                      />
+                    </label>
+                  );
+                }
+                if (f.id === DEVIATION_FLAG_FIELD_ID) {
                   return renderFieldCustom(
                     f,
                     undefined,
@@ -4169,11 +4435,51 @@ function FormFields({
                   renderIncomingQcStack()
                 ) : isRegistrationBalanceGroup ? (
                   renderBalanceTable()
-                ) : isRegistrationDeviationGroup ? (
+                ) : isDeviationGroup ? (
                   renderDeviationStack()
                 ) : (
                   <div className="space-y-3">
                     {g.fields.map((field) => renderFieldRow(field))}
+                    {stageType === "release" && g.id === "grp-default" ? (
+                      <div className="pt-1 space-y-3">
+                        <div className="block">
+                          <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                            <div className="text-xs font-medium text-slate-600">
+                              Технологический процесс выполнил
+                            </div>
+                            {productionCompletersSourceBadge(order) ? (
+                              <span
+                                className="inline-flex max-w-full shrink-0 items-center truncate rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-900 ring-1 ring-inset ring-sky-300/60"
+                                title={productionCompletersSourceBadge(order)!.title}
+                              >
+                                {productionCompletersSourceBadge(order)!.text}
+                              </span>
+                            ) : null}
+                          </div>
+                          <input
+                            type="text"
+                            readOnly
+                            tabIndex={-1}
+                            value={getProductionStageCompletersDisplay(order)}
+                            className={CROSS_STAGE_READONLY_INPUT_CLS}
+                            aria-label="Технологический процесс выполнил"
+                          />
+                        </div>
+                        <div className="block">
+                          <div className="mb-1 text-xs font-medium text-slate-600">
+                            Одобрил
+                          </div>
+                          <input
+                            type="text"
+                            readOnly
+                            tabIndex={-1}
+                            value={stepExecution.techProcessApprovedBy?.trim() || "—"}
+                            className="w-full cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
+                            aria-label="Одобрил"
+                          />
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </NestedRailBlock>
@@ -4182,11 +4488,6 @@ function FormFields({
         })}
       </div>
     );
-
-  const releaseReadonlyInputCls =
-    "w-full cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800";
-
-  const productionCompletersBadge = productionCompletersSourceBadge(order);
 
   return (
     <div className="space-y-3">
@@ -4203,56 +4504,7 @@ function FormFields({
       ) : (
         actionsBody
       )}
-      {fieldsBody}
-
-      {stageType === "release" ? (
-        <CollapsibleSection
-          storageKey={`bio:order-groups:${order.id}:release:${stepTemplate.id}:meta`}
-          defaultOpen
-          title="Сведения этапа"
-        >
-          <NestedRailBlock tone="muted" showRail={false}>
-            <div className="space-y-3">
-              <div className="block">
-                <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <div className="text-xs font-medium text-slate-600">
-                    Технологический процесс выполнил
-                  </div>
-                  {productionCompletersBadge ? (
-                    <span
-                      className="inline-flex max-w-full shrink-0 items-center truncate rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-900 ring-1 ring-inset ring-sky-300/60"
-                      title={productionCompletersBadge.title}
-                    >
-                      {productionCompletersBadge.text}
-                    </span>
-                  ) : null}
-                </div>
-                <input
-                  type="text"
-                  readOnly
-                  tabIndex={-1}
-                  value={getProductionStageCompletersDisplay(order)}
-                  className={CROSS_STAGE_READONLY_INPUT_CLS}
-                  aria-label="Технологический процесс выполнил"
-                />
-              </div>
-              <div className="block">
-                <div className="mb-1 text-xs font-medium text-slate-600">
-                  Одобрил
-                </div>
-                <input
-                  type="text"
-                  readOnly
-                  tabIndex={-1}
-                  value={stepExecution.techProcessApprovedBy?.trim() || "—"}
-                  className={releaseReadonlyInputCls}
-                  aria-label="Одобрил"
-                />
-              </div>
-            </div>
-          </NestedRailBlock>
-        </CollapsibleSection>
-      ) : null}
+      {stageType === "production" ? null : fieldsBody}
 
       {stepTemplate.consumables.length > 0 ? (
         <CollapsibleSection
@@ -4370,6 +4622,40 @@ function FormFields({
                 );
               })}
             </ul>
+          </NestedRailBlock>
+        </CollapsibleSection>
+      ) : null}
+
+      {stageType === "production" ? (
+        <CollapsibleSection
+          storageKey={`bio:order-groups:${order.id}:production:${stepTemplate.id}:${DEVIATION_SECTION_HEADER_ID}`}
+          defaultOpen
+          title="Отклонения"
+        >
+          <NestedRailBlock tone="muted" showRail={false}>
+            <div className="space-y-3">
+              {deviationFields
+                .filter((f) => f.type !== "section_header")
+                .map((f) => {
+                  if (f.id === DEVIATION_FLAG_FIELD_ID) {
+                    const resolveDeviationSentiment = (
+                      rawValue: FieldValue,
+                    ): "positive" | "negative" | undefined => {
+                      if (typeof rawValue !== "string") return undefined;
+                      const v = rawValue.trim().toLowerCase();
+                      if (v === "нет") return "positive";
+                      if (v === "да") return "negative";
+                      return undefined;
+                    };
+                    return renderFieldCustom(
+                      f,
+                      undefined,
+                      resolveDeviationSentiment(resolveValue(f)),
+                    );
+                  }
+                  return renderFieldCustom(f);
+                })}
+            </div>
           </NestedRailBlock>
         </CollapsibleSection>
       ) : null}
