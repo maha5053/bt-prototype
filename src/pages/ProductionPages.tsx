@@ -139,7 +139,7 @@ function collectAllDeviations(order: ProductionOrder): string {
       }
     }
   }
-  return items.length ? items.join("\n") : "—";
+  return items.length ? items.join("\n") : "";
 }
 
 /** Типовые причины брака (модалка подтверждения). */
@@ -3317,6 +3317,12 @@ function QualityControlStage({
       f.type !== "section_header" && !(f.type === "text" && f.multiline),
   );
 
+  // "Отклонения" is rendered as a dedicated block below the table.
+  // Keep it out of the QC indicators table to avoid duplicating the UX.
+  const qcTableFieldsWithoutDeviation = qcTableFields.filter(
+    (f) => f.id !== DEVIATION_FLAG_FIELD_ID,
+  );
+
   const deviationFlagField =
     stepFields.find((f) => f.id === DEVIATION_FLAG_FIELD_ID) ?? null;
   const deviationNotesField =
@@ -3351,7 +3357,7 @@ function QualityControlStage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {qcTableFields.map((f) => {
+              {qcTableFieldsWithoutDeviation.map((f) => {
                 const value = stepExecution.fieldValues[f.id];
                 const out = qcValueOutOfRange(value, f.referenceRange);
                 return (
