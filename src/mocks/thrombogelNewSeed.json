@@ -233,6 +233,10 @@
         {
           "id": "step-prod-1",
           "name": "Получение плазмы",
+          "attachmentPdf": {
+            "fileName": "СОП 2.1.2 - ОбТП_sys.pdf",
+            "dataUrl": "mocks/sop/СОП 2.1.2 - ОбТП_sys.pdf"
+          },
           "fields": [],
           "consumables": [
             {
@@ -339,6 +343,10 @@
         {
           "id": "step-prod-2",
           "name": "2. Получение тромбогеля",
+          "attachmentPdf": {
+            "fileName": "СОП 2.1.4 - Тромбогель_sys.pdf",
+            "dataUrl": "mocks/sop/СОП 2.1.4 - Тромбогель_sys.pdf"
+          },
           "fields": [],
           "actions": [
             {

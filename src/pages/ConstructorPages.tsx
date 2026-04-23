@@ -49,6 +49,27 @@ function uid(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function resolveAttachmentPdfHref(rawHref: string): string {
+  const hrefRaw = (rawHref ?? "").trim();
+  if (!hrefRaw) return "";
+  const base = import.meta.env.BASE_URL ?? "/";
+  const baseTrimmed = base.replace(/^\/+|\/+$/g, "");
+  const hasBaseAlready =
+    (baseTrimmed.length > 0 && hrefRaw.startsWith(`${baseTrimmed}/`)) ||
+    hrefRaw.startsWith(base);
+  const isAbsolute =
+    hrefRaw.startsWith("http://") ||
+    hrefRaw.startsWith("https://") ||
+    hrefRaw.startsWith("/") ||
+    hrefRaw.startsWith("data:");
+  const href = isAbsolute
+    ? hrefRaw
+    : hasBaseAlready
+      ? `/${hrefRaw.replace(/^\/+/, "")}`
+      : `${base}${hrefRaw.replace(/^\.?\//, "")}`;
+  return encodeURI(href);
+}
+
 const GROUP_FIELD_TYPE_OPTIONS: Array<{ value: FieldType; label: string }> = [
   { value: "text", label: "Текст" },
   { value: "number", label: "Число" },
@@ -1073,7 +1094,7 @@ export function ConstructorEditorView({
                                   <span className="min-w-0 truncate">{step.name}</span>
                                   {step.attachmentPdf ? (
                                     <a
-                                      href={step.attachmentPdf.dataUrl}
+                                      href={resolveAttachmentPdfHref(step.attachmentPdf.dataUrl)}
                                       target="_blank"
                                       rel="noreferrer"
                                       className="ml-1 inline-flex items-center text-xs font-medium text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900"
@@ -1166,7 +1187,7 @@ export function ConstructorEditorView({
                                             <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
                                               <div className="min-w-0 text-sm text-slate-700">
                                                 <a
-                                                  href={step.attachmentPdf.dataUrl}
+                                                  href={resolveAttachmentPdfHref(step.attachmentPdf.dataUrl)}
                                                   target="_blank"
                                                   rel="noreferrer"
                                                   className="truncate text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900"
@@ -2345,7 +2366,7 @@ export function ConstructorEditorView({
                                                     </span>
                                                     {group.attachmentPdf ? (
                                                       <a
-                                                        href={group.attachmentPdf.dataUrl}
+                                                        href={resolveAttachmentPdfHref(group.attachmentPdf.dataUrl)}
                                                         target="_blank"
                                                         rel="noreferrer"
                                                         className="ml-3 inline-flex items-center text-xs font-medium text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900"
@@ -2451,7 +2472,7 @@ export function ConstructorEditorView({
                                                           <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
                                                             <div className="min-w-0 text-sm text-slate-700">
                                                               <a
-                                                                href={group.attachmentPdf.dataUrl}
+                                                                href={resolveAttachmentPdfHref(group.attachmentPdf.dataUrl)}
                                                                 target="_blank"
                                                                 rel="noreferrer"
                                                                 className="truncate text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900"

@@ -60,7 +60,6 @@ export interface FieldDefinition {
   refFieldId?: string;
   refDeviations?: number[];
   sopRef?: string;
-  sopFileName?: string;
 }
 
 export interface StepFieldGroup {
@@ -100,7 +99,6 @@ export interface StepTemplate {
   name: string;
   /** Ссылка на документ шага (как у section_header в форме): открывается в новой вкладке. */
   sopRef?: string;
-  sopFileName?: string;
   /** PDF-вложение шага (хранится как data URL в localStorage прототипа). */
   attachmentPdf?: { fileName: string; dataUrl: string };
   groups?: StepGroupTemplate[];
@@ -318,7 +316,6 @@ function makeStageStep(
   return {
     id: `step-${stageType}-1`,
     name: "Шаг 1",
-    sopFileName: undefined,
     sopActions: [],
     fields: clone(systemFields),
     consumables: [],
@@ -414,7 +411,6 @@ function mergeOneStepWithBaseline(
         ? sstep.name
         : bstep.name,
     sopRef: bstep.sopRef,
-    sopFileName: bstep.sopFileName,
     hasDeviations: bstep.hasDeviations,
     consumables: clone(sstep.consumables ?? bstep.consumables),
     equipment: clone(sstep.equipment ?? bstep.equipment),

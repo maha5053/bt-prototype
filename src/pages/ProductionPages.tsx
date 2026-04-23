@@ -3035,9 +3035,8 @@ function StepsStage({
                 </div>
                 <SopAttachmentLink
                   sopRef={activeStepTpl?.sopRef}
-                  sopFileName={activeStepTpl?.sopFileName}
                   attachmentPdf={activeStepTpl?.attachmentPdf}
-                  allowMockDocumentLink={false}
+                  tabIndex={0}
                 />
               </div>
               <div className="mt-1 text-xs text-slate-500">
@@ -3511,27 +3510,15 @@ function actionInputFieldId(actionId: string): string {
   return `action:${actionId}:value`;
 }
 
-function sopMockDocumentHref(): string {
-  return `${import.meta.env.BASE_URL}mocks/sop/test-sop.pdf`;
-}
-
-/** СОП / файл: вложение шага из конструктора (data URL) или моковый PDF по имени из seed (секции формы). */
+/** СОП / файл: вложение шага (URL до PDF в public/) */
 function SopAttachmentLink({
   sopRef,
-  sopFileName,
   attachmentPdf,
-  allowMockDocumentLink = true,
   tabIndex,
 }: {
   sopRef?: string;
-  sopFileName?: string;
   /** PDF из конструктора процессов (вложение шага). */
   attachmentPdf?: { fileName: string; dataUrl: string };
-  /**
-   * false — шапка шага производства: без PDF-вложения ничего не показываем.
-   * true — заголовки секций формы: без вложения остаётся моковая ссылка по seed.
-   */
-  allowMockDocumentLink?: boolean;
   /** Для вложенных подписей формы — не забирать фокус с клавиатуры (как у section_header). */
   tabIndex?: number;
 }) {
@@ -3542,43 +3529,37 @@ function SopAttachmentLink({
     typeof attachmentPdf.fileName === "string" &&
     attachmentPdf.fileName.trim().length > 0;
 
-  if (hasStepAttachment) {
-    return (
-      <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs text-slate-500">
-        {sopRef ? <span className="font-medium text-slate-600">{sopRef}</span> : null}
-        {sopRef ? <span className="text-slate-300">·</span> : null}
-        <a
-          href={attachmentPdf!.dataUrl}
-          target="_blank"
-          rel="noreferrer"
-          tabIndex={tabIndex}
-          className="underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
-        >
-          {attachmentPdf!.fileName}
-        </a>
-      </div>
-    );
-  }
+  if (!hasStepAttachment) return null;
 
-  if (!allowMockDocumentLink) return null;
-
-  if (!sopRef && !sopFileName) return null;
-  const href = sopMockDocumentHref();
+  const hrefRaw = attachmentPdf!.dataUrl.trim();
+  const base = import.meta.env.BASE_URL ?? "/";
+  const baseTrimmed = base.replace(/^\/+|\/+$/g, "");
+  const hasBaseAlready =
+    (baseTrimmed.length > 0 && hrefRaw.startsWith(`${baseTrimmed}/`)) ||
+    hrefRaw.startsWith(base);
+  const isAbsolute =
+    hrefRaw.startsWith("http://") ||
+    hrefRaw.startsWith("https://") ||
+    hrefRaw.startsWith("/") ||
+    hrefRaw.startsWith("data:");
+  const href = isAbsolute
+    ? hrefRaw
+    : hasBaseAlready
+      ? `/${hrefRaw.replace(/^\/+/, "")}`
+      : `${base}${hrefRaw.replace(/^\.?\//, "")}`;
   return (
     <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs text-slate-500">
       {sopRef ? <span className="font-medium text-slate-600">{sopRef}</span> : null}
-      {sopRef && sopFileName ? <span className="text-slate-300">·</span> : null}
-      {sopFileName ? (
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          tabIndex={tabIndex}
-          className="underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
-        >
-          {sopFileName}
-        </a>
-      ) : null}
+      {sopRef ? <span className="text-slate-300">·</span> : null}
+      <a
+        href={encodeURI(href)}
+        target="_blank"
+        rel="noreferrer"
+        tabIndex={tabIndex}
+        className="underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
+      >
+        {attachmentPdf!.fileName}
+      </a>
     </div>
   );
 }
@@ -4090,7 +4071,6 @@ function FormFields({
           const right = g.headerField ? (
             <SopAttachmentLink
               sopRef={g.headerField.sopRef}
-              sopFileName={g.headerField.sopFileName}
               tabIndex={-1}
             />
           ) : null;
