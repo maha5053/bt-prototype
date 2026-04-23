@@ -229,10 +229,6 @@ function productionCompletersSourceBadge(
   };
 }
 
-/** Как у ref-полей (ИБ и т.д.): голубая рамка и фон. */
-const CROSS_STAGE_READONLY_INPUT_CLS =
-  "w-full cursor-default rounded-lg border border-sky-400 bg-sky-50/60 px-3 py-2 text-sm text-slate-800 outline-none shadow-sm";
-
 const RELEASE_READONLY_INPUT_CLS =
   "w-full cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none shadow-sm";
 
@@ -2620,7 +2616,7 @@ function ReleaseIssueConfirmModal({
     <div className="grid grid-cols-[minmax(0,9.5rem)_1fr] gap-x-3 gap-y-1 border-b border-slate-100 py-2 text-sm last:border-b-0 sm:grid-cols-[11rem_1fr]">
       <dt className="text-slate-500">{term}</dt>
       <dd
-        className={`min-w-0 break-words text-slate-900 ${mono ? "font-mono text-xs" : ""}`}
+        className={`min-w-0 break-words text-slate-900 ${term === "Отклонения" ? "whitespace-pre-wrap" : ""} ${mono ? "font-mono text-xs" : ""}`}
       >
         {value}
       </dd>
@@ -2653,7 +2649,7 @@ function ReleaseIssueConfirmModal({
 
         <div className="mt-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Реквизиты
+            Общая информация
           </div>
           <dl className="mt-1 rounded-lg border border-slate-200 bg-slate-50/60 px-3">
             {row("Заказ", summary.orderId, true)}
@@ -2662,17 +2658,17 @@ function ReleaseIssueConfirmModal({
             {row("ФИО пациента", summary.patientName)}
             {row("№ ИБ", summary.caseNumber, true)}
             {row("Куда выдано", summary.destination)}
+            {row("Технологический процесс выполнил", summary.processBy)}
+            {row("Технологический процесс одобрил", summary.approvedBy)}
           </dl>
         </div>
 
         <div className="mt-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Сводка
+            Отклонения
           </div>
           <dl className="mt-1 rounded-lg border border-slate-200 bg-slate-50/60 px-3">
-            {row("Отклонения (сводка)", summary.deviations)}
-            {row("Технологический процесс выполнил", summary.processBy)}
-            {row("Технологический процесс одобрил", summary.approvedBy)}
+            {row("Отклонения", summary.deviations)}
           </dl>
         </div>
 

@@ -75,6 +75,32 @@ export function getProductionStageCompletersDisplay(
   return parts.length ? parts.join(", ") : "—";
 }
 
+function collectAllDeviationsForReleaseSummary(order: ProductionOrder): string {
+  const items: string[] = [];
+  for (const st of order.stages) {
+    if (!st?.steps?.length) continue;
+    for (const step of st.steps) {
+      const fv = step.fieldValues ?? {};
+      const devFlagRaw = fv.devFlag;
+      const devNotesRaw = fv.devNotes;
+      const devFlagYes =
+        devFlagRaw === "Да" || devFlagRaw === true || devFlagRaw === "да";
+      const devNotes = typeof devNotesRaw === "string" ? devNotesRaw.trim() : "";
+
+      if (step.deviationFlag) {
+        const note = step.deviationNotes?.trim();
+        items.push(note ? `${st.name}: ${note}` : `${st.name}: отклонение`);
+        continue;
+      }
+
+      if (devFlagYes || devNotes) {
+        items.push(devNotes ? `${st.name}: ${devNotes}` : `${st.name}: отклонение`);
+      }
+    }
+  }
+  return items.length ? items.join("\n") : "—";
+}
+
 /** Данные для модалки подтверждения и печати акта выдачи. */
 export function getReleaseIssueConfirmSummary(
   order: ProductionOrder,
@@ -92,7 +118,7 @@ export function getReleaseIssueConfirmSummary(
     patientName: patientName || "—",
     caseNumber: caseNumber || "—",
     destination: dashField(rv.where),
-    deviations: dashField(rv.devSummary),
+    deviations: collectAllDeviationsForReleaseSummary(order),
     processBy: getProductionStageCompletersDisplay(order),
     approvedBy: techApprovedBy || dashField(rv.approvedBy as FieldValue),
   };
