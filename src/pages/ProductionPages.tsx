@@ -109,9 +109,9 @@ function ensureReleaseDeviationLayout(fields: FieldDefinition[]): FieldDefinitio
   return [
     ...head,
     deviationBlock[0]!, // section header
-    summary,
     deviationBlock[1]!, // devFlag
     deviationBlock[2]!, // devNotes
+    summary,
     ...filteredTail,
   ];
 }
@@ -232,6 +232,9 @@ function productionCompletersSourceBadge(
 /** Как у ref-полей (ИБ и т.д.): голубая рамка и фон. */
 const CROSS_STAGE_READONLY_INPUT_CLS =
   "w-full cursor-default rounded-lg border border-sky-400 bg-sky-50/60 px-3 py-2 text-sm text-slate-800 outline-none shadow-sm";
+
+const RELEASE_READONLY_INPUT_CLS =
+  "w-full cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 outline-none shadow-sm";
 
 /** Локализованная подпись статуса заказа на производство. */
 function formatOrderStatus(status: ProductionOrderStatus): string {
@@ -3776,9 +3779,11 @@ function FormFields({
 
     const value = resolveValue(field);
     const crossRef =
-      isCrossStageRefField(field) && field.refStageIndex !== undefined
-        ? refFieldCrossStageBadge(order, field.refStageIndex)
-        : null;
+      stageType === "release"
+        ? null
+        : isCrossStageRefField(field) && field.refStageIndex !== undefined
+          ? refFieldCrossStageBadge(order, field.refStageIndex)
+          : null;
 
     const refBadgeEl = crossRef ? (
       <span
@@ -3876,9 +3881,11 @@ function FormFields({
 
     const value = resolveValue(field);
     const crossRef =
-      isCrossStageRefField(field) && field.refStageIndex !== undefined
-        ? refFieldCrossStageBadge(order, field.refStageIndex)
-        : null;
+      stageType === "release"
+        ? null
+        : isCrossStageRefField(field) && field.refStageIndex !== undefined
+          ? refFieldCrossStageBadge(order, field.refStageIndex)
+          : null;
 
     const sentimentBadge =
       sentiment === "positive" ? (
@@ -4392,7 +4399,7 @@ function FormFields({
                       data-production-field={f.id}
                     >
                       <div className="mb-1 text-xs font-medium text-slate-600">
-                        {f.label}
+                        Сводка
                       </div>
                       <textarea
                         rows={4}
@@ -4400,7 +4407,7 @@ function FormFields({
                         tabIndex={-1}
                         value={str}
                         className="w-full cursor-default rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 shadow-sm whitespace-pre-wrap min-h-[5.5rem] resize-y"
-                        aria-label={f.label}
+                        aria-label="Сводка"
                       />
                     </label>
                   );
@@ -4439,15 +4446,53 @@ function FormFields({
                   renderDeviationStack()
                 ) : (
                   <div className="space-y-3">
-                    {g.fields.map((field) => renderFieldRow(field))}
-                    {stageType === "release" && g.id === "grp-default" ? (
-                      <div className="pt-1 space-y-3">
+                    {(() => {
+                      if (!(stageType === "release" && g.id === "grp-default")) {
+                        return g.fields.map((field) => renderFieldRow(field));
+                      }
+
+                      const byId = new Map(g.fields.map((f) => [f.id, f] as const));
+                      const fioRef = byId.get("fioRef") ?? null;
+                      const ibRef = byId.get("ibRef") ?? null;
+                      const productIdRef = byId.get("productIdRef") ?? null;
+                      const where = byId.get("where") ?? null;
+
+                      const used = new Set(
+                        ["fioRef", "ibRef", "productIdRef", "where"].filter(Boolean),
+                      );
+                      const rest = g.fields.filter((f) => !used.has(f.id));
+
+                      return (
+                        <>
+                          {fioRef ? renderFieldRow(fioRef) : null}
+                          {ibRef || productIdRef ? (
+                            <div className="flex flex-col gap-4 md:flex-row md:items-end md:gap-3">
+                              {ibRef ? (
+                                <div className="min-w-0 md:shrink-0">
+                                  {renderFieldCustom(
+                                    ibRef,
+                                    "md:w-[26ch] md:max-w-[26ch]",
+                                  )}
+                                </div>
+                              ) : null}
+                              {productIdRef ? (
+                                <div className="min-w-0 md:shrink-0">
+                                  {renderFieldCustom(
+                                    productIdRef,
+                                    "md:w-[26ch] md:max-w-[26ch]",
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+                          {rest.map((f) => renderFieldRow(f))}
+                          <div className="pt-1 space-y-3">
                         <div className="block">
                           <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-1">
                             <div className="text-xs font-medium text-slate-600">
                               Технологический процесс выполнил
                             </div>
-                            {productionCompletersSourceBadge(order) ? (
+                            {stageType !== "release" && productionCompletersSourceBadge(order) ? (
                               <span
                                 className="inline-flex max-w-full shrink-0 items-center truncate rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-900 ring-1 ring-inset ring-sky-300/60"
                                 title={productionCompletersSourceBadge(order)!.title}
@@ -4461,7 +4506,7 @@ function FormFields({
                             readOnly
                             tabIndex={-1}
                             value={getProductionStageCompletersDisplay(order)}
-                            className={CROSS_STAGE_READONLY_INPUT_CLS}
+                            className={RELEASE_READONLY_INPUT_CLS}
                             aria-label="Технологический процесс выполнил"
                           />
                         </div>
@@ -4478,8 +4523,11 @@ function FormFields({
                             aria-label="Одобрил"
                           />
                         </div>
-                      </div>
-                    ) : null}
+                          </div>
+                          {where ? renderFieldRow(where) : null}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </NestedRailBlock>
