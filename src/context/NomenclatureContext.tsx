@@ -8,7 +8,10 @@ import {
 } from "react";
 import { MOCK_CATALOG, type CatalogItem } from "../mocks/balancesData";
 
-export type SpecResultType = "Да/нет" | "Не применимо" | "В работе";
+/** Единственный допустимый тип результата строки спецификации. */
+export type SpecResultType = "Да/нет";
+
+export const SPEC_RESULT_TYPE_OPTIONS = ["Да/нет"] as const satisfies readonly SpecResultType[];
 
 export type SpecificationItem = {
   id: string;
@@ -75,10 +78,10 @@ function createDefaultSpecification(): SpecificationItem[] {
   }));
 }
 
-function normalizeSpecResultType(value: unknown): SpecResultType {
-  // Backward-compat for older prototypes where values were split into "Да" / "Нет".
+export function normalizeSpecResultType(value: unknown): SpecResultType {
+  // Backward-compat: старые значения «Не применимо», «В работе» и раздельные «Да»/«Нет».
+  if (value === "Да/нет") return "Да/нет";
   if (value === "Да" || value === "Нет") return "Да/нет";
-  if (value === "Да/нет" || value === "Не применимо" || value === "В работе") return value;
   return "Да/нет";
 }
 

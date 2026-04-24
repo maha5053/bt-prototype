@@ -1,4 +1,8 @@
-import type { SpecificationItem, SpecResultType } from "../context/NomenclatureContext";
+import {
+  normalizeSpecResultType,
+  type SpecificationItem,
+  type SpecResultType,
+} from "../context/NomenclatureContext";
 
 export type SpecTemplateItem = {
   name: string;
@@ -56,7 +60,7 @@ export function upsertSpecTemplate(input: {
     .map((r, idx) => ({
       name: r.name,
       requirement: r.requirement,
-      resultType: r.resultType,
+      resultType: normalizeSpecResultType(r.resultType),
       comment: r.comment,
       sortOrder: idx + 1,
     }))
@@ -115,7 +119,7 @@ export function buildSpecRowsFromTemplate(
       id,
       name: it.name,
       requirement: it.requirement,
-      resultType: it.resultType,
+      resultType: normalizeSpecResultType(it.resultType),
       comment: it.comment ?? "",
       sortOrder: idx + 1,
       confirmed: true,

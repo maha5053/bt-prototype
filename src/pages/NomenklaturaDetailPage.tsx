@@ -8,6 +8,7 @@ import {
 } from "../mocks/balancesData";
 import {
   NomenclatureProvider,
+  SPEC_RESULT_TYPE_OPTIONS,
   useNomenclature,
   type SpecificationItem,
   type SpecResultType,
@@ -724,13 +725,11 @@ function NomenklaturaDetailContent() {
                                 }
                                 className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
                               >
-                                {(["Да/нет", "Не применимо", "В работе"] as const).map(
-                                  (v) => (
-                                    <option key={v} value={v}>
-                                      {v}
-                                    </option>
-                                  ),
-                                )}
+                                {SPEC_RESULT_TYPE_OPTIONS.map((v) => (
+                                  <option key={v} value={v}>
+                                    {v}
+                                  </option>
+                                ))}
                               </select>
                             )}
                           </td>
