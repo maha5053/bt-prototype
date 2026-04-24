@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { Combobox } from "@headlessui/react";
 import {
   NomenclatureProvider,
   useNomenclature,
@@ -12,7 +13,11 @@ import {
   type ReceiptIncomingIndicatorValue,
   type ReceiptLine,
 } from "../mocks/receiptsData";
-import { getAllStoragePlaces, formatRuDate } from "../mocks/balancesData";
+import {
+  getAllStoragePlaces,
+  formatRuDate,
+  type CatalogItem,
+} from "../mocks/balancesData";
 
 const INCOMING_INDICATOR_OPTIONS = [
   "Не определено",
@@ -79,6 +84,17 @@ function ReceiptsListContent() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [showDevTools, setShowDevTools] = useState(false);
+  const STORAGE_KEY = "bio-receipts";
+
+  const clearLocalStorage = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      window.location.reload();
+    } catch {
+      // ignore
+    }
+  };
 
   const handleCreate = () => {
     const newSession = createSession();
@@ -112,6 +128,66 @@ function ReceiptsListContent() {
           Поступления
         </h1>
       </header>
+
+      {/* Dev tools modal */}
+      {showDevTools && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 pt-16"
+          onClick={() => setShowDevTools(false)}
+        >
+          <div
+            className="relative w-full max-w-sm rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Инструменты разработчика"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">
+                Инструменты разработчика
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowDevTools(false)}
+                className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label="Закрыть"
+              >
+                <svg
+                  className="size-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <p className="mb-4 text-sm text-slate-600">
+              Очистка localStorage удалит только данные поступлений.
+            </p>
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowDevTools(false)}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={clearLocalStorage}
+                className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-red-500"
+              >
+                Очистить localStorage
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mb-4 flex items-center gap-3">
         <input
@@ -280,6 +356,28 @@ function ReceiptsListContent() {
           </div>
         </footer>
       </div>
+
+      {/* Dev tools button - bottom right, subtle */}
+      <button
+        type="button"
+        onClick={() => setShowDevTools(true)}
+        className="fixed bottom-4 right-4 rounded-md p-2 text-slate-300 hover:bg-slate-100 hover:text-slate-600"
+        aria-label="Инструменты разработчика"
+        title="Инструменты разработчика"
+      >
+        <svg
+          className="size-5"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+      </button>
     </div>
   );
 }
@@ -321,6 +419,7 @@ function ReceiptsSessionContent() {
   // Add line modal state
   const places = useMemo(() => getAllStoragePlaces(), []);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addNomSearch, setAddNomSearch] = useState("");
   const [newRow, setNewRow] = useState({
     nomenclatureId: "",
     lot: "",
@@ -342,7 +441,17 @@ function ReceiptsSessionContent() {
 
   const isEditable = session?.status === "draft";
 
-  const selectedCatalogItem = useMemo(() => {
+  const filteredCatalog = useMemo(() => {
+    const q = addNomSearch.trim().toLowerCase();
+    const base = [...MOCK_CATALOG].sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    if (!q) return base;
+    return base.filter((c) => {
+      const hay = `${c.name} ${c.manufacturer} ${c.group} ${c.catalogNumber}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [addNomSearch]);
+
+  const selectedCatalogItem = useMemo<CatalogItem | null>(() => {
     if (!newRow.nomenclatureId) return null;
     return MOCK_CATALOG.find((c) => c.id === newRow.nomenclatureId) ?? null;
   }, [newRow.nomenclatureId]);
@@ -443,6 +552,7 @@ function ReceiptsSessionContent() {
       quantity: "",
       place: "",
     });
+    setAddNomSearch("");
     setAddModalOpen(false);
     setAfterAddIncomingLineIndex(newLineIndex);
   };
@@ -749,6 +859,7 @@ function ReceiptsSessionContent() {
             onClick={() => {
               setAddModalOpen(true);
               setQtyError("");
+              setAddNomSearch("");
             }}
             className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500"
           >
@@ -777,6 +888,7 @@ function ReceiptsSessionContent() {
           onClick={() => {
             setAddModalOpen(false);
             setQtyError("");
+            setAddNomSearch("");
           }}
         >
           <div
@@ -795,6 +907,7 @@ function ReceiptsSessionContent() {
                 onClick={() => {
                   setAddModalOpen(false);
                   setQtyError("");
+                  setAddNomSearch("");
                 }}
                 className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                 aria-label="Закрыть"
@@ -819,25 +932,72 @@ function ReceiptsSessionContent() {
                 <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
                   Товар <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={newRow.nomenclatureId}
-                  onChange={(e) =>
+                <Combobox
+                  value={selectedCatalogItem}
+                  onChange={(item: CatalogItem | null) => {
                     setNewRow((r) => ({
                       ...r,
-                      nomenclatureId: e.target.value,
+                      nomenclatureId: item?.id ?? "",
                       lot: "",
-                    }))
-                  }
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-                  autoFocus
+                    }));
+                    setAddNomSearch("");
+                  }}
                 >
-                  <option value="">Выберите товар...</option>
-                  {MOCK_CATALOG.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  <div className="relative">
+                    <Combobox.Input
+                      className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 pr-9 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                      placeholder="Выберите товар..."
+                      autoFocus
+                      displayValue={(item: CatalogItem | null) =>
+                        item ? `${item.name} — ${item.manufacturer}` : ""
+                      }
+                      onChange={(event) => setAddNomSearch(event.target.value)}
+                    />
+                    <Combobox.Button className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600">
+                      <svg
+                        className="h-4 w-4"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </Combobox.Button>
+                    <Combobox.Options className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-md border border-slate-200 bg-white py-1 text-sm shadow-lg focus:outline-none">
+                      {filteredCatalog.length === 0 ? (
+                        <div className="px-3 py-2 text-slate-500">
+                          Ничего не найдено.
+                        </div>
+                      ) : (
+                        filteredCatalog.map((c) => (
+                          <Combobox.Option
+                            key={c.id}
+                            value={c}
+                            className={({ active }) =>
+                              `cursor-pointer select-none px-3 py-2 ${
+                                active ? "bg-emerald-600 text-white" : "text-slate-700"
+                              }`
+                            }
+                          >
+                            <div className="flex items-baseline justify-between gap-3">
+                              <span className="font-medium">{c.name}</span>
+                              <span className="shrink-0 text-xs opacity-80">
+                                {c.catalogNumber}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 text-xs opacity-80">
+                              {c.manufacturer} · {c.group}
+                            </div>
+                          </Combobox.Option>
+                        ))
+                      )}
+                    </Combobox.Options>
+                  </div>
+                </Combobox>
               </div>
 
               <div>
@@ -965,6 +1125,7 @@ function ReceiptsSessionContent() {
                 onClick={() => {
                   setAddModalOpen(false);
                   setQtyError("");
+                  setAddNomSearch("");
                 }}
                 className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
               >
