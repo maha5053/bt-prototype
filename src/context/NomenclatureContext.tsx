@@ -17,6 +17,7 @@ export type SpecificationItem = {
   resultType: SpecResultType;
   comment: string;
   sortOrder?: number;
+  confirmed?: boolean;
 };
 
 export type NomenclatureEntry = CatalogItem & {
