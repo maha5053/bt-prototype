@@ -25,6 +25,7 @@ export interface QuarantineEntry {
   rejectionReasonOther?: string;
   rejectionComment?: string;
   destinationPlace: string;
+  releaseComment?: string;
 }
 
 export const INITIAL_QUARANTINE_ENTRIES: QuarantineEntry[] = [

@@ -43,6 +43,7 @@ type QuarantineContextValue = {
     rejectionComment?: string,
   ) => void;
   updateLabResult: (id: string, labResult: string) => void;
+  allowEntry: (id: string, destinationPlace: string, comment?: string) => void;
 };
 
 const QuarantineContext = createContext<QuarantineContextValue | null>(null);
@@ -93,9 +94,32 @@ export function QuarantineProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const allowEntry = useCallback(
+    (id: string, destinationPlace: string, comment?: string) => {
+      setEntries((prev) => {
+        const resolvedAt = new Date().toISOString();
+        const releaseComment = comment?.trim();
+        const next = prev.map((e) =>
+          e.id === id
+            ? {
+                ...e,
+                status: "разрешён" as const,
+                resolvedAt,
+                destinationPlace,
+                ...(releaseComment ? { releaseComment } : {}),
+              }
+            : e,
+        );
+        saveToStorage(next);
+        return next;
+      });
+    },
+    [],
+  );
+
   const value = useMemo(
-    () => ({ entries, updateStatus, updateLabResult }),
-    [entries, updateStatus, updateLabResult],
+    () => ({ entries, updateStatus, updateLabResult, allowEntry }),
+    [entries, updateStatus, updateLabResult, allowEntry],
   );
 
   return (

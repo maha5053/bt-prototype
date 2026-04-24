@@ -7,6 +7,7 @@ import {
   type RejectionReason,
 } from "../context/QuarantineContext";
 import { formatRuDate } from "../mocks/balancesData";
+import { ALL_STORAGE_PLACES_META } from "../mocks/storagePlacesMeta";
 
 const PAGE_SIZE = 10;
 const STORAGE_KEY = "bio-quarantine";
@@ -20,7 +21,7 @@ export function KarantinPage() {
 }
 
 function KarantinContent() {
-  const { entries, updateStatus, updateLabResult } = useQuarantine();
+  const { entries, updateStatus, updateLabResult, allowEntry } = useQuarantine();
   const [search, setSearch] = useState("");
   const [groupFilter, setGroupFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
@@ -46,6 +47,7 @@ function KarantinContent() {
   // Modal state
   type ModalState =
     | { type: "lab"; id: string; value: string }
+    | { type: "allow"; id: string; name: string; lot: string }
     | {
         type: "reject";
         id: string;
@@ -63,6 +65,9 @@ function KarantinContent() {
   const [rejectReasonOther, setRejectReasonOther] = useState("");
   const [rejectComment, setRejectComment] = useState("");
   const [rejectError, setRejectError] = useState("");
+  const [allowPlace, setAllowPlace] = useState("");
+  const [allowComment, setAllowComment] = useState("");
+  const [allowError, setAllowError] = useState("");
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -154,6 +159,20 @@ function KarantinContent() {
     setRejectComment("");
     setRejectError("");
     showToast("error", "Партия отправлена в брак");
+  };
+
+  const submitAllow = () => {
+    if (!modal || modal.type !== "allow") return;
+    if (!allowPlace) {
+      setAllowError("Укажите место хранения, куда выводится партия из карантина.");
+      return;
+    }
+    allowEntry(modal.id, allowPlace, allowComment);
+    setModal(null);
+    setAllowPlace("");
+    setAllowComment("");
+    setAllowError("");
+    showToast("success", "Партия разрешена к использованию");
   };
 
   const clearQuarantineLocalStorage = () => {
@@ -336,6 +355,140 @@ function KarantinContent() {
                 className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white shadow hover:bg-slate-700"
               >
                 Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Allow release modal */}
+      {modal && modal.type === "allow" && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 pt-16"
+          onClick={() => {
+            setModal(null);
+            setAllowPlace("");
+            setAllowComment("");
+            setAllowError("");
+          }}
+        >
+          <div
+            className="relative w-full max-w-lg rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Разрешить к использованию"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">
+                Разрешить к использованию
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setModal(null);
+                  setAllowPlace("");
+                  setAllowComment("");
+                  setAllowError("");
+                }}
+                className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label="Закрыть"
+              >
+                <svg
+                  className="size-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <p className="mb-3 text-sm text-slate-600">
+              <strong>{modal.name}</strong>, лот{" "}
+              <span className="font-mono">{modal.lot}</span>
+            </p>
+
+            <div className="mb-4">
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                Место хранения <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={allowPlace}
+                onChange={(e) => {
+                  setAllowPlace(e.target.value);
+                  if (allowError) setAllowError("");
+                }}
+                className={`w-full rounded-md border bg-white px-3 py-2 text-sm outline-none ${
+                  allowError && !allowPlace
+                    ? "border-red-400 ring-2 ring-red-200"
+                    : "border-slate-300"
+                } focus:border-slate-400 focus:ring-2 focus:ring-slate-200`}
+                autoFocus
+              >
+                <option value="">Выберите место...</option>
+                {ALL_STORAGE_PLACES_META.filter((p) => !p.quarantineZone).map(
+                  (p) => (
+                    <option
+                      key={p.name}
+                      value={p.name}
+                      title={
+                        p.writeOffOnTransfer
+                          ? "Зона настроена на автоматическое списание при перемещении"
+                          : undefined
+                      }
+                    >
+                      {p.name}
+                      {p.writeOffOnTransfer ? " · автосписание" : ""}
+                    </option>
+                  ),
+                )}
+              </select>
+            </div>
+
+            <div className="mb-4">
+              <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                Комментарий
+              </label>
+              <textarea
+                value={allowComment}
+                onChange={(e) => setAllowComment(e.target.value)}
+                placeholder="Необязательный комментарий..."
+                rows={2}
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+              />
+            </div>
+
+            {allowError && (
+              <p className="mb-3 text-xs text-red-600" role="alert">
+                {allowError}
+              </p>
+            )}
+
+            <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setModal(null);
+                  setAllowPlace("");
+                  setAllowComment("");
+                  setAllowError("");
+                }}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={submitAllow}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-500"
+              >
+                OK
               </button>
             </div>
           </div>
@@ -677,11 +830,15 @@ function KarantinContent() {
                                 type="button"
                                 onClick={() => {
                                   setOpenMenuId(null);
-                                  updateStatus(e.id, "разрешён");
-                                  showToast(
-                                    "success",
-                                    "Партия разрешена к использованию",
-                                  );
+                                  setModal({
+                                    type: "allow",
+                                    id: e.id,
+                                    name: e.nomenclatureName,
+                                    lot: e.lot,
+                                  });
+                                  setAllowPlace(e.destinationPlace || "");
+                                  setAllowComment("");
+                                  setAllowError("");
                                 }}
                                 className="flex w-full items-center gap-2 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50"
                               >
