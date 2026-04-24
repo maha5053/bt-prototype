@@ -114,15 +114,22 @@ function NomenklaturaDetailContent() {
     return null;
   };
 
-  const saveSpec = () => {
-    const bad = validateSpec(specDraft);
+  const persistSpecDraft = (nextRows: SpecificationItem[]) => {
+    const bad = validateSpec(nextRows);
     if (bad) {
       setSpecError(bad);
-      return;
+      return false;
     }
-    updateItem(catalog.id, { specification: specDraft });
+    updateItem(catalog.id, { specification: nextRows });
     setSpecToast("Спецификация сохранена");
     setTimeout(() => setSpecToast(null), 2500);
+    return true;
+  };
+
+  const confirmSpecRow = (id: string) => {
+    const nextRows = specDraft.map((r) => (r.id === id ? { ...r, confirmed: true } : r));
+    if (!persistSpecDraft(nextRows)) return;
+    setSpecDraft(nextRows);
   };
 
   return (
@@ -377,22 +384,6 @@ function NomenklaturaDetailContent() {
             <h2 id="spec-heading" className="text-lg font-semibold text-slate-900">
               Спецификация
             </h2>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={addSpecRow}
-                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-              >
-                Добавить элемент
-              </button>
-              <button
-                type="button"
-                onClick={saveSpec}
-                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-500"
-              >
-                Сохранить
-              </button>
-            </div>
           </div>
 
           {specError && (
@@ -404,224 +395,245 @@ function NomenklaturaDetailContent() {
           {specDraft.length === 0 ? (
             <div className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">
               Пока нет элементов спецификации.
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={addSpecRow}
+                  className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Добавить элемент
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="min-w-[1100px] w-full border-collapse text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                      <th className="px-4 py-3 font-medium">Наименование *</th>
-                      <th className="px-4 py-3 font-medium">Требование *</th>
-                      <th className="px-4 py-3 font-medium whitespace-nowrap">
-                        Тип результата *
-                      </th>
-                      <th className="px-4 py-3 font-medium">Комментарий</th>
-                      <th className="px-4 py-3 font-medium whitespace-nowrap">
-                        Поле сортировки
-                      </th>
-                      <th className="px-4 py-3 font-medium w-10"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {specDraft.map((row) => (
-                      <tr key={row.id} className="align-top">
-                        <td className="px-4 py-3">
-                          {row.confirmed ? (
-                            <button
-                              type="button"
-                              onClick={() => updateSpecRow(row.id, { confirmed: false })}
-                              className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-slate-800 hover:border-slate-300 hover:bg-slate-50"
-                              title="Редактировать"
-                            >
-                              {row.name || "—"}
-                            </button>
-                          ) : (
-                            <>
-                              <input
-                                value={row.name}
-                                maxLength={128}
-                                onChange={(e) =>
-                                  updateSpecRow(row.id, { name: e.target.value })
-                                }
-                                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-                                placeholder="Наименование…"
-                              />
-                              <div className="mt-1 text-[10px] text-slate-400">
-                                {row.name.length}/128
-                              </div>
-                            </>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {row.confirmed ? (
-                            <button
-                              type="button"
-                              onClick={() => updateSpecRow(row.id, { confirmed: false })}
-                              className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                              title="Редактировать"
-                            >
-                              <span className="line-clamp-3">
-                                {row.requirement || "—"}
-                              </span>
-                            </button>
-                          ) : (
-                            <>
-                              <textarea
-                                value={row.requirement}
-                                maxLength={1024}
-                                onChange={(e) =>
-                                  updateSpecRow(row.id, {
-                                    requirement: e.target.value,
-                                  })
-                                }
-                                rows={3}
-                                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-                                placeholder="Требование…"
-                              />
-                              <div className="mt-1 text-[10px] text-slate-400">
-                                {row.requirement.length}/1024
-                              </div>
-                            </>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {row.confirmed ? (
-                            <button
-                              type="button"
-                              onClick={() => updateSpecRow(row.id, { confirmed: false })}
-                              className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                              title="Редактировать"
-                            >
-                              {row.resultType}
-                            </button>
-                          ) : (
-                            <select
-                              value={row.resultType}
-                              onChange={(e) =>
-                                updateSpecRow(row.id, {
-                                  resultType: e.target.value as SpecResultType,
-                                })
-                              }
-                              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-                            >
-                              {(["Да", "Нет", "Не применимо", "В работе"] as const).map(
-                                (v) => (
-                                  <option key={v} value={v}>
-                                    {v}
-                                  </option>
-                                ),
-                              )}
-                            </select>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {row.confirmed ? (
-                            <button
-                              type="button"
-                              onClick={() => updateSpecRow(row.id, { confirmed: false })}
-                              className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                              title="Редактировать"
-                            >
-                              <span className="line-clamp-3">
-                                {row.comment || "—"}
-                              </span>
-                            </button>
-                          ) : (
-                            <>
-                              <textarea
-                                value={row.comment}
-                                maxLength={1024}
-                                onChange={(e) =>
-                                  updateSpecRow(row.id, { comment: e.target.value })
-                                }
-                                rows={3}
-                                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-                                placeholder="Комментарий…"
-                              />
-                              <div className="mt-1 text-[10px] text-slate-400">
-                                {row.comment.length}/1024
-                              </div>
-                            </>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {row.confirmed ? (
-                            <button
-                              type="button"
-                              onClick={() => updateSpecRow(row.id, { confirmed: false })}
-                              className="w-28 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                              title="Редактировать"
-                            >
-                              {row.sortOrder ?? "—"}
-                            </button>
-                          ) : (
-                            <input
-                              type="number"
-                              value={row.sortOrder ?? ""}
-                              onChange={(e) =>
-                                updateSpecRow(row.id, {
-                                  sortOrder:
-                                    e.target.value === ""
-                                      ? undefined
-                                      : Number(e.target.value),
-                                })
-                              }
-                              className="w-28 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-                              placeholder="—"
-                            />
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            {!row.confirmed && (
-                              <button
-                                type="button"
-                                onClick={() => updateSpecRow(row.id, { confirmed: true })}
-                                className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-500"
-                                title="OK"
-                              >
-                                OK
-                              </button>
-                            )}
-                            {row.confirmed && (
+            <>
+              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="min-w-[1100px] w-full border-collapse text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                        <th className="px-4 py-3 font-medium">Наименование *</th>
+                        <th className="px-4 py-3 font-medium">Требование *</th>
+                        <th className="px-4 py-3 font-medium whitespace-nowrap">
+                          Тип результата *
+                        </th>
+                        <th className="px-4 py-3 font-medium">Комментарий</th>
+                        <th className="px-4 py-3 font-medium whitespace-nowrap">
+                          Поле сортировки
+                        </th>
+                        <th className="px-4 py-3 font-medium w-10"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {specDraft.map((row) => (
+                        <tr key={row.id} className="align-top">
+                          <td className="px-4 py-3">
+                            {row.confirmed ? (
                               <button
                                 type="button"
                                 onClick={() => updateSpecRow(row.id, { confirmed: false })}
-                                className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-slate-800 hover:border-slate-300 hover:bg-slate-50"
                                 title="Редактировать"
                               >
-                                ✎
+                                {row.name || "—"}
                               </button>
+                            ) : (
+                              <>
+                                <input
+                                  value={row.name}
+                                  maxLength={128}
+                                  onChange={(e) =>
+                                    updateSpecRow(row.id, { name: e.target.value })
+                                  }
+                                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                                  placeholder="Наименование…"
+                                />
+                                <div className="mt-1 text-[10px] text-slate-400">
+                                  {row.name.length}/128
+                                </div>
+                              </>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => removeSpecRow(row.id)}
-                              className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                              title="Удалить"
-                              aria-label="Удалить"
-                            >
-                              <svg
-                                className="size-4"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
+                          </td>
+                          <td className="px-4 py-3">
+                            {row.confirmed ? (
+                              <button
+                                type="button"
+                                onClick={() => updateSpecRow(row.id, { confirmed: false })}
+                                className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                                title="Редактировать"
                               >
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                              </svg>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                                <span className="line-clamp-3">
+                                  {row.requirement || "—"}
+                                </span>
+                              </button>
+                            ) : (
+                              <>
+                                <textarea
+                                  value={row.requirement}
+                                  maxLength={1024}
+                                  onChange={(e) =>
+                                    updateSpecRow(row.id, {
+                                      requirement: e.target.value,
+                                    })
+                                  }
+                                  rows={3}
+                                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                                  placeholder="Требование…"
+                                />
+                                <div className="mt-1 text-[10px] text-slate-400">
+                                  {row.requirement.length}/1024
+                                </div>
+                              </>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {row.confirmed ? (
+                              <button
+                                type="button"
+                                onClick={() => updateSpecRow(row.id, { confirmed: false })}
+                                className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                                title="Редактировать"
+                              >
+                                {row.resultType}
+                              </button>
+                            ) : (
+                              <select
+                                value={row.resultType}
+                                onChange={(e) =>
+                                  updateSpecRow(row.id, {
+                                    resultType: e.target.value as SpecResultType,
+                                  })
+                                }
+                                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                              >
+                                {(["Да", "Нет", "Не применимо", "В работе"] as const).map(
+                                  (v) => (
+                                    <option key={v} value={v}>
+                                      {v}
+                                    </option>
+                                  ),
+                                )}
+                              </select>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {row.confirmed ? (
+                              <button
+                                type="button"
+                                onClick={() => updateSpecRow(row.id, { confirmed: false })}
+                                className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                                title="Редактировать"
+                              >
+                                <span className="line-clamp-3">{row.comment || "—"}</span>
+                              </button>
+                            ) : (
+                              <>
+                                <textarea
+                                  value={row.comment}
+                                  maxLength={1024}
+                                  onChange={(e) =>
+                                    updateSpecRow(row.id, { comment: e.target.value })
+                                  }
+                                  rows={3}
+                                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                                  placeholder="Комментарий…"
+                                />
+                                <div className="mt-1 text-[10px] text-slate-400">
+                                  {row.comment.length}/1024
+                                </div>
+                              </>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {row.confirmed ? (
+                              <button
+                                type="button"
+                                onClick={() => updateSpecRow(row.id, { confirmed: false })}
+                                className="w-28 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                                title="Редактировать"
+                              >
+                                {row.sortOrder ?? "—"}
+                              </button>
+                            ) : (
+                              <input
+                                type="number"
+                                value={row.sortOrder ?? ""}
+                                onChange={(e) =>
+                                  updateSpecRow(row.id, {
+                                    sortOrder:
+                                      e.target.value === ""
+                                        ? undefined
+                                        : Number(e.target.value),
+                                  })
+                                }
+                                className="w-28 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                                placeholder="—"
+                              />
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              {!row.confirmed && (
+                                <button
+                                  type="button"
+                                  onClick={() => confirmSpecRow(row.id)}
+                                  className="rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-500"
+                                  title="OK"
+                                >
+                                  OK
+                                </button>
+                              )}
+                              {row.confirmed && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateSpecRow(row.id, { confirmed: false })
+                                  }
+                                  className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                  title="Редактировать"
+                                >
+                                  ✎
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => removeSpecRow(row.id)}
+                                className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                title="Удалить"
+                                aria-label="Удалить"
+                              >
+                                <svg
+                                  className="size-4"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <line x1="18" y1="6" x2="6" y2="18" />
+                                  <line x1="6" y1="6" x2="18" y2="18" />
+                                </svg>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+
+              <div className="flex items-center justify-start">
+                <button
+                  type="button"
+                  onClick={addSpecRow}
+                  className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Добавить элемент
+                </button>
+              </div>
+            </>
           )}
         </section>
       ) : null}
