@@ -21,6 +21,7 @@ import {
 } from "./pages/InventoryPages";
 import { WriteOffListPage, WriteOffSessionPage } from "./pages/WriteOffPages";
 import { WriteOffPrintPage } from "./pages/WriteOffPrintPage";
+import { ReceiptsListPage, ReceiptsSessionPage } from "./pages/ReceiptsPages";
 import {
   ProductionListPage,
   ProductionOrderPage,
@@ -58,7 +59,11 @@ const router = createBrowserRouter(
             },
             {
               path: "postupleniya",
-              element: <SectionPage title="Поступления" />,
+              element: <ReceiptsListPage />,
+            },
+            {
+              path: "postupleniya/:receiptId",
+              element: <ReceiptsSessionPage />,
             },
             { path: "balance", element: <BalancePage /> },
             {

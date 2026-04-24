@@ -1,0 +1,965 @@
+import { useMemo, useRef, useState, useEffect } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ReceiptsProvider, useReceipts } from "../context/ReceiptsContext";
+import { MOCK_CATALOG } from "../mocks/receiptsData";
+import { getAllStoragePlaces, formatRuDate } from "../mocks/balancesData";
+
+const PAGE_SIZE = 15;
+
+/* ===========================
+   LIST PAGE
+   =========================== */
+
+export function ReceiptsListPage() {
+  return (
+    <ReceiptsProvider>
+      <ReceiptsListContent />
+    </ReceiptsProvider>
+  );
+}
+
+function ReceiptsListContent() {
+  const { sessions, createSession } = useReceipts();
+  const navigate = useNavigate();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
+
+  const handleCreate = () => {
+    const newSession = createSession();
+    navigate(`/sklad/postupleniya/${newSession.id}`);
+  };
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return sessions.filter((s) => {
+      if (statusFilter !== "all" && s.status !== statusFilter) return false;
+      if (!q) return true;
+      const names = s.lines.map((l) => l.nomenclatureName.toLowerCase()).join(" ");
+      const lots = s.lines.map((l) => l.lot.toLowerCase()).join(" ");
+      return (
+        names.includes(q) ||
+        lots.includes(q) ||
+        s.id.toLowerCase().includes(q) ||
+        s.createdBy.toLowerCase().includes(q)
+      );
+    });
+  }, [sessions, statusFilter, search]);
+
+  const total = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, total);
+  const shown = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  return (
+    <div className="p-6 md:p-8 relative">
+      <header className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          Поступления
+        </h1>
+      </header>
+
+      <div className="mb-4 flex items-center gap-3">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => {
+            setPage(1);
+            setSearch(e.target.value);
+          }}
+          placeholder="Поиск по товару или лоту…"
+          className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setPage(1);
+            setStatusFilter(e.target.value);
+          }}
+          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+          aria-label="Статус"
+        >
+          <option value="all">Все</option>
+          <option value="draft">В процессе</option>
+          <option value="completed">Завершено</option>
+        </select>
+        <button
+          onClick={handleCreate}
+          className="shrink-0 rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-500"
+        >
+          Создать поступление
+        </button>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                <th className="px-4 py-3 font-medium">Номер</th>
+                <th className="px-4 py-3 font-medium">Дата</th>
+                <th className="px-4 py-3 font-medium">Создал</th>
+                <th className="px-4 py-3 font-medium">Товар</th>
+                <th className="px-4 py-3 font-medium">Лоты</th>
+                <th className="px-4 py-3 font-medium text-right">Кол-во</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap">
+                  Статус
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-4 py-12 text-center text-slate-500"
+                  >
+                    Нет документов поступления.
+                  </td>
+                </tr>
+              ) : (
+                shown.map((s) => {
+                  const totalQty = s.lines.reduce((sum, l) => sum + l.quantity, 0);
+                  const names = [...new Set(s.lines.map((l) => l.nomenclatureName))];
+                  const lots = [...new Set(s.lines.map((l) => l.lot))];
+                  return (
+                    <tr
+                      key={s.id}
+                      onClick={() => navigate(`/sklad/postupleniya/${s.id}`)}
+                      className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 cursor-pointer"
+                    >
+                      <td className="px-4 py-3 font-mono text-xs text-slate-600">
+                        {s.id.replace("rcpt-", "")}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {formatRuDateTime(s.createdAt)}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">{s.createdBy}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {names.slice(0, 2).map((n) => (
+                            <span
+                              key={n}
+                              className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-700"
+                            >
+                              {n}
+                            </span>
+                          ))}
+                          {names.length > 2 && (
+                            <span className="inline-flex items-center text-xs text-slate-500">
+                              +{names.length - 2}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {lots.slice(0, 2).map((l) => (
+                            <span
+                              key={l}
+                              className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-mono text-slate-600"
+                            >
+                              {l}
+                            </span>
+                          ))}
+                          {lots.length > 2 && (
+                            <span className="inline-flex items-center text-xs text-slate-500">
+                              +{lots.length - 2}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums font-medium text-slate-700">
+                        {totalQty || "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${
+                            s.status === "completed"
+                              ? "bg-slate-100 text-slate-600 ring-slate-500/20"
+                              : "bg-amber-50 text-amber-700 ring-amber-500/20"
+                          }`}
+                        >
+                          {s.status === "completed" ? "Завершено" : "В процессе"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-600">
+          <span>
+            Показано{" "}
+            <strong className="font-medium text-slate-800">
+              {filtered.length === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}–
+              {Math.min(safePage * PAGE_SIZE, filtered.length)}
+            </strong>{" "}
+            из{" "}
+            <strong className="font-medium text-slate-800">
+              {filtered.length}
+            </strong>
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              ← Назад
+            </button>
+            <span className="tabular-nums text-slate-700">
+              Стр. {safePage} / {total}
+            </span>
+            <button
+              type="button"
+              disabled={safePage >= total}
+              onClick={() => setPage((p) => Math.min(total, p + 1))}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Вперёд →
+            </button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+/* ===========================
+   SESSION DETAIL PAGE
+   =========================== */
+
+export function ReceiptsSessionPage() {
+  return (
+    <ReceiptsProvider>
+      <ReceiptsSessionContent />
+    </ReceiptsProvider>
+  );
+}
+
+function ReceiptsSessionContent() {
+  const { receiptId } = useParams<{ receiptId: string }>();
+  const navigate = useNavigate();
+  const { sessions, addLine, removeLine, completeSession, saveDraft, deleteSession } =
+    useReceipts();
+
+  const session = useMemo(
+    () => sessions.find((s) => s.id === receiptId) ?? null,
+    [sessions, receiptId],
+  );
+
+  const [page, setPage] = useState(1);
+  const [confirmComplete, setConfirmComplete] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [saveToast, setSaveToast] = useState<{ message: string; details: string } | null>(
+    null,
+  );
+  const saveToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Add line modal state
+  const places = useMemo(() => getAllStoragePlaces(), []);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [newRow, setNewRow] = useState({
+    nomenclatureId: "",
+    lot: "",
+    serialNumber: "",
+    quantity: "",
+    place: "",
+  });
+  const [qtyError, setQtyError] = useState("");
+
+  const isEditable = session?.status === "draft";
+
+  const selectedCatalogItem = useMemo(() => {
+    if (!newRow.nomenclatureId) return null;
+    return MOCK_CATALOG.find((c) => c.id === newRow.nomenclatureId) ?? null;
+  }, [newRow.nomenclatureId]);
+
+  const selectedLotData = useMemo(() => {
+    if (!selectedCatalogItem || !newRow.lot) return null;
+    return selectedCatalogItem.lots.find((l) => l.code === newRow.lot) ?? null;
+  }, [selectedCatalogItem, newRow.lot]);
+
+  useEffect(() => {
+    if (!session && receiptId) navigate("/sklad/postupleniya", { replace: true });
+  }, [session, receiptId, navigate]);
+
+  if (!session) return null;
+
+  const totalPages = Math.max(1, Math.ceil(session.lines.length / PAGE_SIZE));
+  const paginatedLines = useMemo(
+    () => session.lines.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [session, page],
+  );
+
+  const handleSaveDraft = () => {
+    const result = saveDraft(session.id);
+    const time = formatRuTime(result.savedAt);
+    setSaveToast({
+      message: "Черновик сохранён",
+      details: `${time}`,
+    });
+    if (saveToastTimer.current) clearTimeout(saveToastTimer.current);
+    saveToastTimer.current = setTimeout(() => setSaveToast(null), 4000);
+  };
+
+  const handleDelete = () => {
+    const ok = deleteSession(session.id);
+    if (ok) navigate("/sklad/postupleniya", { replace: true });
+  };
+
+  const handleAddRow = () => {
+    if (!selectedCatalogItem) return;
+    const qty = parseInt(newRow.quantity, 10);
+    if (!qty || qty <= 0) {
+      setQtyError("Введите количество");
+      return;
+    }
+    if (!newRow.lot) {
+      setQtyError("Укажите лот");
+      return;
+    }
+    if (!newRow.place) {
+      setQtyError("Укажите место хранения");
+      return;
+    }
+    setQtyError("");
+    addLine(session.id, {
+      nomenclatureId: selectedCatalogItem.id,
+      nomenclatureName: selectedCatalogItem.name,
+      catalogNumber: selectedCatalogItem.catalogNumber,
+      serialNumber: newRow.serialNumber.trim(),
+      lot: newRow.lot,
+      quantity: qty,
+      expiryDate: selectedLotData?.expiryDate || "",
+      unit: selectedCatalogItem.unit,
+      place: newRow.place,
+    });
+    setNewRow({
+      nomenclatureId: "",
+      lot: "",
+      serialNumber: "",
+      quantity: "",
+      place: "",
+    });
+    setAddModalOpen(false);
+  };
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-6">
+      {/* Header */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-3">
+            <Link
+              to="/sklad/postupleniya"
+              className="text-sm text-slate-500 transition hover:text-slate-700"
+              title="К списку поступлений"
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+            </Link>
+            <h1 className="text-xl font-semibold text-slate-800">Поступление</h1>
+          </div>
+          <p className="mt-1 text-sm text-slate-500">
+            от {formatRuDateTime(session.createdAt)} · Создал: {session.createdBy}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {isEditable ? (
+            <>
+              <button
+                onClick={handleSaveDraft}
+                className="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
+              >
+                Сохранить черновик
+              </button>
+              <button
+                onClick={() => setConfirmComplete(true)}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500"
+              >
+                Завершить
+              </button>
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-100"
+                title="Удалить черновик"
+              >
+                Удалить
+              </button>
+            </>
+          ) : (
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+              Завершено
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="min-w-[1080px] w-full text-left text-sm">
+            <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-4 py-2.5 font-medium">Товар</th>
+                <th className="px-4 py-2.5 font-medium">Артикул</th>
+                <th className="px-4 py-2.5 font-medium whitespace-nowrap">
+                  Серийный №
+                </th>
+                <th className="px-4 py-2.5 font-medium">Лот</th>
+                <th className="px-4 py-2.5 font-medium whitespace-nowrap text-right">
+                  Кол-во
+                </th>
+                <th className="px-4 py-2.5 font-medium whitespace-nowrap">
+                  Годен до
+                </th>
+                <th className="px-4 py-2.5 font-medium">Упаковка</th>
+                <th className="px-4 py-2.5 font-medium">Годность</th>
+                <th className="px-4 py-2.5 font-medium">Место хранения</th>
+                {isEditable && <th className="px-4 py-2.5 font-medium w-10"></th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {paginatedLines.map((line) => {
+                const realIndex = session.lines.indexOf(line);
+                const expiry = line.expiryDate ? formatRuDate(line.expiryDate) : "—";
+                return (
+                  <tr
+                    key={`${line.nomenclatureId}-${line.lot}-${realIndex}`}
+                    className="transition hover:bg-slate-50"
+                  >
+                    <td className="px-4 py-2.5">
+                      <div className="font-medium text-slate-800">
+                        {line.nomenclatureName}
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        {line.quantity} {line.unit}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-slate-600">
+                      {line.catalogNumber || "—"}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600">
+                      {line.serialNumber || "—"}
+                    </td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-slate-600">
+                      {line.lot}
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums text-slate-700">
+                      {line.quantity}
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600 text-xs">{expiry}</td>
+                    <td className="px-4 py-2.5 text-slate-600">{line.unit}</td>
+                    <td className="px-4 py-2.5">
+                      <ShelfLifeBadge expiryDate={line.expiryDate} />
+                    </td>
+                    <td className="px-4 py-2.5 text-slate-600">{line.place}</td>
+                    {isEditable && (
+                      <td className="px-4 py-2.5 text-center">
+                        <button
+                          onClick={() => removeLine(session.id, realIndex)}
+                          className="rounded-md p-1 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                          title="Удалить позицию"
+                        >
+                          <svg
+                            className="h-4 w-4"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M6 18L18 6M6 6l12 12"
+                            />
+                          </svg>
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+
+              {session.lines.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={isEditable ? 10 : 9}
+                    className="px-4 py-16 text-center text-sm text-slate-500"
+                  >
+                    Нет позиций. Нажмите «Добавить позицию».
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3">
+            <span className="text-xs text-slate-500">
+              {(page - 1) * PAGE_SIZE + 1}–
+              {Math.min(page * PAGE_SIZE, session.lines.length)} из{" "}
+              {session.lines.length}
+            </span>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition disabled:opacity-40 hover:bg-slate-100"
+              >
+                ←
+              </button>
+              <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600">
+                {page} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600 transition disabled:opacity-40 hover:bg-slate-100"
+              >
+                →
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {isEditable && (
+        <div className="mt-3 flex justify-end">
+          <button
+            onClick={() => {
+              setAddModalOpen(true);
+              setQtyError("");
+            }}
+            className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500"
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            Добавить позицию
+          </button>
+        </div>
+      )}
+
+      {/* Add line modal */}
+      {isEditable && addModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 pt-16"
+          onClick={() => {
+            setAddModalOpen(false);
+            setQtyError("");
+          }}
+        >
+          <div
+            className="relative w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Добавить позицию"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">
+                Добавить позицию
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddModalOpen(false);
+                  setQtyError("");
+                }}
+                className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label="Закрыть"
+              >
+                <svg
+                  className="size-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Товар <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={newRow.nomenclatureId}
+                  onChange={(e) =>
+                    setNewRow((r) => ({
+                      ...r,
+                      nomenclatureId: e.target.value,
+                      lot: "",
+                    }))
+                  }
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                  autoFocus
+                >
+                  <option value="">Выберите товар...</option>
+                  {MOCK_CATALOG.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Артикул
+                </label>
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  <span className="font-mono text-xs">
+                    {selectedCatalogItem?.catalogNumber || "—"}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Упаковка
+                </label>
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  {selectedCatalogItem?.unit || "—"}
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Серийный №
+                </label>
+                <input
+                  value={newRow.serialNumber}
+                  onChange={(e) =>
+                    setNewRow((r) => ({ ...r, serialNumber: e.target.value }))
+                  }
+                  placeholder="Необязательно"
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Лот <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={newRow.lot}
+                  onChange={(e) => setNewRow((r) => ({ ...r, lot: e.target.value }))}
+                  disabled={!selectedCatalogItem}
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                >
+                  <option value="">Выберите лот...</option>
+                  {selectedCatalogItem
+                    ? selectedCatalogItem.lots.map((l) => (
+                        <option key={l.code} value={l.code}>
+                          {l.code}
+                        </option>
+                      ))
+                    : []}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Годен до
+                </label>
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  {selectedLotData?.expiryDate
+                    ? formatRuDate(selectedLotData.expiryDate)
+                    : "—"}
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Годность
+                </label>
+                <div className="flex items-center">
+                  <ShelfLifeBadge expiryDate={selectedLotData?.expiryDate || ""} />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Место хранения <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={newRow.place}
+                  onChange={(e) =>
+                    setNewRow((r) => ({ ...r, place: e.target.value }))
+                  }
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                >
+                  <option value="">Выберите место...</option>
+                  {places.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-xs font-medium uppercase tracking-wide text-slate-500">
+                  Кол-во <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={newRow.quantity}
+                  onChange={(e) => {
+                    setNewRow((r) => ({ ...r, quantity: e.target.value }));
+                    setQtyError("");
+                  }}
+                  className={`w-full rounded-md border bg-white px-3 py-2 text-sm outline-none ${
+                    qtyError ? "border-red-400 ring-2 ring-red-200" : "border-slate-300"
+                  } focus:border-slate-400 focus:ring-2 focus:ring-slate-200`}
+                />
+                {qtyError && (
+                  <p className="mt-1 text-xs text-red-600" role="alert">
+                    {qtyError}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setAddModalOpen(false);
+                  setQtyError("");
+                }}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={handleAddRow}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-500"
+              >
+                Добавить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {saveToast && (
+        <div className="fixed bottom-4 right-4 z-50 animate-slide-up">
+          <div className="flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-lg">
+            <svg
+              className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-emerald-800">
+                {saveToast.message}
+              </div>
+              <div className="text-xs text-emerald-600">{saveToast.details}</div>
+            </div>
+            <button
+              onClick={() => setSaveToast(null)}
+              className="shrink-0 text-emerald-400 transition hover:text-emerald-600"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmComplete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setConfirmComplete(false)}
+        >
+          <div
+            className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-slate-800">
+              Завершить поступление?
+            </h3>
+            <p className="mt-2 text-sm text-slate-500">
+              Завершение создаст транзакцию поступления, которая увеличит остатки
+              на складе. Действие нельзя отменить.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmComplete(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-50"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => {
+                  completeSession(session.id);
+                  setConfirmComplete(false);
+                }}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500"
+              >
+                Завершить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+          onClick={() => setConfirmDelete(false)}
+        >
+          <div
+            className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100">
+                <svg
+                  className="h-5 w-5 text-red-600"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800">
+                  Удалить поступление?
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Черновик будет удалён безвозвратно.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 transition hover:bg-slate-50"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleDelete}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700"
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShelfLifeBadge({ expiryDate }: { expiryDate: string }) {
+  if (!expiryDate) {
+    return <span className="text-slate-400">—</span>;
+  }
+  const now = new Date();
+  const expiry = new Date(expiryDate + "T23:59:59");
+  const daysLeft = Math.ceil((expiry.getTime() - now.getTime()) / 86400000);
+
+  if (daysLeft < 0) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 ring-1 ring-red-200">
+        просрочен
+      </span>
+    );
+  }
+  if (daysLeft <= 30) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-amber-200">
+        скоро
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
+      ок
+    </span>
+  );
+}
+
+function formatRuDateTime(iso: string): string {
+  const d = new Date(iso);
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  const hours = String(d.getHours()).padStart(2, "0");
+  const mins = String(d.getMinutes()).padStart(2, "0");
+  return `${day}.${month}.${year} ${hours}:${mins}`;
+}
+
+function formatRuTime(iso: string): string {
+  const d = new Date(iso);
+  const hours = String(d.getHours()).padStart(2, "0");
+  const mins = String(d.getMinutes()).padStart(2, "0");
+  const secs = String(d.getSeconds()).padStart(2, "0");
+  return `${hours}:${mins}:${secs}`;
+}
+
