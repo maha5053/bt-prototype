@@ -1,5 +1,6 @@
 import { Link, useParams } from "react-router-dom";
 import { useMemo, useState, useEffect } from "react";
+import { Combobox } from "@headlessui/react";
 import {
   formatRuDate,
   getEnrichedStockLinesByNomenclature,
@@ -77,7 +78,8 @@ function NomenklaturaDetailContent() {
   const [templateError, setTemplateError] = useState("");
   const [saveOverwritePrompt, setSaveOverwritePrompt] = useState(false);
 
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<SpecTemplate | null>(null);
+  const [templateSearch, setTemplateSearch] = useState("");
   const [loadConfirm, setLoadConfirm] = useState<{
     templateId: string;
     templateName: string;
@@ -184,7 +186,8 @@ function NomenklaturaDetailContent() {
   };
 
   const openLoadTemplateModal = () => {
-    setSelectedTemplateId(null);
+    setSelectedTemplate(null);
+    setTemplateSearch("");
     setLoadConfirm(null);
     setTemplateError("");
     setOpenLoadTemplate(true);
@@ -235,6 +238,12 @@ function NomenklaturaDetailContent() {
     setOpenLoadTemplate(false);
     setLoadConfirm(null);
   };
+
+  const filteredTemplates = useMemo(() => {
+    const q = templateSearch.trim().toLowerCase();
+    if (!q) return specTemplates;
+    return specTemplates.filter((t) => t.name.toLowerCase().includes(q));
+  }, [specTemplates, templateSearch]);
 
   return (
     <div className="p-6 md:p-8">
@@ -952,46 +961,81 @@ function NomenklaturaDetailContent() {
                   </div>
                 ) : (
                   <>
-                    <div className="overflow-hidden rounded-lg border border-slate-200">
-                      <ul className="divide-y divide-slate-100">
-                        {specTemplates.map((t) => (
-                          <li key={t.id} className="p-3">
-                            <label className="flex cursor-pointer items-start gap-3">
-                              <input
-                                type="radio"
-                                name="spec-template"
-                                value={t.id}
-                                checked={selectedTemplateId === t.id}
-                                onChange={() => {
-                                  setSelectedTemplateId(t.id);
-                                  setLoadConfirm(null);
-                                }}
-                                className="mt-1"
+                    <label className="block">
+                      <div className="mb-1 text-xs font-medium text-slate-600">
+                        Шаблон
+                      </div>
+                      <Combobox
+                        value={selectedTemplate}
+                        onChange={(tpl: SpecTemplate | null) => {
+                          setSelectedTemplate(tpl);
+                          setTemplateSearch("");
+                          setLoadConfirm(null);
+                        }}
+                      >
+                        <div className="relative">
+                          <Combobox.Input
+                            className="w-full rounded-lg border border-slate-200 px-3 py-2 pr-9 text-sm outline-none transition focus:border-emerald-400"
+                            placeholder="Начните вводить…"
+                            displayValue={(tpl: SpecTemplate | null) =>
+                              tpl ? tpl.name : ""
+                            }
+                            onChange={(e) => setTemplateSearch(e.target.value)}
+                          />
+                          <Combobox.Button className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600">
+                            <svg
+                              className="h-4 w-4"
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                              aria-hidden="true"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                                clipRule="evenodd"
                               />
-                              <div className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                  <span className="font-medium text-slate-900">
-                                    {t.name}
-                                  </span>
-                                  <span className="text-xs text-slate-500">
-                                    · {t.items.length} показ.
-                                  </span>
-                                </div>
-                                <div className="mt-0.5 text-xs text-slate-500">
-                                  {t.updatedAt
-                                    ? `Обновлён: ${new Date(t.updatedAt).toLocaleString(
-                                        "ru-RU",
-                                      )}`
-                                    : `Создан: ${new Date(t.createdAt).toLocaleString(
-                                        "ru-RU",
-                                      )}`}
-                                </div>
+                            </svg>
+                          </Combobox.Button>
+                          <Combobox.Options className="absolute z-50 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg focus:outline-none">
+                            {filteredTemplates.length === 0 ? (
+                              <div className="px-3 py-2 text-slate-500">
+                                Ничего не найдено.
                               </div>
-                            </label>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                            ) : (
+                              filteredTemplates.map((t) => (
+                                <Combobox.Option
+                                  key={t.id}
+                                  value={t}
+                                  className={({ active }) =>
+                                    `cursor-pointer select-none px-3 py-2 ${
+                                      active
+                                        ? "bg-emerald-600 text-white"
+                                        : "text-slate-700"
+                                    }`
+                                  }
+                                >
+                                  <div className="flex items-baseline justify-between gap-3">
+                                    <span className="font-medium">{t.name}</span>
+                                    <span className="shrink-0 text-xs opacity-80">
+                                      {t.items.length} показ.
+                                    </span>
+                                  </div>
+                                  <div className="mt-0.5 text-xs opacity-80">
+                                    {t.updatedAt
+                                      ? `Обновлён: ${new Date(t.updatedAt).toLocaleString(
+                                          "ru-RU",
+                                        )}`
+                                      : `Создан: ${new Date(t.createdAt).toLocaleString(
+                                          "ru-RU",
+                                        )}`}
+                                  </div>
+                                </Combobox.Option>
+                              ))
+                            )}
+                          </Combobox.Options>
+                        </div>
+                      </Combobox>
+                    </label>
 
                     {loadConfirm ? (
                       <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -1036,16 +1080,16 @@ function NomenklaturaDetailContent() {
                   </button>
                   <button
                     type="button"
-                    disabled={!selectedTemplateId}
+                    disabled={!selectedTemplate}
                     onClick={() => {
-                      if (!selectedTemplateId) return;
-                      const tpl = specTemplates.find((t) => t.id === selectedTemplateId);
+                      if (!selectedTemplate) return;
+                      const tpl = selectedTemplate;
                       if (!tpl) return;
                       setLoadConfirm({ templateId: tpl.id, templateName: tpl.name });
                     }}
                     className={[
                       "rounded-md px-4 py-2 text-sm font-medium shadow-sm",
-                      selectedTemplateId
+                      selectedTemplate
                         ? "bg-emerald-600 text-white hover:bg-emerald-500"
                         : "cursor-not-allowed bg-slate-200 text-slate-500",
                     ].join(" ")}
