@@ -1,10 +1,16 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { NomenclatureProvider, useNomenclature } from "../context/NomenclatureContext";
+import {
+  NomenclatureProvider,
+  useNomenclature,
+  type SpecificationItem,
+} from "../context/NomenclatureContext";
 import { ReceiptsProvider, useReceipts } from "../context/ReceiptsContext";
 import {
   MOCK_CATALOG,
+  type ReceiptIncomingControlAnswers,
   type ReceiptIncomingIndicatorValue,
+  type ReceiptLine,
 } from "../mocks/receiptsData";
 import { getAllStoragePlaces, formatRuDate } from "../mocks/balancesData";
 
@@ -15,6 +21,35 @@ const INCOMING_INDICATOR_OPTIONS = [
 ] as const satisfies readonly ReceiptIncomingIndicatorValue[];
 
 const PAGE_SIZE = 15;
+
+function sortedSpecRows(specification: SpecificationItem[] | undefined) {
+  return specification?.length
+    ? [...specification].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    : [];
+}
+
+/** Хотя бы по одному показателю выбрано «Нет». */
+function hasIncomingControlNo(
+  line: Pick<ReceiptLine, "incomingControl">,
+  specification: SpecificationItem[] | undefined,
+): boolean {
+  return sortedSpecRows(specification).some(
+    (row) => line.incomingControl?.[row.id] === "Нет",
+  );
+}
+
+/** Все строки спецификации имеют ответ «Да» или «Нет» (не «Не определено»). */
+function isIncomingControlComplete(
+  line: Pick<ReceiptLine, "incomingControl">,
+  specification: SpecificationItem[] | undefined,
+): boolean {
+  const rows = sortedSpecRows(specification);
+  if (rows.length === 0) return false;
+  return rows.every((row) => {
+    const v = line.incomingControl?.[row.id];
+    return v === "Да" || v === "Нет";
+  });
+}
 
 /* ===========================
    LIST PAGE
@@ -287,6 +322,9 @@ function ReceiptsSessionContent() {
   const [incomingModalLineIndex, setIncomingModalLineIndex] = useState<number | null>(
     null,
   );
+  const [incomingControlDraft, setIncomingControlDraft] =
+    useState<ReceiptIncomingControlAnswers>({});
+  const [incomingNotesDraft, setIncomingNotesDraft] = useState("");
 
   const isEditable = session?.status === "draft";
 
@@ -375,6 +413,31 @@ function ReceiptsSessionContent() {
       place: "",
     });
     setAddModalOpen(false);
+  };
+
+  const openIncomingModal = (lineIndex: number) => {
+    const line = session.lines[lineIndex];
+    setIncomingControlDraft(line?.incomingControl ? { ...line.incomingControl } : {});
+    setIncomingNotesDraft(line?.incomingControlNotes ?? "");
+    setIncomingModalLineIndex(lineIndex);
+  };
+
+  const closeIncomingModal = () => {
+    setIncomingModalLineIndex(null);
+    setIncomingControlDraft({});
+    setIncomingNotesDraft("");
+  };
+
+  const saveIncomingModal = () => {
+    if (incomingModalLineIndex === null) return;
+    const notes = incomingNotesDraft.trim();
+    updateLine(session.id, incomingModalLineIndex, {
+      incomingControl: { ...incomingControlDraft },
+      incomingControlNotes: notes || undefined,
+    });
+    setIncomingModalLineIndex(null);
+    setIncomingControlDraft({});
+    setIncomingNotesDraft("");
   };
 
   return (
@@ -474,6 +537,11 @@ function ReceiptsSessionContent() {
               {paginatedLines.map((line) => {
                 const realIndex = session.lines.indexOf(line);
                 const expiry = line.expiryDate ? formatRuDate(line.expiryDate) : "—";
+                const nomEntry = nomenclatureEntries.find((e) => e.id === line.nomenclatureId);
+                const spec = nomEntry?.specification;
+                const incomingVkHasNo = hasIncomingControlNo(line, spec);
+                const incomingVkOk =
+                  !incomingVkHasNo && isIncomingControlComplete(line, spec);
                 return (
                   <tr
                     key={`${line.nomenclatureId}-${line.lot}-${realIndex}`}
@@ -506,39 +574,74 @@ function ReceiptsSessionContent() {
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">{line.place}</td>
                     <td className="px-2 py-2.5 text-center">
-                      <button
-                        type="button"
-                        onClick={() => setIncomingModalLineIndex(realIndex)}
-                        className="inline-flex rounded-md p-1.5 text-slate-500 transition hover:bg-emerald-50 hover:text-emerald-700"
-                        title="Входной контроль"
-                        aria-label="Входной контроль по спецификации"
-                      >
-                        <svg
-                          className="h-5 w-5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={1.5}
-                          stroke="currentColor"
-                          aria-hidden
+                      <div className="relative inline-flex items-center justify-center">
+                        <button
+                          type="button"
+                          onClick={() => openIncomingModal(realIndex)}
+                          className={
+                            incomingVkHasNo
+                              ? "inline-flex rounded-md p-1.5 text-red-700 ring-1 ring-red-200 bg-red-50 transition hover:bg-red-100"
+                              : incomingVkOk
+                                ? "inline-flex rounded-md p-1.5 text-emerald-700 ring-1 ring-emerald-200 bg-emerald-50 transition hover:bg-emerald-100"
+                                : "inline-flex rounded-md p-1.5 text-slate-500 transition hover:bg-emerald-50 hover:text-emerald-700"
+                          }
+                          title={
+                            incomingVkHasNo
+                              ? "Входной контроль — есть ответы «Нет»"
+                              : incomingVkOk
+                                ? "Входной контроль — все показатели отмечены"
+                                : "Входной контроль"
+                          }
+                          aria-label={
+                            incomingVkHasNo
+                              ? "Входной контроль, есть ответы нет"
+                              : incomingVkOk
+                                ? "Входной контроль, все показатели отмечены"
+                                : "Входной контроль по спецификации"
+                          }
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                          />
-                        </svg>
-                      </button>
+                          <svg
+                            className="h-5 w-5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            strokeWidth={1.5}
+                            stroke="currentColor"
+                            aria-hidden
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                            />
+                          </svg>
+                        </button>
+                        {incomingVkHasNo ? (
+                          <span
+                            className="pointer-events-none absolute -bottom-1 -right-1 inline-flex items-center rounded-full bg-red-600 px-1 py-px text-[9px] font-semibold leading-none text-white shadow-sm ring-1 ring-white"
+                            title="Есть «Нет»"
+                            aria-hidden
+                          >
+                            нет
+                          </span>
+                        ) : incomingVkOk ? (
+                          <span
+                            className="pointer-events-none absolute -bottom-1 -right-1 inline-flex items-center rounded-full bg-emerald-600 px-1 py-px text-[9px] font-semibold leading-none text-white shadow-sm ring-1 ring-white"
+                            title="Ок"
+                            aria-hidden
+                          >
+                            ок
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     {isEditable && (
                       <td className="px-4 py-2.5 text-center">
                         <button
                           type="button"
                           onClick={() => {
-                            setIncomingModalLineIndex((idx) => {
-                              if (idx === realIndex) return null;
-                              if (idx !== null && realIndex < idx) return idx - 1;
-                              return idx;
-                            });
+                            setIncomingModalLineIndex(null);
+                            setIncomingControlDraft({});
+                            setIncomingNotesDraft("");
                             removeLine(session.id, realIndex);
                           }}
                           className="rounded-md p-1 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
@@ -850,7 +953,7 @@ function ReceiptsSessionContent() {
       {incomingModalLineIndex !== null && incomingModalLine && (
         <div
           className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-12"
-          onClick={() => setIncomingModalLineIndex(null)}
+          onClick={closeIncomingModal}
         >
           <div
             className="relative w-full max-w-3xl rounded-xl bg-white shadow-xl"
@@ -874,7 +977,7 @@ function ReceiptsSessionContent() {
               </div>
               <button
                 type="button"
-                onClick={() => setIncomingModalLineIndex(null)}
+                onClick={closeIncomingModal}
                 className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
                 aria-label="Закрыть"
               >
@@ -892,7 +995,7 @@ function ReceiptsSessionContent() {
                   <Link
                     to={`/sklad/nomenklatura/${incomingModalLine.nomenclatureId}`}
                     className="font-medium text-emerald-700 underline hover:text-emerald-600"
-                    onClick={() => setIncomingModalLineIndex(null)}
+                    onClick={closeIncomingModal}
                   >
                     Открыть карточку
                   </Link>
@@ -908,8 +1011,7 @@ function ReceiptsSessionContent() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {incomingModalSpec.map((row) => {
-                      const val =
-                        incomingModalLine.incomingControl?.[row.id] ?? "Не определено";
+                      const val = incomingControlDraft[row.id] ?? "Не определено";
                       return (
                         <tr key={row.id} className="align-top">
                           <td className="px-3 py-2.5 font-medium text-slate-800">{row.name}</td>
@@ -920,10 +1022,7 @@ function ReceiptsSessionContent() {
                               disabled={!isEditable}
                               onChange={(e) => {
                                 const v = e.target.value as ReceiptIncomingIndicatorValue;
-                                const prev = incomingModalLine.incomingControl ?? {};
-                                updateLine(session.id, incomingModalLineIndex, {
-                                  incomingControl: { ...prev, [row.id]: v },
-                                });
+                                setIncomingControlDraft((d) => ({ ...d, [row.id]: v }));
                               }}
                               className="w-full min-w-[9rem] rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-600"
                             >
@@ -940,15 +1039,41 @@ function ReceiptsSessionContent() {
                   </tbody>
                 </table>
               )}
+              <div className="mt-5 border-t border-slate-200 pt-4">
+                <label
+                  htmlFor="incoming-qc-notes"
+                  className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-slate-500"
+                >
+                  Примечания{" "}
+                  <span className="font-normal normal-case text-slate-400">(необязательно)</span>
+                </label>
+                <textarea
+                  id="incoming-qc-notes"
+                  value={incomingNotesDraft}
+                  onChange={(e) => setIncomingNotesDraft(e.target.value)}
+                  disabled={!isEditable}
+                  rows={3}
+                  placeholder="При необходимости укажите комментарий…"
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-600"
+                />
+              </div>
             </div>
 
-            <div className="flex justify-end border-t border-slate-200 px-5 py-3">
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">
               <button
                 type="button"
-                onClick={() => setIncomingModalLineIndex(null)}
-                className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+                onClick={closeIncomingModal}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
               >
-                Закрыть
+                Отмена
+              </button>
+              <button
+                type="button"
+                disabled={!isEditable}
+                onClick={saveIncomingModal}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600"
+              >
+                Сохранить
               </button>
             </div>
           </div>

@@ -33,6 +33,8 @@ export interface ReceiptLine {
   place: string;
   /** Входной контроль по спецификации номенклатуры (показатель id → ответ). */
   incomingControl?: ReceiptIncomingControlAnswers;
+  /** Примечания к входному контролю (необязательно). */
+  incomingControlNotes?: string;
 }
 
 export interface ReceiptSession {
