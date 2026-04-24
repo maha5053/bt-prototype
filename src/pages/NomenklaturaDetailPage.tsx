@@ -1078,6 +1078,10 @@ function NomenklaturaDetailContent() {
                       if (!selectedTemplate) return;
                       const tpl = selectedTemplate;
                       if (!tpl) return;
+                      if (specDraft.length === 0) {
+                        applyTemplate("append", tpl.id);
+                        return;
+                      }
                       setLoadConfirm({ templateId: tpl.id, templateName: tpl.name });
                     }}
                     className={[
