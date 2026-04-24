@@ -125,10 +125,10 @@ function mergeCatalogWithStorage(
     const candidate = fromStorage ?? (b as NomenclatureEntry);
     return {
       ...candidate,
-      specification:
-        candidate.specification && candidate.specification.length > 0
-          ? candidate.specification
-          : createDefaultSpecification(),
+      // Пустой массив — намеренно очищенная спецификация; подставляем дефолт только если поля нет.
+      specification: Array.isArray(candidate.specification)
+        ? candidate.specification
+        : createDefaultSpecification(),
     };
   });
   // If storage has items missing in base, keep them too (prototype-friendly).
@@ -136,10 +136,9 @@ function mergeCatalogWithStorage(
     if (!base.some((b) => b.id === s.id)) {
       merged.push({
         ...s,
-        specification:
-          s.specification && s.specification.length > 0
-            ? s.specification
-            : createDefaultSpecification(),
+        specification: Array.isArray(s.specification)
+          ? s.specification
+          : createDefaultSpecification(),
       });
     }
   }

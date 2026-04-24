@@ -121,8 +121,10 @@ function NomenklaturaDetailContent() {
   };
 
   const removeSpecRow = (id: string) => {
-    setSpecDraft((rows) => rows.filter((r) => r.id !== id));
+    const next = specDraft.filter((r) => r.id !== id);
+    setSpecDraft(next);
     if (specError) setSpecError("");
+    persistSpecDraft(next, false);
   };
 
   const validateSpec = (rows: SpecificationItem[]): string | null => {
@@ -520,25 +522,34 @@ function NomenklaturaDetailContent() {
 
       {tab === "spec" ? (
         <section aria-labelledby="spec-heading" className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-start gap-x-3 gap-y-2">
             <h2 id="spec-heading" className="text-lg font-semibold text-slate-900">
               Спецификация
             </h2>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={openLoadTemplateModal}
-                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-              >
-                Загрузить из шаблона
-              </button>
-              <button
-                type="button"
-                onClick={openSaveTemplateModal}
-                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-500"
-              >
-                Сохранить как шаблон
-              </button>
+            <div
+              className="flex flex-wrap items-center justify-start gap-x-2 gap-y-1"
+              role="group"
+              aria-label="Шаблоны спецификации"
+            >
+              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                Шаблоны
+              </span>
+              <div className="flex flex-wrap items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={openLoadTemplateModal}
+                  className="rounded-md px-2.5 py-1.5 text-sm font-normal text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                >
+                  Загрузить из шаблона
+                </button>
+                <button
+                  type="button"
+                  onClick={openSaveTemplateModal}
+                  className="rounded-md px-2.5 py-1.5 text-sm font-normal text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                >
+                  Сохранить как шаблон
+                </button>
+              </div>
             </div>
           </div>
 
@@ -551,15 +562,6 @@ function NomenklaturaDetailContent() {
           {specDraft.length === 0 ? (
             <div className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">
               Пока нет элементов спецификации.
-              <div className="mt-4">
-                <button
-                  type="button"
-                  onClick={addSpecRow}
-                  className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                >
-                  Добавить элемент
-                </button>
-              </div>
             </div>
           ) : (
             <>
@@ -840,25 +842,25 @@ function NomenklaturaDetailContent() {
                   </table>
                 </div>
               </div>
-
-              <div className="flex flex-wrap items-center justify-start gap-2">
-                <button
-                  type="button"
-                  onClick={addSpecRow}
-                  className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                >
-                  Добавить элемент
-                </button>
-                <button
-                  type="button"
-                  onClick={clearSpec}
-                  className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                >
-                  Очистить
-                </button>
-              </div>
             </>
           )}
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4">
+            <button
+              type="button"
+              onClick={addSpecRow}
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              Добавить элемент
+            </button>
+            <button
+              type="button"
+              onClick={clearSpec}
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              Очистить
+            </button>
+          </div>
 
           {openSaveTemplate ? (
             <div

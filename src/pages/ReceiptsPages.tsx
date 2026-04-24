@@ -51,6 +51,16 @@ function isIncomingControlComplete(
   });
 }
 
+/** Спецификация есть, но не по всем показателям выбрано «Да» или «Нет». */
+function hasIncomingControlUnfilled(
+  line: Pick<ReceiptLine, "incomingControl">,
+  specification: SpecificationItem[] | undefined,
+): boolean {
+  const rows = sortedSpecRows(specification);
+  if (rows.length === 0) return false;
+  return !isIncomingControlComplete(line, specification);
+}
+
 /* ===========================
    LIST PAGE
    =========================== */
@@ -357,6 +367,19 @@ function ReceiptsSessionContent() {
     const raw = entry?.specification ?? [];
     return [...raw].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
   }, [nomenclatureEntries, incomingModalLine]);
+
+  const completeVkWarnings = useMemo(() => {
+    if (!session) return { hasRed: false, hasUnfilled: false };
+    let hasRed = false;
+    let hasUnfilled = false;
+    for (const line of session.lines) {
+      const entry = nomenclatureEntries.find((e) => e.id === line.nomenclatureId);
+      const spec = entry?.specification;
+      if (hasIncomingControlNo(line, spec)) hasRed = true;
+      if (hasIncomingControlUnfilled(line, spec)) hasUnfilled = true;
+    }
+    return { hasRed, hasUnfilled };
+  }, [session, nomenclatureEntries]);
 
   if (!session) return null;
 
@@ -1197,6 +1220,28 @@ function ReceiptsSessionContent() {
               Завершение создаст транзакцию поступления, которая увеличит остатки
               на складе. Действие нельзя отменить.
             </p>
+            {(completeVkWarnings.hasRed || completeVkWarnings.hasUnfilled) && (
+              <div
+                className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950"
+                role="status"
+              >
+                <p className="font-medium text-amber-900">Входной контроль (ВК)</p>
+                <ul className="mt-2 list-inside list-disc space-y-1 text-amber-900/90">
+                  {completeVkWarnings.hasUnfilled && (
+                    <li>Есть позиции с незаполненным или неполностью заполненным ВК.</li>
+                  )}
+                  {completeVkWarnings.hasRed && (
+                    <li>
+                      Есть позиции с ответом «Нет» по показателям (красная индикация ВК).
+                    </li>
+                  )}
+                </ul>
+                <p className="mt-2 text-xs leading-snug text-amber-800/85">
+                  Вы можете отменить завершение и заполнить ВК либо всё равно завершить
+                  поступление.
+                </p>
+              </div>
+            )}
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => setConfirmComplete(false)}
