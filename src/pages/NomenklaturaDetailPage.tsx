@@ -1045,24 +1045,17 @@ function NomenklaturaDetailContent() {
                         <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
                           <button
                             type="button"
-                            onClick={() => setLoadConfirm(null)}
-                            className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-50"
-                          >
-                            Отмена
-                          </button>
-                          <button
-                            type="button"
                             onClick={() => applyTemplate("append", loadConfirm.templateId)}
                             className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
                           >
-                            Добавить
+                            Добавить в конец списка
                           </button>
                           <button
                             type="button"
                             onClick={() => applyTemplate("replace", loadConfirm.templateId)}
                             className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500"
                           >
-                            Заменить
+                            Заменить текущие элементы
                           </button>
                         </div>
                       </div>
