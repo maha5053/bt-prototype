@@ -61,6 +61,8 @@ function NomenklaturaDetailContent() {
   );
   const [specError, setSpecError] = useState("");
   const [specToast, setSpecToast] = useState<string | null>(null);
+  const [specDraggingId, setSpecDraggingId] = useState<string | null>(null);
+  const [specDragOverId, setSpecDragOverId] = useState<string | null>(null);
 
   useEffect(() => {
     setSpecDraft(catalog.specification ? [...catalog.specification] : []);
@@ -114,11 +116,13 @@ function NomenklaturaDetailContent() {
     return null;
   };
 
-  const persistSpecDraft = (nextRows: SpecificationItem[]) => {
-    const bad = validateSpec(nextRows);
-    if (bad) {
-      setSpecError(bad);
-      return false;
+  const persistSpecDraft = (nextRows: SpecificationItem[], validate = true) => {
+    if (validate) {
+      const bad = validateSpec(nextRows);
+      if (bad) {
+        setSpecError(bad);
+        return false;
+      }
     }
     updateItem(catalog.id, { specification: nextRows });
     setSpecToast("Спецификация сохранена");
@@ -128,8 +132,24 @@ function NomenklaturaDetailContent() {
 
   const confirmSpecRow = (id: string) => {
     const nextRows = specDraft.map((r) => (r.id === id ? { ...r, confirmed: true } : r));
-    if (!persistSpecDraft(nextRows)) return;
+    if (!persistSpecDraft(nextRows, true)) return;
     setSpecDraft(nextRows);
+  };
+
+  const reorderSpecRows = (fromId: string, toId: string) => {
+    if (fromId === toId) return;
+    const fromIdx = specDraft.findIndex((r) => r.id === fromId);
+    const toIdx = specDraft.findIndex((r) => r.id === toId);
+    if (fromIdx < 0 || toIdx < 0) return;
+
+    const next = [...specDraft];
+    const [moved] = next.splice(fromIdx, 1);
+    if (!moved) return;
+    next.splice(toIdx, 0, moved);
+
+    const normalized = next.map((r, idx) => ({ ...r, sortOrder: idx + 1 }));
+    persistSpecDraft(normalized, false);
+    setSpecDraft(normalized);
   };
 
   return (
@@ -412,6 +432,7 @@ function NomenklaturaDetailContent() {
                   <table className="min-w-[1100px] w-full border-collapse text-left text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                        <th className="px-4 py-3 font-medium w-10" aria-label="Порядок" />
                         <th className="px-4 py-3 font-medium">Наименование *</th>
                         <th className="px-4 py-3 font-medium">Требование *</th>
                         <th className="px-4 py-3 font-medium whitespace-nowrap">
@@ -426,7 +447,69 @@ function NomenklaturaDetailContent() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {specDraft.map((row) => (
-                        <tr key={row.id} className="align-top">
+                        <tr
+                          key={row.id}
+                          className={[
+                            "align-top",
+                            specDragOverId === row.id && specDraggingId
+                              ? "bg-emerald-50/40"
+                              : "",
+                          ].join(" ")}
+                          onDragOver={(e) => {
+                            if (!specDraggingId) return;
+                            e.preventDefault();
+                            setSpecDragOverId(row.id);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const fromId =
+                              e.dataTransfer.getData("text/plain") || specDraggingId;
+                            if (!fromId) return;
+                            reorderSpecRows(fromId, row.id);
+                            setSpecDraggingId(null);
+                            setSpecDragOverId(null);
+                          }}
+                        >
+                          <td className="px-4 py-3">
+                            <span
+                              className="inline-flex cursor-grab rounded-md border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-50 hover:text-slate-800 active:cursor-grabbing"
+                              title="Перетащите, чтобы изменить порядок"
+                              aria-label="Перетащить показатель"
+                              role="button"
+                              tabIndex={0}
+                              draggable
+                              onDragStart={(e) => {
+                                setSpecDraggingId(row.id);
+                                e.dataTransfer.effectAllowed = "move";
+                                e.dataTransfer.setData("text/plain", row.id);
+                              }}
+                              onDragEnd={() => {
+                                setSpecDraggingId(null);
+                                setSpecDragOverId(null);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === " ") e.preventDefault();
+                              }}
+                            >
+                              <svg
+                                className="size-4"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden
+                              >
+                                <path d="M10 5h.01" />
+                                <path d="M10 12h.01" />
+                                <path d="M10 19h.01" />
+                                <path d="M14 5h.01" />
+                                <path d="M14 12h.01" />
+                                <path d="M14 19h.01" />
+                              </svg>
+                            </span>
+                          </td>
                           <td className="px-4 py-3">
                             {row.confirmed ? (
                               <button
