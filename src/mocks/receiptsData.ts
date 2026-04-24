@@ -12,6 +12,15 @@ export { USERS, MOCK_CATALOG };
 
 export type ReceiptStatus = "draft" | "completed";
 
+/** Ответ по показателю спецификации во входном контроле поступления. */
+export type ReceiptIncomingIndicatorValue = "Да" | "Нет" | "Не определено";
+
+/** Ключ — `id` строки спецификации из номенклатуры. */
+export type ReceiptIncomingControlAnswers = Record<
+  string,
+  ReceiptIncomingIndicatorValue
+>;
+
 export interface ReceiptLine {
   nomenclatureId: string;
   nomenclatureName: string;
@@ -22,6 +31,8 @@ export interface ReceiptLine {
   expiryDate: string;
   unit: string;
   place: string;
+  /** Входной контроль по спецификации номенклатуры (показатель id → ответ). */
+  incomingControl?: ReceiptIncomingControlAnswers;
 }
 
 export interface ReceiptSession {

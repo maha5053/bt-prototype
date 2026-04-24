@@ -1,8 +1,18 @@
 import { useMemo, useRef, useState, useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { NomenclatureProvider, useNomenclature } from "../context/NomenclatureContext";
 import { ReceiptsProvider, useReceipts } from "../context/ReceiptsContext";
-import { MOCK_CATALOG } from "../mocks/receiptsData";
+import {
+  MOCK_CATALOG,
+  type ReceiptIncomingIndicatorValue,
+} from "../mocks/receiptsData";
 import { getAllStoragePlaces, formatRuDate } from "../mocks/balancesData";
+
+const INCOMING_INDICATOR_OPTIONS = [
+  "Не определено",
+  "Да",
+  "Нет",
+] as const satisfies readonly ReceiptIncomingIndicatorValue[];
 
 const PAGE_SIZE = 15;
 
@@ -235,16 +245,19 @@ function ReceiptsListContent() {
 
 export function ReceiptsSessionPage() {
   return (
-    <ReceiptsProvider>
-      <ReceiptsSessionContent />
-    </ReceiptsProvider>
+    <NomenclatureProvider>
+      <ReceiptsProvider>
+        <ReceiptsSessionContent />
+      </ReceiptsProvider>
+    </NomenclatureProvider>
   );
 }
 
 function ReceiptsSessionContent() {
   const { receiptId } = useParams<{ receiptId: string }>();
   const navigate = useNavigate();
-  const { sessions, addLine, removeLine, completeSession, saveDraft, deleteSession } =
+  const { entries: nomenclatureEntries } = useNomenclature();
+  const { sessions, addLine, removeLine, updateLine, completeSession, saveDraft, deleteSession } =
     useReceipts();
 
   const session = useMemo(
@@ -271,6 +284,9 @@ function ReceiptsSessionContent() {
     place: "",
   });
   const [qtyError, setQtyError] = useState("");
+  const [incomingModalLineIndex, setIncomingModalLineIndex] = useState<number | null>(
+    null,
+  );
 
   const isEditable = session?.status === "draft";
 
@@ -287,6 +303,18 @@ function ReceiptsSessionContent() {
   useEffect(() => {
     if (!session && receiptId) navigate("/sklad/postupleniya", { replace: true });
   }, [session, receiptId, navigate]);
+
+  const incomingModalLine = useMemo(() => {
+    if (!session || incomingModalLineIndex === null) return null;
+    return session.lines[incomingModalLineIndex] ?? null;
+  }, [session, incomingModalLineIndex]);
+
+  const incomingModalSpec = useMemo(() => {
+    if (!incomingModalLine) return [];
+    const entry = nomenclatureEntries.find((e) => e.id === incomingModalLine.nomenclatureId);
+    const raw = entry?.specification ?? [];
+    return [...raw].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  }, [nomenclatureEntries, incomingModalLine]);
 
   if (!session) return null;
 
@@ -432,6 +460,13 @@ function ReceiptsSessionContent() {
                 <th className="px-4 py-2.5 font-medium">Упаковка</th>
                 <th className="px-4 py-2.5 font-medium">Годность</th>
                 <th className="px-4 py-2.5 font-medium">Место хранения</th>
+                <th
+                  className="px-2 py-2.5 w-12 text-center text-xs font-semibold uppercase tracking-wide text-slate-500"
+                  title="Входной контроль"
+                  aria-label="Входной контроль"
+                >
+                  ВК
+                </th>
                 {isEditable && <th className="px-4 py-2.5 font-medium w-10"></th>}
               </tr>
             </thead>
@@ -470,10 +505,42 @@ function ReceiptsSessionContent() {
                       <ShelfLifeBadge expiryDate={line.expiryDate} />
                     </td>
                     <td className="px-4 py-2.5 text-slate-600">{line.place}</td>
+                    <td className="px-2 py-2.5 text-center">
+                      <button
+                        type="button"
+                        onClick={() => setIncomingModalLineIndex(realIndex)}
+                        className="inline-flex rounded-md p-1.5 text-slate-500 transition hover:bg-emerald-50 hover:text-emerald-700"
+                        title="Входной контроль"
+                        aria-label="Входной контроль по спецификации"
+                      >
+                        <svg
+                          className="h-5 w-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={1.5}
+                          stroke="currentColor"
+                          aria-hidden
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
+                          />
+                        </svg>
+                      </button>
+                    </td>
                     {isEditable && (
                       <td className="px-4 py-2.5 text-center">
                         <button
-                          onClick={() => removeLine(session.id, realIndex)}
+                          type="button"
+                          onClick={() => {
+                            setIncomingModalLineIndex((idx) => {
+                              if (idx === realIndex) return null;
+                              if (idx !== null && realIndex < idx) return idx - 1;
+                              return idx;
+                            });
+                            removeLine(session.id, realIndex);
+                          }}
                           className="rounded-md p-1 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
                           title="Удалить позицию"
                         >
@@ -500,7 +567,7 @@ function ReceiptsSessionContent() {
               {session.lines.length === 0 && (
                 <tr>
                   <td
-                    colSpan={isEditable ? 10 : 9}
+                    colSpan={isEditable ? 11 : 10}
                     className="px-4 py-16 text-center text-sm text-slate-500"
                   >
                     Нет позиций. Нажмите «Добавить позицию».
@@ -774,6 +841,114 @@ function ReceiptsSessionContent() {
                 className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-500"
               >
                 Добавить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {incomingModalLineIndex !== null && incomingModalLine && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 px-4 py-12"
+          onClick={() => setIncomingModalLineIndex(null)}
+        >
+          <div
+            className="relative w-full max-w-3xl rounded-xl bg-white shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="incoming-qc-title"
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+              <div>
+                <h2
+                  id="incoming-qc-title"
+                  className="text-lg font-semibold text-slate-900"
+                >
+                  Входной контроль
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">{incomingModalLine.nomenclatureName}</p>
+                <p className="mt-0.5 font-mono text-xs text-slate-500">
+                  Лот {incomingModalLine.lot}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIncomingModalLineIndex(null)}
+                className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                aria-label="Закрыть"
+              >
+                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="max-h-[min(70vh,520px)] overflow-y-auto px-5 py-4">
+              {incomingModalSpec.length === 0 ? (
+                <p className="text-sm text-slate-600">
+                  Для этой номенклатуры не задана спецификация. Добавьте её в карточке
+                  номенклатуры на вкладке «Спецификация».{" "}
+                  <Link
+                    to={`/sklad/nomenklatura/${incomingModalLine.nomenclatureId}`}
+                    className="font-medium text-emerald-700 underline hover:text-emerald-600"
+                    onClick={() => setIncomingModalLineIndex(null)}
+                  >
+                    Открыть карточку
+                  </Link>
+                </p>
+              ) : (
+                <table className="w-full border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-xs uppercase text-slate-500">
+                      <th className="px-3 py-2 font-medium">Показатель</th>
+                      <th className="px-3 py-2 font-medium">Требование</th>
+                      <th className="px-3 py-2 font-medium whitespace-nowrap">Оценка</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {incomingModalSpec.map((row) => {
+                      const val =
+                        incomingModalLine.incomingControl?.[row.id] ?? "Не определено";
+                      return (
+                        <tr key={row.id} className="align-top">
+                          <td className="px-3 py-2.5 font-medium text-slate-800">{row.name}</td>
+                          <td className="px-3 py-2.5 text-slate-600">{row.requirement}</td>
+                          <td className="px-3 py-2.5">
+                            <select
+                              value={val}
+                              disabled={!isEditable}
+                              onChange={(e) => {
+                                const v = e.target.value as ReceiptIncomingIndicatorValue;
+                                const prev = incomingModalLine.incomingControl ?? {};
+                                updateLine(session.id, incomingModalLineIndex, {
+                                  incomingControl: { ...prev, [row.id]: v },
+                                });
+                              }}
+                              className="w-full min-w-[9rem] rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-600"
+                            >
+                              {INCOMING_INDICATOR_OPTIONS.map((o) => (
+                                <option key={o} value={o}>
+                                  {o}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div className="flex justify-end border-t border-slate-200 px-5 py-3">
+              <button
+                type="button"
+                onClick={() => setIncomingModalLineIndex(null)}
+                className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+              >
+                Закрыть
               </button>
             </div>
           </div>
