@@ -1,25 +1,40 @@
 import { Link, useParams } from "react-router-dom";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   formatRuDate,
-  getCatalogById,
   getEnrichedStockLinesByNomenclature,
   getTransactionsByNomenclature,
 } from "../mocks/balancesData";
+import {
+  NomenclatureProvider,
+  useNomenclature,
+  type SpecificationItem,
+  type SpecResultType,
+} from "../context/NomenclatureContext";
 
-type TabId = "stock" | "info" | "journal";
+type TabId = "stock" | "info" | "spec" | "journal";
 
 const tabs: { id: TabId; label: string }[] = [
   { id: "stock", label: "Остаток" },
   { id: "info", label: "Информация" },
+  { id: "spec", label: "Спецификация" },
   { id: "journal", label: "Журнал" },
 ];
 
 export function NomenklaturaDetailPage() {
+  return (
+    <NomenclatureProvider>
+      <NomenklaturaDetailContent />
+    </NomenclatureProvider>
+  );
+}
+
+function NomenklaturaDetailContent() {
   const { nomenclatureId } = useParams<{ nomenclatureId: string }>();
   const [tab, setTab] = useState<TabId>("stock");
 
-  const catalog = nomenclatureId ? getCatalogById(nomenclatureId) : undefined;
+  const { entries, updateItem } = useNomenclature();
+  const catalog = nomenclatureId ? entries.find((e) => e.id === nomenclatureId) : undefined;
   const transactions = useMemo(
     () => (nomenclatureId ? getTransactionsByNomenclature(nomenclatureId) : []),
     [nomenclatureId],
@@ -40,6 +55,68 @@ export function NomenklaturaDetailPage() {
   }
 
   const stockLines = getEnrichedStockLinesByNomenclature(nomenclatureId);
+
+  const [specDraft, setSpecDraft] = useState<SpecificationItem[]>(
+    catalog.specification ? [...catalog.specification] : [],
+  );
+  const [specError, setSpecError] = useState("");
+  const [specToast, setSpecToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSpecDraft(catalog.specification ? [...catalog.specification] : []);
+    setSpecError("");
+  }, [catalog.id, catalog.specification]);
+
+  const addSpecRow = () => {
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : String(Math.random());
+    setSpecDraft((rows) => [
+      ...rows,
+      { id, name: "", requirement: "", resultType: "Да", comment: "" },
+    ]);
+    setSpecError("");
+  };
+
+  const updateSpecRow = (id: string, patch: Partial<SpecificationItem>) => {
+    setSpecDraft((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    if (specError) setSpecError("");
+  };
+
+  const removeSpecRow = (id: string) => {
+    setSpecDraft((rows) => rows.filter((r) => r.id !== id));
+    if (specError) setSpecError("");
+  };
+
+  const validateSpec = (rows: SpecificationItem[]): string | null => {
+    for (const [idx, r] of rows.entries()) {
+      const pos = idx + 1;
+      if (!r.name.trim()) return `Заполните «Наименование» в строке ${pos}.`;
+      if (r.name.trim().length > 128)
+        return `«Наименование» в строке ${pos} не должно превышать 128 символов.`;
+      if (!r.requirement.trim()) return `Заполните «Требование» в строке ${pos}.`;
+      if (r.requirement.trim().length > 1024)
+        return `«Требование» в строке ${pos} не должно превышать 1024 символа.`;
+      if (!r.resultType) return `Укажите «Тип результата» в строке ${pos}.`;
+      if (r.comment && r.comment.length > 1024)
+        return `«Комментарий» в строке ${pos} не должен превышать 1024 символа.`;
+      if (r.sortOrder !== undefined && !Number.isFinite(r.sortOrder))
+        return `«Поле сортировки» в строке ${pos} должно быть числом.`;
+    }
+    return null;
+  };
+
+  const saveSpec = () => {
+    const bad = validateSpec(specDraft);
+    if (bad) {
+      setSpecError(bad);
+      return;
+    }
+    updateItem(catalog.id, { specification: specDraft });
+    setSpecToast("Спецификация сохранена");
+    setTimeout(() => setSpecToast(null), 2500);
+  };
 
   return (
     <div className="p-6 md:p-8">
@@ -286,6 +363,176 @@ export function NomenklaturaDetailPage() {
           </div>
         </section>
       ) : null}
+
+      {tab === "spec" ? (
+        <section aria-labelledby="spec-heading" className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="spec-heading" className="text-lg font-semibold text-slate-900">
+              Спецификация
+            </h2>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={addSpecRow}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                Добавить элемент
+              </button>
+              <button
+                type="button"
+                onClick={saveSpec}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-500"
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+
+          {specError && (
+            <p className="text-xs text-red-600" role="alert">
+              {specError}
+            </p>
+          )}
+
+          {specDraft.length === 0 ? (
+            <div className="rounded-lg border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">
+              Пока нет элементов спецификации.
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="min-w-[1100px] w-full border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                      <th className="px-4 py-3 font-medium">Наименование *</th>
+                      <th className="px-4 py-3 font-medium">Требование *</th>
+                      <th className="px-4 py-3 font-medium whitespace-nowrap">
+                        Тип результата *
+                      </th>
+                      <th className="px-4 py-3 font-medium">Комментарий</th>
+                      <th className="px-4 py-3 font-medium whitespace-nowrap">
+                        Поле сортировки
+                      </th>
+                      <th className="px-4 py-3 font-medium w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {specDraft.map((row) => (
+                      <tr key={row.id} className="align-top">
+                        <td className="px-4 py-3">
+                          <input
+                            value={row.name}
+                            maxLength={128}
+                            onChange={(e) => updateSpecRow(row.id, { name: e.target.value })}
+                            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                            placeholder="Наименование…"
+                          />
+                          <div className="mt-1 text-[10px] text-slate-400">
+                            {row.name.length}/128
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <textarea
+                            value={row.requirement}
+                            maxLength={1024}
+                            onChange={(e) =>
+                              updateSpecRow(row.id, { requirement: e.target.value })
+                            }
+                            rows={3}
+                            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                            placeholder="Требование…"
+                          />
+                          <div className="mt-1 text-[10px] text-slate-400">
+                            {row.requirement.length}/1024
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <select
+                            value={row.resultType}
+                            onChange={(e) =>
+                              updateSpecRow(row.id, {
+                                resultType: e.target.value as SpecResultType,
+                              })
+                            }
+                            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                          >
+                            {(["Да", "Нет", "Не применимо", "В работе"] as const).map(
+                              (v) => (
+                                <option key={v} value={v}>
+                                  {v}
+                                </option>
+                              ),
+                            )}
+                          </select>
+                        </td>
+                        <td className="px-4 py-3">
+                          <textarea
+                            value={row.comment}
+                            maxLength={1024}
+                            onChange={(e) =>
+                              updateSpecRow(row.id, { comment: e.target.value })
+                            }
+                            rows={3}
+                            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                            placeholder="Комментарий…"
+                          />
+                          <div className="mt-1 text-[10px] text-slate-400">
+                            {row.comment.length}/1024
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <input
+                            type="number"
+                            value={row.sortOrder ?? ""}
+                            onChange={(e) =>
+                              updateSpecRow(row.id, {
+                                sortOrder:
+                                  e.target.value === "" ? undefined : Number(e.target.value),
+                              })
+                            }
+                            className="w-28 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                            placeholder="—"
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => removeSpecRow(row.id)}
+                            className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                            title="Удалить"
+                            aria-label="Удалить"
+                          >
+                            <svg
+                              className="size-4"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {specToast && (
+        <div className="fixed bottom-4 right-4 z-50 animate-in fade-in-0 slide-in-from-bottom-2 duration-300">
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-900 shadow-lg">
+            {specToast}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

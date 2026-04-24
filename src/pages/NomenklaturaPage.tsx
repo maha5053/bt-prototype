@@ -1,7 +1,10 @@
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ALL_GROUPS, type CatalogItem } from "../mocks/balancesData";
-import { NomenclatureProvider, useNomenclature } from "../context/NomenclatureContext";
+import {
+  NomenclatureProvider,
+  useNomenclature,
+} from "../context/NomenclatureContext";
 
 const PAGE_SIZE = 10;
 

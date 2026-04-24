@@ -8,19 +8,34 @@ import {
 } from "react";
 import { MOCK_CATALOG, type CatalogItem } from "../mocks/balancesData";
 
+export type SpecResultType = "Да" | "Нет" | "Не применимо" | "В работе";
+
+export type SpecificationItem = {
+  id: string;
+  name: string;
+  requirement: string;
+  resultType: SpecResultType;
+  comment: string;
+  sortOrder?: number;
+};
+
+export type NomenclatureEntry = CatalogItem & {
+  specification?: SpecificationItem[];
+};
+
 const STORAGE_KEY = "bio-nomenclature";
 
-function loadFromStorage(): CatalogItem[] | null {
+function loadFromStorage(): NomenclatureEntry[] | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as CatalogItem[];
+    if (raw) return JSON.parse(raw) as NomenclatureEntry[];
   } catch {
     /* ignore */
   }
   return null;
 }
 
-function saveToStorage(entries: CatalogItem[]) {
+function saveToStorage(entries: NomenclatureEntry[]) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
   } catch {
@@ -28,9 +43,12 @@ function saveToStorage(entries: CatalogItem[]) {
   }
 }
 
-function mergeCatalogWithStorage(base: CatalogItem[], stored: CatalogItem[]): CatalogItem[] {
+function mergeCatalogWithStorage(
+  base: CatalogItem[],
+  stored: NomenclatureEntry[],
+): NomenclatureEntry[] {
   const storedById = new Map(stored.map((s) => [s.id, s]));
-  const merged = base.map((b) => storedById.get(b.id) ?? b);
+  const merged: NomenclatureEntry[] = base.map((b) => storedById.get(b.id) ?? b);
   // If storage has items missing in base, keep them too (prototype-friendly).
   for (const s of stored) {
     if (!base.some((b) => b.id === s.id)) merged.push(s);
@@ -39,19 +57,19 @@ function mergeCatalogWithStorage(base: CatalogItem[], stored: CatalogItem[]): Ca
 }
 
 type NomenclatureContextValue = {
-  entries: CatalogItem[];
-  updateItem: (id: string, patch: Partial<CatalogItem>) => void;
+  entries: NomenclatureEntry[];
+  updateItem: (id: string, patch: Partial<NomenclatureEntry>) => void;
 };
 
 const NomenclatureContext = createContext<NomenclatureContextValue | null>(null);
 
 export function NomenclatureProvider({ children }: { children: ReactNode }) {
-  const [entries, setEntries] = useState<CatalogItem[]>(() => {
+  const [entries, setEntries] = useState<NomenclatureEntry[]>(() => {
     const stored = loadFromStorage();
     return stored ? mergeCatalogWithStorage(MOCK_CATALOG, stored) : [...MOCK_CATALOG];
   });
 
-  const updateItem = useCallback((id: string, patch: Partial<CatalogItem>) => {
+  const updateItem = useCallback((id: string, patch: Partial<NomenclatureEntry>) => {
     setEntries((prev) => {
       const next = prev.map((e) => (e.id === id ? { ...e, ...patch } : e));
       saveToStorage(next);
