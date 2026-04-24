@@ -325,6 +325,10 @@ function ReceiptsSessionContent() {
   const [incomingControlDraft, setIncomingControlDraft] =
     useState<ReceiptIncomingControlAnswers>({});
   const [incomingNotesDraft, setIncomingNotesDraft] = useState("");
+  /** Индекс только что добавленной строки — спросить про переход к ВК. */
+  const [afterAddIncomingLineIndex, setAfterAddIncomingLineIndex] = useState<number | null>(
+    null,
+  );
 
   const isEditable = session?.status === "draft";
 
@@ -394,6 +398,10 @@ function ReceiptsSessionContent() {
       return;
     }
     setQtyError("");
+    const newLineIndex = session.lines.length;
+    const newLength = newLineIndex + 1;
+    const targetPage = Math.max(1, Math.ceil(newLength / PAGE_SIZE));
+    setPage(targetPage);
     addLine(session.id, {
       nomenclatureId: selectedCatalogItem.id,
       nomenclatureName: selectedCatalogItem.name,
@@ -413,6 +421,7 @@ function ReceiptsSessionContent() {
       place: "",
     });
     setAddModalOpen(false);
+    setAfterAddIncomingLineIndex(newLineIndex);
   };
 
   const openIncomingModal = (lineIndex: number) => {
@@ -944,6 +953,54 @@ function ReceiptsSessionContent() {
                 className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-500"
               >
                 Добавить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {afterAddIncomingLineIndex !== null && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setAfterAddIncomingLineIndex(null)}
+        >
+          <div
+            className="mx-4 w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="after-add-incoming-title"
+          >
+            <h3
+              id="after-add-incoming-title"
+              className="text-lg font-semibold text-slate-900"
+            >
+              Позиция добавлена
+            </h3>
+            <p className="mt-3 text-sm font-medium text-emerald-800">
+              Позиция успешно добавлена к поступлению.
+            </p>
+            <p className="mt-2 text-sm text-slate-600">
+              Перейти сейчас к заполнению входного контроля для этой позиции?
+            </p>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAfterAddIncomingLineIndex(null)}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                Заполню позже
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const idx = afterAddIncomingLineIndex;
+                  setAfterAddIncomingLineIndex(null);
+                  if (idx !== null) openIncomingModal(idx);
+                }}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+              >
+                Да, открыть
               </button>
             </div>
           </div>
