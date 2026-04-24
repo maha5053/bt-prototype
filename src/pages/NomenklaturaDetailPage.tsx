@@ -78,7 +78,7 @@ function NomenklaturaDetailContent() {
         id,
         name: "",
         requirement: "",
-        resultType: "Да",
+        resultType: "Да/нет",
         comment: "",
         confirmed: false,
       },
@@ -506,7 +506,7 @@ function NomenklaturaDetailContent() {
                                 }
                                 className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
                               >
-                                {(["Да", "Нет", "Не применимо", "В работе"] as const).map(
+                                {(["Да/нет", "Не применимо", "В работе"] as const).map(
                                   (v) => (
                                     <option key={v} value={v}>
                                       {v}

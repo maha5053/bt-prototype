@@ -8,7 +8,7 @@ import {
 } from "react";
 import { MOCK_CATALOG, type CatalogItem } from "../mocks/balancesData";
 
-export type SpecResultType = "Да" | "Нет" | "Не применимо" | "В работе";
+export type SpecResultType = "Да/нет" | "Не применимо" | "В работе";
 
 export type SpecificationItem = {
   id: string;
@@ -26,10 +26,29 @@ export type NomenclatureEntry = CatalogItem & {
 
 const STORAGE_KEY = "bio-nomenclature";
 
+function normalizeSpecResultType(value: unknown): SpecResultType {
+  // Backward-compat for older prototypes where values were split into "Да" / "Нет".
+  if (value === "Да" || value === "Нет") return "Да/нет";
+  if (value === "Да/нет" || value === "Не применимо" || value === "В работе") return value;
+  return "Да/нет";
+}
+
 function loadFromStorage(): NomenclatureEntry[] | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as NomenclatureEntry[];
+    if (raw) {
+      const parsed = JSON.parse(raw) as NomenclatureEntry[];
+      return parsed.map((entry) => {
+        if (!entry.specification) return entry;
+        return {
+          ...entry,
+          specification: entry.specification.map((row) => ({
+            ...row,
+            resultType: normalizeSpecResultType((row as { resultType?: unknown }).resultType),
+          })),
+        };
+      });
+    }
   } catch {
     /* ignore */
   }
