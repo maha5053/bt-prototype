@@ -11,6 +11,12 @@ import {
   type SpecificationItem,
   type SpecResultType,
 } from "../context/NomenclatureContext";
+import {
+  buildSpecRowsFromTemplate,
+  listSpecTemplates,
+  upsertSpecTemplate,
+  type SpecTemplate,
+} from "../lib/specTemplatesStorage";
 
 type TabId = "stock" | "info" | "spec" | "journal";
 
@@ -64,10 +70,28 @@ function NomenklaturaDetailContent() {
   const [specDraggingId, setSpecDraggingId] = useState<string | null>(null);
   const [specDragOverId, setSpecDragOverId] = useState<string | null>(null);
 
+  const [specTemplates, setSpecTemplates] = useState<SpecTemplate[]>([]);
+  const [openSaveTemplate, setOpenSaveTemplate] = useState(false);
+  const [openLoadTemplate, setOpenLoadTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [templateError, setTemplateError] = useState("");
+  const [saveOverwritePrompt, setSaveOverwritePrompt] = useState(false);
+
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [loadConfirm, setLoadConfirm] = useState<{
+    templateId: string;
+    templateName: string;
+  } | null>(null);
+
   useEffect(() => {
     setSpecDraft(catalog.specification ? [...catalog.specification] : []);
     setSpecError("");
   }, [catalog.id, catalog.specification]);
+
+  useEffect(() => {
+    if (!openSaveTemplate && !openLoadTemplate) return;
+    setSpecTemplates(listSpecTemplates());
+  }, [openSaveTemplate, openLoadTemplate]);
 
   const addSpecRow = () => {
     const id =
@@ -150,6 +174,66 @@ function NomenklaturaDetailContent() {
     const normalized = next.map((r, idx) => ({ ...r, sortOrder: idx + 1 }));
     persistSpecDraft(normalized, false);
     setSpecDraft(normalized);
+  };
+
+  const openSaveTemplateModal = () => {
+    setTemplateName("");
+    setTemplateError("");
+    setSaveOverwritePrompt(false);
+    setOpenSaveTemplate(true);
+  };
+
+  const openLoadTemplateModal = () => {
+    setSelectedTemplateId(null);
+    setLoadConfirm(null);
+    setTemplateError("");
+    setOpenLoadTemplate(true);
+  };
+
+  const saveCurrentSpecAsTemplate = (overwrite: boolean) => {
+    const name = templateName.trim();
+    if (!name) {
+      setTemplateError("Укажите название шаблона.");
+      return;
+    }
+
+    const existing = specTemplates.find(
+      (t) => t.name.trim().toLowerCase() === name.toLowerCase(),
+    );
+    if (existing && !overwrite) {
+      setSaveOverwritePrompt(true);
+      setTemplateError(
+        "Шаблон с таким названием уже существует. Перезаписать его?",
+      );
+      return;
+    }
+
+    upsertSpecTemplate({
+      id: existing?.id,
+      name,
+      items: specDraft,
+    });
+    setSpecTemplates(listSpecTemplates());
+    setOpenSaveTemplate(false);
+    setSpecToast("Шаблон спецификации сохранён");
+    setTimeout(() => setSpecToast(null), 2500);
+  };
+
+  const applyTemplate = (mode: "replace" | "append", templateId: string) => {
+    const tpl = specTemplates.find((t) => t.id === templateId) ?? null;
+    if (!tpl) return;
+
+    const rows = buildSpecRowsFromTemplate(tpl) as SpecificationItem[];
+    const next =
+      mode === "replace"
+        ? rows
+        : [...specDraft, ...rows].map((r, idx) => ({ ...r, sortOrder: idx + 1 }));
+
+    setSpecError("");
+    persistSpecDraft(next, false);
+    setSpecDraft(next);
+    setOpenLoadTemplate(false);
+    setLoadConfirm(null);
   };
 
   return (
@@ -404,6 +488,22 @@ function NomenklaturaDetailContent() {
             <h2 id="spec-heading" className="text-lg font-semibold text-slate-900">
               Спецификация
             </h2>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={openLoadTemplateModal}
+                className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                Загрузить из шаблона
+              </button>
+              <button
+                type="button"
+                onClick={openSaveTemplateModal}
+                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-500"
+              >
+                Сохранить как шаблон
+              </button>
+            </div>
           </div>
 
           {specError && (
@@ -718,6 +818,244 @@ function NomenklaturaDetailContent() {
               </div>
             </>
           )}
+
+          {openSaveTemplate ? (
+            <div
+              className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/40 pt-16"
+              onClick={() => setOpenSaveTemplate(false)}
+            >
+              <div
+                className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Сохранить как шаблон"
+              >
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    Сохранить как шаблон
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setOpenSaveTemplate(false)}
+                    className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                    aria-label="Закрыть"
+                  >
+                    <svg
+                      className="size-5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+
+                <label className="block text-sm font-medium text-slate-700">
+                  Название шаблона
+                  <input
+                    value={templateName}
+                    maxLength={128}
+                    onChange={(e) => {
+                      setTemplateName(e.target.value);
+                      if (templateError) setTemplateError("");
+                      if (saveOverwritePrompt) setSaveOverwritePrompt(false);
+                    }}
+                    className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                    placeholder="Напр. Флаконы 25см²"
+                  />
+                </label>
+
+                {templateError ? (
+                  <p className="mt-2 text-xs text-red-600" role="alert">
+                    {templateError}
+                  </p>
+                ) : null}
+
+                <div className="mt-5 flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setOpenSaveTemplate(false)}
+                    className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                  >
+                    Отмена
+                  </button>
+                  {saveOverwritePrompt ? (
+                    <button
+                      type="button"
+                      onClick={() => saveCurrentSpecAsTemplate(true)}
+                      className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-amber-500"
+                    >
+                      Перезаписать
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => saveCurrentSpecAsTemplate(false)}
+                      className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-500"
+                    >
+                      Сохранить
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {openLoadTemplate ? (
+            <div
+              className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/40 pt-16"
+              onClick={() => setOpenLoadTemplate(false)}
+            >
+              <div
+                className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Загрузить из шаблона"
+              >
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    Загрузить из шаблона
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setOpenLoadTemplate(false)}
+                    className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                    aria-label="Закрыть"
+                  >
+                    <svg
+                      className="size-5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+
+                {specTemplates.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/40 px-4 py-6 text-sm text-slate-600">
+                    Шаблонов пока нет. Сначала сохраните спецификацию как шаблон.
+                  </div>
+                ) : (
+                  <>
+                    <div className="overflow-hidden rounded-lg border border-slate-200">
+                      <ul className="divide-y divide-slate-100">
+                        {specTemplates.map((t) => (
+                          <li key={t.id} className="p-3">
+                            <label className="flex cursor-pointer items-start gap-3">
+                              <input
+                                type="radio"
+                                name="spec-template"
+                                value={t.id}
+                                checked={selectedTemplateId === t.id}
+                                onChange={() => {
+                                  setSelectedTemplateId(t.id);
+                                  setLoadConfirm(null);
+                                }}
+                                className="mt-1"
+                              />
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                  <span className="font-medium text-slate-900">
+                                    {t.name}
+                                  </span>
+                                  <span className="text-xs text-slate-500">
+                                    · {t.items.length} показ.
+                                  </span>
+                                </div>
+                                <div className="mt-0.5 text-xs text-slate-500">
+                                  {t.updatedAt
+                                    ? `Обновлён: ${new Date(t.updatedAt).toLocaleString(
+                                        "ru-RU",
+                                      )}`
+                                    : `Создан: ${new Date(t.createdAt).toLocaleString(
+                                        "ru-RU",
+                                      )}`}
+                                </div>
+                              </div>
+                            </label>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    {loadConfirm ? (
+                      <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        <div className="font-medium">
+                          Как применить шаблон «{loadConfirm.templateName}»?
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setLoadConfirm(null)}
+                            className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-50"
+                          >
+                            Отмена
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => applyTemplate("append", loadConfirm.templateId)}
+                            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            Добавить
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => applyTemplate("replace", loadConfirm.templateId)}
+                            className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500"
+                          >
+                            Заменить
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                )}
+
+                <div className="mt-5 flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setOpenLoadTemplate(false)}
+                    className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                  >
+                    Закрыть
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!selectedTemplateId}
+                    onClick={() => {
+                      if (!selectedTemplateId) return;
+                      const tpl = specTemplates.find((t) => t.id === selectedTemplateId);
+                      if (!tpl) return;
+                      setLoadConfirm({ templateId: tpl.id, templateName: tpl.name });
+                    }}
+                    className={[
+                      "rounded-md px-4 py-2 text-sm font-medium shadow-sm",
+                      selectedTemplateId
+                        ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                        : "cursor-not-allowed bg-slate-200 text-slate-500",
+                    ].join(" ")}
+                  >
+                    Выбрать
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
