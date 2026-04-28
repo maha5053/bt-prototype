@@ -577,9 +577,6 @@ function NomenklaturaDetailContent() {
                           Тип результата *
                         </th>
                         <th className="px-4 py-3 font-medium">Комментарий</th>
-                        <th className="px-4 py-3 font-medium whitespace-nowrap">
-                          Поле сортировки
-                        </th>
                         <th className="px-4 py-3 font-medium w-10"></th>
                       </tr>
                     </thead>
@@ -761,33 +758,6 @@ function NomenklaturaDetailContent() {
                                   {row.comment.length}/1024
                                 </div>
                               </>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            {row.confirmed ? (
-                              <button
-                                type="button"
-                                onClick={() => updateSpecRow(row.id, { confirmed: false })}
-                                className="w-28 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                                title="Редактировать"
-                              >
-                                {row.sortOrder ?? "—"}
-                              </button>
-                            ) : (
-                              <input
-                                type="number"
-                                value={row.sortOrder ?? ""}
-                                onChange={(e) =>
-                                  updateSpecRow(row.id, {
-                                    sortOrder:
-                                      e.target.value === ""
-                                        ? undefined
-                                        : Number(e.target.value),
-                                  })
-                                }
-                                className="w-28 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-                                placeholder="—"
-                              />
                             )}
                           </td>
                           <td className="px-4 py-3 text-center">
