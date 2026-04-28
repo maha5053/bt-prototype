@@ -8,10 +8,8 @@ import {
 } from "../mocks/balancesData";
 import {
   NomenclatureProvider,
-  SPEC_RESULT_TYPE_OPTIONS,
   useNomenclature,
   type SpecificationItem,
-  type SpecResultType,
 } from "../context/NomenclatureContext";
 import {
   buildSpecRowsFromTemplate,
