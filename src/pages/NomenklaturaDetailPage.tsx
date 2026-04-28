@@ -1118,6 +1118,16 @@ function NomenklaturaDetailContent() {
                                     </div>
                                     <button
                                       type="button"
+                                      onMouseDown={(e) => {
+                                        // HeadlessUI Combobox selects option on mousedown.
+                                        // Prevent selection/closing when clicking delete.
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                      }}
+                                      onPointerDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                      }}
                                       onClick={(e) => {
                                         e.preventDefault();
                                         e.stopPropagation();
