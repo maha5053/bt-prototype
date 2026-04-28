@@ -13,6 +13,7 @@ import {
 } from "../context/NomenclatureContext";
 import {
   buildSpecRowsFromTemplate,
+  deleteSpecTemplate,
   listSpecTemplates,
   upsertSpecTemplate,
   type SpecTemplate,
@@ -213,6 +214,17 @@ function NomenklaturaDetailContent() {
     setLoadConfirm(null);
     setTemplateError("");
     setOpenLoadTemplate(true);
+  };
+
+  const handleDeleteTemplate = (tpl: SpecTemplate) => {
+    if (!window.confirm(`Удалить шаблон «${tpl.name}»?`)) return;
+    const ok = deleteSpecTemplate(tpl.id);
+    if (!ok) return;
+    const next = listSpecTemplates();
+    setSpecTemplates(next);
+    if (selectedTemplate?.id === tpl.id) setSelectedTemplate(null);
+    if (loadConfirm?.templateId === tpl.id) setLoadConfirm(null);
+    setTemplateSearch("");
   };
 
   const saveCurrentSpecAsTemplate = (overwrite: boolean) => {
@@ -1086,20 +1098,52 @@ function NomenklaturaDetailContent() {
                                     }`
                                   }
                                 >
-                                  <div className="flex items-baseline justify-between gap-3">
-                                    <span className="font-medium">{t.name}</span>
-                                    <span className="shrink-0 text-xs opacity-80">
-                                      {t.items.length} показ.
-                                    </span>
-                                  </div>
-                                  <div className="mt-0.5 text-xs opacity-80">
-                                    {t.updatedAt
-                                      ? `Обновлён: ${new Date(t.updatedAt).toLocaleString(
-                                          "ru-RU",
-                                        )}`
-                                      : `Создан: ${new Date(t.createdAt).toLocaleString(
-                                          "ru-RU",
-                                        )}`}
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-baseline justify-between gap-3">
+                                        <span className="font-medium">{t.name}</span>
+                                        <span className="shrink-0 text-xs opacity-80">
+                                          {t.items.length} показ.
+                                        </span>
+                                      </div>
+                                      <div className="mt-0.5 text-xs opacity-80">
+                                        {t.updatedAt
+                                          ? `Обновлён: ${new Date(t.updatedAt).toLocaleString(
+                                              "ru-RU",
+                                            )}`
+                                          : `Создан: ${new Date(t.createdAt).toLocaleString(
+                                              "ru-RU",
+                                            )}`}
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleDeleteTemplate(t);
+                                      }}
+                                      className="shrink-0 rounded-md p-1 opacity-80 hover:bg-red-500/15 hover:text-red-600"
+                                      title="Удалить шаблон"
+                                      aria-label="Удалить шаблон"
+                                    >
+                                      <svg
+                                        className="size-4"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        aria-hidden
+                                      >
+                                        <path d="M3 6h18" />
+                                        <path d="M8 6V4h8v2" />
+                                        <path d="M19 6l-1 14H6L5 6" />
+                                        <path d="M10 11v6" />
+                                        <path d="M14 11v6" />
+                                      </svg>
+                                    </button>
                                   </div>
                                 </Combobox.Option>
                               ))

@@ -127,3 +127,11 @@ export function buildSpecRowsFromTemplate(
   });
 }
 
+export function deleteSpecTemplate(templateId: string): boolean {
+  const templates = listSpecTemplates();
+  const next = templates.filter((t) => t.id !== templateId);
+  if (next.length === templates.length) return false;
+  saveSpecTemplates(next);
+  return true;
+}
+
