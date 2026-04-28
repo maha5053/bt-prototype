@@ -1253,9 +1253,37 @@ function ReceiptsSessionContent() {
                   <tbody className="divide-y divide-slate-100">
                     {incomingModalSpec.map((row) => {
                       const val = incomingControlDraft[row.id] ?? "Не определено";
+                      const comment = row.comment?.trim() || "";
                       return (
                         <tr key={row.id} className="align-top">
-                          <td className="px-3 py-2.5 font-medium text-slate-800">{row.name}</td>
+                          <td className="px-3 py-2.5 font-medium text-slate-800">
+                            <div className="flex items-start gap-2">
+                              <span className="flex-1">{row.name}</span>
+                              {comment ? (
+                                <button
+                                  type="button"
+                                  className="mt-0.5 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                                  title={comment}
+                                  aria-label="Комментарий"
+                                >
+                                  <svg
+                                    className="size-4"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    aria-hidden
+                                  >
+                                    <path d="M21 15a4 4 0 0 1-4 4H7l-4 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+                                    <path d="M7.5 8.5h9" />
+                                    <path d="M7.5 12h6.5" />
+                                  </svg>
+                                </button>
+                              ) : null}
+                            </div>
+                          </td>
                           <td className="px-3 py-2.5 text-slate-600">{row.requirement}</td>
                           <td className="px-3 py-2.5">
                             <select

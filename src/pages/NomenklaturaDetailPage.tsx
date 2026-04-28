@@ -594,9 +594,6 @@ function NomenklaturaDetailContent() {
                         <th className="px-4 py-3 font-medium w-10" aria-label="Порядок" />
                         <th className="px-4 py-3 font-medium">Наименование *</th>
                         <th className="px-4 py-3 font-medium">Требование *</th>
-                        <th className="px-4 py-3 font-medium whitespace-nowrap">
-                          Тип результата *
-                        </th>
                         <th className="px-4 py-3 font-medium w-10"></th>
                       </tr>
                     </thead>
@@ -722,34 +719,6 @@ function NomenklaturaDetailContent() {
                                   {row.requirement.length}/1024
                                 </div>
                               </>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            {row.confirmed ? (
-                              <button
-                                type="button"
-                                onClick={() => updateSpecRow(row.id, { confirmed: false })}
-                                className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                                title="Редактировать"
-                              >
-                                {row.resultType}
-                              </button>
-                            ) : (
-                              <select
-                                value={row.resultType}
-                                onChange={(e) =>
-                                  updateSpecRow(row.id, {
-                                    resultType: e.target.value as SpecResultType,
-                                  })
-                                }
-                                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-                              >
-                                {SPEC_RESULT_TYPE_OPTIONS.map((v) => (
-                                  <option key={v} value={v}>
-                                    {v}
-                                  </option>
-                                ))}
-                              </select>
                             )}
                           </td>
                           <td className="px-4 py-3 text-center">
