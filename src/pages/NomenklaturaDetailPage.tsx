@@ -71,6 +71,8 @@ function NomenklaturaDetailContent() {
   const [specToast, setSpecToast] = useState<string | null>(null);
   const [specDraggingId, setSpecDraggingId] = useState<string | null>(null);
   const [specDragOverId, setSpecDragOverId] = useState<string | null>(null);
+  const [specCommentEditor, setSpecCommentEditor] = useState<{ id: string } | null>(null);
+  const [specCommentDraft, setSpecCommentDraft] = useState("");
 
   const [specTemplates, setSpecTemplates] = useState<SpecTemplate[]>([]);
   const [openSaveTemplate, setOpenSaveTemplate] = useState(false);
@@ -163,6 +165,25 @@ function NomenklaturaDetailContent() {
     const nextRows = specDraft.map((r) => (r.id === id ? { ...r, confirmed: true } : r));
     if (!persistSpecDraft(nextRows, true)) return;
     setSpecDraft(nextRows);
+  };
+
+  const openCommentEditor = (id: string) => {
+    const row = specDraft.find((r) => r.id === id);
+    if (!row) return;
+    setSpecCommentDraft(row.comment || "");
+    setSpecCommentEditor({ id });
+  };
+
+  const saveComment = () => {
+    if (!specCommentEditor) return;
+    const id = specCommentEditor.id;
+    const nextRows = specDraft.map((r) =>
+      r.id === id ? { ...r, comment: specCommentDraft } : r,
+    );
+    if (!persistSpecDraft(nextRows, true)) return;
+    setSpecDraft(nextRows);
+    setSpecCommentEditor(null);
+    setSpecCommentDraft("");
   };
 
   const reorderSpecRows = (fromId: string, toId: string) => {
@@ -576,7 +597,6 @@ function NomenklaturaDetailContent() {
                         <th className="px-4 py-3 font-medium whitespace-nowrap">
                           Тип результата *
                         </th>
-                        <th className="px-4 py-3 font-medium">Комментарий</th>
                         <th className="px-4 py-3 font-medium w-10"></th>
                       </tr>
                     </thead>
@@ -732,34 +752,6 @@ function NomenklaturaDetailContent() {
                               </select>
                             )}
                           </td>
-                          <td className="px-4 py-3">
-                            {row.confirmed ? (
-                              <button
-                                type="button"
-                                onClick={() => updateSpecRow(row.id, { confirmed: false })}
-                                className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-left text-sm text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                                title="Редактировать"
-                              >
-                                <span className="line-clamp-3">{row.comment || "—"}</span>
-                              </button>
-                            ) : (
-                              <>
-                                <textarea
-                                  value={row.comment}
-                                  maxLength={1024}
-                                  onChange={(e) =>
-                                    updateSpecRow(row.id, { comment: e.target.value })
-                                  }
-                                  rows={3}
-                                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
-                                  placeholder="Комментарий…"
-                                />
-                                <div className="mt-1 text-[10px] text-slate-400">
-                                  {row.comment.length}/1024
-                                </div>
-                              </>
-                            )}
-                          </td>
                           <td className="px-4 py-3 text-center">
                             <div className="flex items-center justify-center gap-1">
                               {!row.confirmed && (
@@ -784,6 +776,33 @@ function NomenklaturaDetailContent() {
                                   ✎
                                 </button>
                               )}
+                              <button
+                                type="button"
+                                onClick={() => openCommentEditor(row.id)}
+                                className={[
+                                  "rounded-md p-1",
+                                  row.comment
+                                    ? "text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                                    : "text-slate-400 hover:bg-slate-100 hover:text-slate-700",
+                                ].join(" ")}
+                                title={row.comment ? "Комментарий" : "Добавить комментарий"}
+                                aria-label={row.comment ? "Комментарий" : "Добавить комментарий"}
+                              >
+                                <svg
+                                  className="size-4"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  aria-hidden
+                                >
+                                  <path d="M21 15a4 4 0 0 1-4 4H7l-4 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z" />
+                                  <path d="M7.5 8.5h9" />
+                                  <path d="M7.5 12h6.5" />
+                                </svg>
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => removeSpecRow(row.id)}
@@ -814,6 +833,84 @@ function NomenklaturaDetailContent() {
               </div>
             </>
           )}
+
+          {specCommentEditor ? (
+            <div
+              className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/40 pt-16"
+              onClick={() => {
+                setSpecCommentEditor(null);
+                setSpecCommentDraft("");
+              }}
+            >
+              <div
+                className="w-full max-w-xl rounded-xl bg-white p-6 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+                aria-label="Комментарий"
+              >
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="text-lg font-semibold text-slate-900">Комментарий</h3>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSpecCommentEditor(null);
+                      setSpecCommentDraft("");
+                    }}
+                    className="rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                    aria-label="Закрыть"
+                  >
+                    <svg
+                      className="size-5"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+
+                <textarea
+                  value={specCommentDraft}
+                  maxLength={1024}
+                  onChange={(e) => setSpecCommentDraft(e.target.value)}
+                  rows={4}
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
+                  placeholder="Комментарий…"
+                  autoFocus
+                />
+                <div className="mt-1 text-[10px] text-slate-400">
+                  {specCommentDraft.length}/1024
+                </div>
+
+                <div className="mt-5 flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSpecCommentEditor(null);
+                      setSpecCommentDraft("");
+                    }}
+                    className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                  >
+                    Отмена
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveComment}
+                    className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-500"
+                  >
+                    Сохранить
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4">
             <button
