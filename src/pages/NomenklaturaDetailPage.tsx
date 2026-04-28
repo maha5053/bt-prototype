@@ -885,16 +885,16 @@ function NomenklaturaDetailContent() {
             <button
               type="button"
               onClick={addSpecRow}
-              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-500"
             >
               Добавить элемент
             </button>
             <button
               type="button"
               onClick={clearSpec}
-              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+              className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-red-500"
             >
-              Очистить
+              Удалить все элементы
             </button>
           </div>
 
