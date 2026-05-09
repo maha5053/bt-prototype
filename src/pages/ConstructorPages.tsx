@@ -2051,9 +2051,9 @@ export function ConstructorEditorView({
                                             {step.consumables.map((c) => (
                                               <div
                                                 key={c.id}
-                                                className="flex flex-col gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 md:flex-row md:items-center md:justify-between"
+                                                className="flex flex-col gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 md:flex-row md:items-center md:justify-start md:gap-6"
                                               >
-                                                <span className="min-w-0 truncate font-medium">
+                                                <span className="min-w-0 font-medium md:w-64 md:shrink-0">
                                                   {c.name}
                                                 </span>
                                                 <div className="flex shrink-0 items-center gap-2">
