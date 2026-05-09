@@ -834,6 +834,26 @@ export function ConstructorEditorView({
     });
   };
 
+  const updateStepConsumableDefault = (
+    stage: StageTemplate,
+    stepId: string,
+    consumableId: string,
+    value: number | null,
+  ) => {
+    patchStep(stage.id, stepId, (prev) => ({
+      ...prev,
+      consumables: (prev.consumables ?? []).map((item) =>
+        item.id === consumableId
+          ? {
+              ...item,
+              defaultQuantity:
+                value == null ? null : Math.max(0, Math.floor(value)),
+            }
+          : item,
+      ),
+    }));
+  };
+
   const toggleStepEquipment = (
     stage: StageTemplate,
     stepId: string,
@@ -2031,42 +2051,101 @@ export function ConstructorEditorView({
                                             {step.consumables.map((c) => (
                                               <div
                                                 key={c.id}
-                                                className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                                                className="flex flex-col gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 md:flex-row md:items-center md:justify-between"
                                               >
-                                                <span className="truncate">{c.name}</span>
-                                                {controlsEnabled ? (
-                                                <button
-                                                  type="button"
-                                                  className="rounded-md border border-red-300 bg-white p-2 text-red-700 hover:bg-red-50"
-                                                  onClick={() =>
-                                                    toggleStepConsumable(
-                                                      stage,
-                                                      step.id,
-                                                      c.id,
-                                                      false,
-                                                    )
-                                                  }
-                                                  aria-label="Удалить расходный материал"
-                                                  title="Удалить"
-                                                >
-                                                  <svg
-                                                    className="size-4"
-                                                    viewBox="0 0 24 24"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    strokeWidth="2"
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    aria-hidden
-                                                  >
-                                                    <path d="M3 6h18" />
-                                                    <path d="M8 6V4h8v2" />
-                                                    <path d="M19 6l-1 14H6L5 6" />
-                                                    <path d="M10 11v6" />
-                                                    <path d="M14 11v6" />
-                                                  </svg>
-                                                </button>
-                                                ) : null}
+                                                <span className="min-w-0 truncate font-medium">
+                                                  {c.name}
+                                                </span>
+                                                <div className="flex shrink-0 items-center gap-2">
+                                                  <label className="flex items-center gap-2 text-xs text-slate-500">
+                                                    <span className="whitespace-nowrap">
+                                                      По умолчанию
+                                                    </span>
+                                                    <input
+                                                      type="number"
+                                                      inputMode="numeric"
+                                                      min={0}
+                                                      step={1}
+                                                      value={
+                                                        typeof c.defaultQuantity === "number"
+                                                          ? c.defaultQuantity
+                                                          : ""
+                                                      }
+                                                      onKeyDown={(e) => {
+                                                        if (
+                                                          e.key === "-" ||
+                                                          e.key === "e" ||
+                                                          e.key === "E" ||
+                                                          e.key === "+"
+                                                        ) {
+                                                          e.preventDefault();
+                                                        }
+                                                      }}
+                                                      onChange={(e) => {
+                                                        if (!controlsEnabled) return;
+                                                        const raw = e.target.value;
+                                                        if (raw === "") {
+                                                          updateStepConsumableDefault(
+                                                            stage,
+                                                            step.id,
+                                                            c.id,
+                                                            null,
+                                                          );
+                                                          return;
+                                                        }
+                                                        const next = Number(raw);
+                                                        if (!Number.isFinite(next) || next < 0) {
+                                                          return;
+                                                        }
+                                                        updateStepConsumableDefault(
+                                                          stage,
+                                                          step.id,
+                                                          c.id,
+                                                          next,
+                                                        );
+                                                      }}
+                                                      disabled={!controlsEnabled}
+                                                      className="w-20 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-800 outline-none transition focus:border-blue-400 disabled:bg-slate-50 disabled:text-slate-500"
+                                                      aria-label={`Значение по умолчанию: ${c.name}`}
+                                                    />
+                                                    <span className="whitespace-nowrap">
+                                                      {c.unit}
+                                                    </span>
+                                                  </label>
+                                                  {controlsEnabled ? (
+                                                    <button
+                                                      type="button"
+                                                      className="rounded-md border border-red-300 bg-white p-2 text-red-700 hover:bg-red-50"
+                                                      onClick={() =>
+                                                        toggleStepConsumable(
+                                                          stage,
+                                                          step.id,
+                                                          c.id,
+                                                          false,
+                                                        )
+                                                      }
+                                                      aria-label="Удалить расходный материал"
+                                                      title="Удалить"
+                                                    >
+                                                      <svg
+                                                        className="size-4"
+                                                        viewBox="0 0 24 24"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        strokeWidth="2"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        aria-hidden
+                                                      >
+                                                        <path d="M3 6h18" />
+                                                        <path d="M8 6V4h8v2" />
+                                                        <path d="M19 6l-1 14H6L5 6" />
+                                                        <path d="M10 11v6" />
+                                                        <path d="M14 11v6" />
+                                                      </svg>
+                                                    </button>
+                                                  ) : null}
+                                                </div>
                                               </div>
                                             ))}
                                           </div>

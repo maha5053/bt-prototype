@@ -24,6 +24,7 @@ export interface ConsumableItem {
   id: string;
   name: string;
   unit: string;
+  defaultQuantity?: number | null;
 }
 
 export interface EquipmentItem {
@@ -222,7 +223,12 @@ function emptyStepExecution(step: StepTemplate): StepExecution {
   }
 
   const consumableValues: Record<string, number | null> = {};
-  for (const c of step.consumables) consumableValues[c.id] = null;
+  for (const c of step.consumables) {
+    consumableValues[c.id] =
+      typeof c.defaultQuantity === "number" && Number.isFinite(c.defaultQuantity)
+        ? Math.max(0, Math.floor(c.defaultQuantity))
+        : null;
+  }
 
   const equipmentValues: Record<string, boolean> = {};
   for (const e of step.equipment) equipmentValues[e.id] = false;
@@ -798,4 +804,3 @@ export const INITIAL_PRODUCTION_ORDERS: ProductionOrder[] = (() => {
 
   return [completed, atProduction, atQualityControl].map(clone);
 })();
-
