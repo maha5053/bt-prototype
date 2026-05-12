@@ -2,7 +2,16 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link id="app-favicon" rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      const favicon = document.getElementById("app-favicon");
+      const isGithubPages = location.hostname.endsWith("github.io");
+      const baseUrl = "%BASE_URL%";
+
+      if (!isGithubPages) {
+        favicon.href = `${baseUrl}favicon-local.svg`;
+      }
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bio — прототип</title>
   </head>
