@@ -266,6 +266,7 @@ export function ConstructorEditorView({
   stageTypeLabel = STAGE_TYPE_LABEL,
   allowGroupsByStageType,
   allowStepsByStageType,
+  emptyStagesByStageType,
   readOnly = false,
 }: {
   headerTitle: string;
@@ -274,6 +275,7 @@ export function ConstructorEditorView({
   stageTypeLabel?: Partial<Record<StageTemplate["type"], string>>;
   allowGroupsByStageType?: Partial<Record<StageTemplate["type"], boolean>>;
   allowStepsByStageType?: Partial<Record<StageTemplate["type"], boolean>>;
+  emptyStagesByStageType?: Partial<Record<StageTemplate["type"], boolean>>;
   readOnly?: boolean;
 }) {
   const { templateId } = useParams<{ templateId: string }>();
@@ -369,6 +371,9 @@ export function ConstructorEditorView({
 
   const allowSteps = (type: StageTemplate["type"]) =>
     allowStepsByStageType?.[type] ?? true;
+
+  const isEmptyStage = (type: StageTemplate["type"]) =>
+    emptyStagesByStageType?.[type] ?? false;
 
   useEffect(() => {
     // For stages where steps are disabled, we still need one implicit step to hold groups/fields/etc.
@@ -1040,7 +1045,11 @@ export function ConstructorEditorView({
           {orderedStages.map((stage) => (
             <Tab.Panel key={stage.id}>
               <div className="space-y-3">
-                {stage.steps.length === 0 ? (
+                {isEmptyStage(stage.type) ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-600">
+                    Раздел пока пуст.
+                  </div>
+                ) : stage.steps.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-600">
                     {allowSteps(stage.type) ? "Добавьте первый шаг." : "Подготовка формы этапа…"}
                   </div>

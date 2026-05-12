@@ -7,6 +7,7 @@ import { ProductionTemplatesDevTools } from "../components/ProductionTemplatesDe
 
 /** Стабильные ссылки — иначе у `ConstructorEditorView` каждый рендер новые пропсы и эффекты срабатывают постоянно. */
 const CONSTRUCTOR_V2_STAGE_ORDER: StageTemplate["type"][] = [
+  "registration",
   "production",
   "quality_control",
 ];
@@ -14,13 +15,15 @@ const CONSTRUCTOR_V2_STAGE_ORDER: StageTemplate["type"][] = [
 const CONSTRUCTOR_V2_STAGE_LABEL: Partial<
   Record<StageTemplate["type"], string>
 > = {
-  production: "Настройки производства",
-  quality_control: "Настройки контроля качества",
+  registration: "Регистрация",
+  production: "Производство",
+  quality_control: "Контроль качества",
 };
 
 const CONSTRUCTOR_V2_ALLOW_GROUPS: Partial<
   Record<StageTemplate["type"], boolean>
 > = {
+  registration: false,
   production: false,
   quality_control: false,
 };
@@ -28,7 +31,14 @@ const CONSTRUCTOR_V2_ALLOW_GROUPS: Partial<
 const CONSTRUCTOR_V2_ALLOW_STEPS: Partial<
   Record<StageTemplate["type"], boolean>
 > = {
+  registration: false,
   quality_control: false,
+};
+
+const CONSTRUCTOR_V2_EMPTY_STAGES: Partial<
+  Record<StageTemplate["type"], boolean>
+> = {
+  registration: true,
 };
 
 export function ConstructorV2ListPage() {
@@ -49,6 +59,7 @@ export function ConstructorV2EditorPage() {
         stageTypeLabel={CONSTRUCTOR_V2_STAGE_LABEL}
         allowGroupsByStageType={CONSTRUCTOR_V2_ALLOW_GROUPS}
         allowStepsByStageType={CONSTRUCTOR_V2_ALLOW_STEPS}
+        emptyStagesByStageType={CONSTRUCTOR_V2_EMPTY_STAGES}
       />
     </ProductionProvider>
   );
@@ -64,6 +75,7 @@ export function ConstructorV2ViewerPage() {
         stageTypeLabel={CONSTRUCTOR_V2_STAGE_LABEL}
         allowGroupsByStageType={CONSTRUCTOR_V2_ALLOW_GROUPS}
         allowStepsByStageType={CONSTRUCTOR_V2_ALLOW_STEPS}
+        emptyStagesByStageType={CONSTRUCTOR_V2_EMPTY_STAGES}
         readOnly
       />
     </ProductionProvider>

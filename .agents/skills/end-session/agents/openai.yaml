@@ -1,0 +1,4 @@
+interface:
+  display_name: "End Session"
+  short_description: "Finalize context, commit, push, deploy"
+  default_prompt: "Use $end-session when I write @end-session to update project agent notes, commit, push, and deploy."
