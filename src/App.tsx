@@ -37,6 +37,7 @@ import {
   ConstructorV2ViewerPage,
 } from "./pages/ConstructorV2Pages";
 import { UsersAdminPage } from "./pages/UsersAdminPage";
+import { MaterialTypesAdminPage } from "./pages/MaterialTypesAdminPage";
 
 const router = createBrowserRouter(
   [
@@ -125,6 +126,10 @@ const router = createBrowserRouter(
             {
               path: "polzovateli",
               element: <UsersAdminPage />,
+            },
+            {
+              path: "tipy-materiala",
+              element: <MaterialTypesAdminPage />,
             },
             { path: "konstruktor", element: <ConstructorListPage /> },
             { path: "konstruktor-ver2", element: <ConstructorV2ListPage /> },

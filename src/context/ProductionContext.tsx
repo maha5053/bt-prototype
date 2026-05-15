@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  DEFAULT_MATERIAL_TYPE_SETTINGS,
   DEFAULT_SYSTEM_FIELD_REGISTRY,
   INITIAL_PROCESS_TEMPLATES,
   INITIAL_PRODUCTION_ORDERS,
@@ -16,8 +17,11 @@ import {
   reconcileRuntimeV2Templates,
   type ExecutionStatus,
   type FieldValue,
+  type MaterialTypeCode,
+  type MaterialTypeSettings,
   type ProcessTemplate,
   type ProductionOrder,
+  type ProductionOrderSettingsSnapshot,
   type ProductionOrderStatus,
   type ProductionRejectionAttachment,
   type ProductionRejectionPhase,
@@ -62,18 +66,22 @@ function formatIncomingSampleId(now: Date, seqInYear: number): string {
   const y = now.getFullYear();
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const d = String(now.getDate()).padStart(2, "0");
-  return `${y}${m}${d}-${seqInYear}`;
+  return `${y}${m}${d}-${String(seqInYear).padStart(3, "0")}`;
 }
 
 function nextIncomingSampleId(orders: ProductionOrder[], createdAtIso: string): string {
   const now = new Date(createdAtIso);
-  const year = now.getFullYear();
-  const countInYear = orders.filter((o) => {
-    if (!o.createdAt) return false;
-    const dt = new Date(o.createdAt);
-    return dt.getFullYear() === year;
-  }).length;
-  return formatIncomingSampleId(now, countInYear + 1);
+  let max = 0;
+  for (const order of orders) {
+    const regStage = order.stages.find((s) => s.type === "registration");
+    const productId = regStage?.steps?.[0]?.fieldValues?.productId;
+    if (typeof productId !== "string") continue;
+    const match = /^\d{8}-(\d+)$/.exec(productId);
+    if (!match) continue;
+    const seq = Number.parseInt(match[1], 10);
+    if (Number.isFinite(seq)) max = Math.max(max, seq);
+  }
+  return formatIncomingSampleId(now, max + 1);
 }
 
 function withIncomingSampleId(order: ProductionOrder, incomingId: string): ProductionOrder {
@@ -92,11 +100,62 @@ function withIncomingSampleId(order: ProductionOrder, incomingId: string): Produ
   return { ...order, stages: nextStages };
 }
 
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function normalizeMaterialTypeCode(code: unknown): MaterialTypeCode {
+  return code === "skin" ? "skin" : "blood";
+}
+
+function normalizeMaterialTypeSettings(
+  stored: MaterialTypeSettings[] | undefined,
+): MaterialTypeSettings[] {
+  return DEFAULT_MATERIAL_TYPE_SETTINGS.map((base) => {
+    const found = stored?.find((item) => item.code === base.code);
+    if (!found) return clone(base);
+    return {
+      ...clone(base),
+      ...found,
+      code: base.code,
+      label: base.label,
+      collectionFields: Array.isArray(found.collectionFields)
+        ? found.collectionFields
+        : clone(base.collectionFields),
+      incomingControlFields: Array.isArray(found.incomingControlFields)
+        ? found.incomingControlFields
+        : clone(base.incomingControlFields),
+    };
+  });
+}
+
+function buildSettingsSnapshot(input: {
+  template: ProcessTemplate;
+  materialTypes: MaterialTypeSettings[];
+}): ProductionOrderSettingsSnapshot {
+  const materialTypeCode = normalizeMaterialTypeCode(input.template.materialTypeCode);
+  const materialType =
+    input.materialTypes.find((item) => item.code === materialTypeCode) ??
+    DEFAULT_MATERIAL_TYPE_SETTINGS.find((item) => item.code === materialTypeCode) ??
+    DEFAULT_MATERIAL_TYPE_SETTINGS[0]!;
+  return {
+    product: {
+      templateId: input.template.id,
+      templateName: input.template.name,
+      materialTypeCode,
+    },
+    materialType: clone(materialType),
+    storage: null,
+    registrationMaterialBalance: [],
+  };
+}
+
 function loadFromStorage():
   | {
       templates: ProcessTemplate[];
       orders: ProductionOrder[];
       systemFieldRegistry?: SystemFieldRegistry;
+      materialTypes?: MaterialTypeSettings[];
     }
   | null {
   try {
@@ -106,6 +165,7 @@ function loadFromStorage():
         templates: ProcessTemplate[];
         orders: ProductionOrder[];
         systemFieldRegistry?: SystemFieldRegistry;
+        materialTypes?: MaterialTypeSettings[];
       };
   } catch {
     /* ignore */
@@ -117,6 +177,7 @@ function saveToStorage(state: {
   templates: ProcessTemplate[];
   orders: ProductionOrder[];
   systemFieldRegistry: SystemFieldRegistry;
+  materialTypes: MaterialTypeSettings[];
 }) {
   try {
     localStorage.setItem(PRODUCTION_STORAGE_KEY, JSON.stringify(state));
@@ -155,11 +216,14 @@ type ProductionContextValue = {
   templates: ProcessTemplate[];
   orders: ProductionOrder[];
   systemFieldRegistry: SystemFieldRegistry;
+  materialTypes: MaterialTypeSettings[];
   getOrderById: (orderId: string) => ProductionOrder | null;
   createTemplate: (name: string) => ProcessTemplate;
   updateTemplate: (template: ProcessTemplate) => void;
   deleteTemplate: (templateId: string) => boolean;
   archiveTemplate: (templateId: string) => boolean;
+  updateMaterialTypeSettings: (settings: MaterialTypeSettings) => void;
+  resetMaterialTypeSettings: () => void;
   createOrder: (templateId: string, createdBy: string) => ProductionOrder;
   createOrderFromConstructorV2: (input: {
     templateId: string;
@@ -219,10 +283,11 @@ type ProductionContextValue = {
 const ProductionContext = createContext<ProductionContextValue | null>(null);
 
 export function ProductionProvider({ children }: { children: ReactNode }) {
-  const [{ templates, orders, systemFieldRegistry }, setState] = useState<{
+  const [{ templates, orders, systemFieldRegistry, materialTypes }, setState] = useState<{
     templates: ProcessTemplate[];
     orders: ProductionOrder[];
     systemFieldRegistry: SystemFieldRegistry;
+    materialTypes: MaterialTypeSettings[];
   }>(() => {
     const stored = loadFromStorage();
     if (!stored) {
@@ -230,6 +295,7 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
         templates: [...INITIAL_PROCESS_TEMPLATES],
         orders: [...INITIAL_PRODUCTION_ORDERS],
         systemFieldRegistry: DEFAULT_SYSTEM_FIELD_REGISTRY,
+        materialTypes: normalizeMaterialTypeSettings(undefined),
       };
     }
     const storedOrders =
@@ -244,6 +310,7 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       orders: storedOrders,
       systemFieldRegistry:
         stored.systemFieldRegistry ?? DEFAULT_SYSTEM_FIELD_REGISTRY,
+      materialTypes: normalizeMaterialTypeSettings(stored.materialTypes),
     };
     saveToStorage(merged);
     return merged;
@@ -253,6 +320,37 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
     (orderId: string) => orders.find((o) => o.id === orderId) ?? null,
     [orders],
   );
+
+  const updateMaterialTypeSettings = useCallback((settings: MaterialTypeSettings) => {
+    setState((prev) => {
+      const code = normalizeMaterialTypeCode(settings.code);
+      const nextMaterialTypes = prev.materialTypes.map((item) =>
+        item.code === code
+          ? {
+              ...settings,
+              code,
+              label: DEFAULT_MATERIAL_TYPE_SETTINGS.find((base) => base.code === code)
+                ?.label ?? settings.label,
+              updatedAt: new Date().toISOString(),
+            }
+          : item,
+      );
+      const next = { ...prev, materialTypes: nextMaterialTypes };
+      saveToStorage(next);
+      return next;
+    });
+  }, []);
+
+  const resetMaterialTypeSettings = useCallback(() => {
+    setState((prev) => {
+      const next = {
+        ...prev,
+        materialTypes: normalizeMaterialTypeSettings(undefined),
+      };
+      saveToStorage(next);
+      return next;
+    });
+  }, []);
 
   const createOrder = useCallback(
     (templateId: string, createdBy: string): ProductionOrder => {
@@ -270,6 +368,10 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
           id,
           createdBy,
           createdAt,
+          settingsSnapshot: buildSettingsSnapshot({
+            template,
+            materialTypes: prev.materialTypes,
+          }),
         });
         const withId = withIncomingSampleId(newOrder, incomingId);
         created = withId;
@@ -280,7 +382,7 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       if (!created) throw new Error("Failed to create order");
       return created;
     },
-    [templates],
+    [materialTypes, templates],
   );
 
   const createOrderFromConstructorV2 = useCallback(
@@ -294,6 +396,9 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
               INITIAL_PROCESS_TEMPLATES,
             )
           : templates;
+      const materialTypesForSnapshot = normalizeMaterialTypeSettings(
+        snapshot?.materialTypes ?? materialTypes,
+      );
       const activeTemplates = mergedForSource.filter((t) => !t.archivedAt);
       const source =
         activeTemplates.find((t) => t.id === templateId) ?? null;
@@ -306,6 +411,7 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       const runtimeTemplate: ProcessTemplate = {
         id: runtimeTemplateId,
         name: source.name,
+        materialTypeCode: source.materialTypeCode ?? "blood",
         stages: [
           getBaselineRegistrationStage(),
           prodStage ? JSON.parse(JSON.stringify(prodStage)) : {
@@ -331,6 +437,10 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
           id: orderId,
           createdBy,
           createdAt,
+          settingsSnapshot: buildSettingsSnapshot({
+            template: source,
+            materialTypes: materialTypesForSnapshot,
+          }),
         });
         const withId = withIncomingSampleId(newOrder, incomingId);
         created = withId;
@@ -345,7 +455,7 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       if (!created) throw new Error("Failed to create order");
       return created;
     },
-    [templates],
+    [materialTypes, templates],
   );
 
   const deleteOrder = useCallback((orderId: string): boolean => {
@@ -395,11 +505,15 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       const isArchived = Boolean(current.archivedAt);
       const usedByOrder = prev.orders.some((o) => o.templateId === template.id);
       if (isArchived || usedByOrder) return prev;
+      const nextTemplate = {
+        ...template,
+        materialTypeCode: normalizeMaterialTypeCode(template.materialTypeCode),
+      };
       const next = {
         ...prev,
         templates: reconcileRuntimeV2Templates(
           prev.templates.map((t) =>
-            t.id === template.id ? template : t,
+            t.id === template.id ? nextTemplate : t,
           ),
         ),
       };
@@ -821,11 +935,14 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       templates,
       orders,
       systemFieldRegistry,
+      materialTypes,
       getOrderById,
       createTemplate,
       updateTemplate,
       deleteTemplate,
       archiveTemplate,
+      updateMaterialTypeSettings,
+      resetMaterialTypeSettings,
       createOrder,
       createOrderFromConstructorV2,
       deleteOrder,
@@ -843,11 +960,14 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       templates,
       orders,
       systemFieldRegistry,
+      materialTypes,
       getOrderById,
       createTemplate,
       updateTemplate,
       deleteTemplate,
       archiveTemplate,
+      updateMaterialTypeSettings,
+      resetMaterialTypeSettings,
       createOrder,
       createOrderFromConstructorV2,
       deleteOrder,
@@ -877,4 +997,3 @@ export function useProduction() {
   }
   return ctx;
 }
-

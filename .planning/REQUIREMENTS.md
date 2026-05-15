@@ -8,25 +8,25 @@
 ### Order Creation
 
 - [ ] **ORD-01**: User can create an order by selecting only a product.
-- [ ] **ORD-02**: A new order receives an incoming sample ID formatted as `YYYYMMDD-001`, with the numeric part padded to three digits.
-- [ ] **ORD-03**: Incoming sample ID sequencing is global across orders, not reset by date.
-- [ ] **ORD-04**: A created order snapshots product and material settings so later settings changes affect only new orders.
+- [x] **ORD-02**: A new order receives an incoming sample ID formatted as `YYYYMMDD-001`, with the numeric part padded to three digits.
+- [x] **ORD-03**: Incoming sample ID sequencing is global across orders, not reset by date.
+- [x] **ORD-04**: A created order snapshots product and material settings so later settings changes affect only new orders.
 
 ### Material Types
 
-- [ ] **MAT-01**: Admin can open a separate material type settings page outside the product editor.
-- [ ] **MAT-02**: Admin can configure fixed-code material types such as `Кровь` and `Кожа`; products can select exactly one material type.
+- [x] **MAT-01**: Admin can open a separate material type settings page outside the product editor.
+- [x] **MAT-02**: Admin can configure fixed-code material types such as `Кровь` and `Кожа`; products can select exactly one material type.
 - [ ] **MAT-03**: Admin can configure registration collection fields per material type.
 - [ ] **MAT-04**: Admin can configure incoming control fields per material type.
-- [ ] **MAT-05**: Configurable fields support text, number, date, checkbox, and select types.
-- [ ] **MAT-06**: Each configurable field supports required flag, default value, unit, and help text.
+- [x] **MAT-05**: Configurable fields support text, number, date, checkbox, and select types.
+- [x] **MAT-06**: Each configurable field supports required flag, default value, unit, and help text.
 - [ ] **MAT-07**: Blood material type defaults include current fields `Объём забранной крови (мл)` and `Тип контейнера`.
 - [ ] **MAT-08**: Skin material type defaults include biopsy/site/container/fixation-oriented fields from `.planning/research/MATERIAL_AND_STORAGE_NOTES.md`.
 - [ ] **MAT-09**: Incoming control requiredness follows the current order creation form behavior unless explicitly changed in material type settings.
 
 ### Product Settings
 
-- [ ] **PROD-01**: Product settings include exactly one selected material type.
+- [x] **PROD-01**: Product settings include exactly one selected material type.
 - [ ] **PROD-02**: Product settings can enable or disable one storage stage after production.
 - [ ] **PROD-03**: If storage is enabled, product settings define storage input fields and defaults.
 - [ ] **PROD-04**: Product settings define registration material balance rows with consumable, default quantity, and write-off-on-completion flag.
@@ -96,19 +96,19 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | ORD-01 | Phase 2 | Pending |
-| ORD-02 | Phase 1 | Pending |
-| ORD-03 | Phase 1 | Pending |
-| ORD-04 | Phase 1 | Pending |
-| MAT-01 | Phase 1 | Pending |
-| MAT-02 | Phase 1 | Pending |
+| ORD-02 | Phase 1 | Complete |
+| ORD-03 | Phase 1 | Complete |
+| ORD-04 | Phase 1 | Complete |
+| MAT-01 | Phase 1 | Complete |
+| MAT-02 | Phase 1 | Complete |
 | MAT-03 | Phase 2 | Pending |
 | MAT-04 | Phase 2 | Pending |
-| MAT-05 | Phase 1 | Pending |
-| MAT-06 | Phase 1 | Pending |
+| MAT-05 | Phase 1 | Complete |
+| MAT-06 | Phase 1 | Complete |
 | MAT-07 | Phase 2 | Pending |
 | MAT-08 | Phase 2 | Pending |
 | MAT-09 | Phase 2 | Pending |
-| PROD-01 | Phase 1 | Pending |
+| PROD-01 | Phase 1 | Complete |
 | PROD-02 | Phase 3 | Pending |
 | PROD-03 | Phase 3 | Pending |
 | PROD-04 | Phase 3 | Pending |
@@ -141,5 +141,4 @@
 
 ---
 *Requirements defined: 2026-05-15*
-*Last updated: 2026-05-15 after customer feedback scoping*
-
+*Last updated: 2026-05-15 after Phase 1 completion*
