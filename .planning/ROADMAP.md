@@ -10,7 +10,7 @@ This milestone turns the existing order/product prototype into a configurable or
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions if discovered mid-milestone
 
-- [ ] **Phase 1: Product and Material Settings Foundation** - Add stable data model, admin navigation, sample ID sequencing, and snapshot rules.
+- [x] **Phase 1: Product and Material Settings Foundation** - Add stable data model, admin navigation, sample ID sequencing, and snapshot rules.
 - [ ] **Phase 2: Material-Driven Registration** - Move collection and incoming control fields into material type settings and order creation.
 - [ ] **Phase 3: Product Process Settings** - Add storage and registration material balance settings, defaults, and optional action inputs.
 - [ ] **Phase 4: Independent Quality Control** - Split QC from the main order stage line and allow QC at any time.
@@ -30,9 +30,9 @@ This milestone turns the existing order/product prototype into a configurable or
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: Add material type and configurable field data model.
-- [ ] 01-02: Add material type admin route/navigation and product material-type selection.
-- [ ] 01-03: Update incoming sample ID sequencing and order snapshot creation.
+- [x] 01-01: Add material type and configurable field data model.
+- [x] 01-02: Add material type admin route/navigation and product material-type selection.
+- [x] 01-03: Update incoming sample ID sequencing and order snapshot creation.
 
 ### Phase 2: Material-Driven Registration
 **Goal**: Render registration collection and incoming control from material type settings instead of hard-coded order fields.
@@ -106,9 +106,8 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Product and Material Settings Foundation | 0/3 | Not started | - |
+| 1. Product and Material Settings Foundation | 3/3 | Complete | 2026-05-15 |
 | 2. Material-Driven Registration | 0/3 | Not started | - |
 | 3. Product Process Settings | 0/4 | Not started | - |
 | 4. Independent Quality Control | 0/3 | Not started | - |
 | 5. Privileged Corrections and Audit | 0/3 | Not started | - |
-
