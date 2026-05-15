@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { Tab } from "@headlessui/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ProductionProvider, useProduction } from "../context/ProductionContext";
 import type {
   ConfigurableMaterialField,
   ConfigurableMaterialFieldType,
   FieldValue,
-  MaterialTypeCode,
   MaterialTypeSettings,
 } from "../mocks/productionData";
 
@@ -15,6 +16,12 @@ const FIELD_TYPE_LABEL: Record<ConfigurableMaterialFieldType, string> = {
   checkbox: "Чекбокс",
   select: "Список",
 };
+
+const MATERIAL_EDITOR_TABS = [
+  { key: "collectionFields", label: "Забор" },
+  { key: "materialBalance", label: "Материальный баланс" },
+  { key: "incomingControlFields", label: "Входной контроль" },
+] as const;
 
 type FieldSection = "collectionFields" | "incomingControlFields";
 type ErrorMap = Record<string, string>;
@@ -101,23 +108,183 @@ function validateSettings(settings: MaterialTypeSettings): ErrorMap {
 export function MaterialTypesAdminPage() {
   return (
     <ProductionProvider>
-      <MaterialTypesAdminContent />
+      <MaterialTypesListContent />
     </ProductionProvider>
   );
 }
 
-function MaterialTypesAdminContent() {
-  const {
-    materialTypes,
-    updateMaterialTypeSettings,
-    resetMaterialTypeSettings,
-  } = useProduction();
-  const [selectedCode, setSelectedCode] = useState<MaterialTypeCode>(
-    materialTypes[0]?.code ?? "blood",
+export function MaterialTypeEditorPage() {
+  return (
+    <ProductionProvider>
+      <MaterialTypeEditorContent />
+    </ProductionProvider>
   );
+}
+
+function MaterialTypesListContent() {
+  const { materialTypes, resetMaterialTypeSettings } = useProduction();
+  const [openMenuCode, setOpenMenuCode] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ left: number; top: number } | null>(
+    null,
+  );
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!openMenuCode) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuCode(null);
+        setMenuPosition(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenuCode]);
+
+  const openMenu = (code: string, button: HTMLButtonElement) => {
+    const rect = button.getBoundingClientRect();
+    setMenuPosition({ left: rect.left, top: rect.bottom });
+    setOpenMenuCode(code);
+  };
+
+  return (
+    <div className="relative p-6 md:p-8">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-800">Типы материала</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Настройка фиксированных типов материала для новых заказов.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={resetMaterialTypeSettings}
+          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Восстановить типы
+        </button>
+      </div>
+
+      {materialTypes.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-200 bg-white p-6">
+          <div className="text-sm font-semibold text-slate-800">
+            Типы материала не найдены
+          </div>
+          <p className="mt-1 text-sm text-slate-600">
+            Очистите локальные настройки или восстановите стандартные типы материала.
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-left text-slate-600">
+              <tr>
+                <th className="w-10 px-2 py-3 font-medium" aria-label="Действия" />
+                <th className="px-4 py-3 font-medium">Код</th>
+                <th className="px-4 py-3 font-medium">Тип материала</th>
+                <th className="px-4 py-3 font-medium">Поля забора</th>
+                <th className="px-4 py-3 font-medium">Материальный баланс</th>
+                <th className="px-4 py-3 font-medium">Входной контроль</th>
+              </tr>
+            </thead>
+            <tbody>
+              {materialTypes.map((item) => (
+                <tr key={item.code} className="border-t border-slate-100">
+                  <td className="w-10 px-2 py-3 align-middle">
+                    <button
+                      type="button"
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        if (openMenuCode === item.code) {
+                          setOpenMenuCode(null);
+                          setMenuPosition(null);
+                        } else {
+                          openMenu(item.code, ev.currentTarget);
+                        }
+                      }}
+                      className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      aria-label="Действия"
+                      title="Действия"
+                    >
+                      <svg
+                        className="size-5"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        aria-hidden
+                      >
+                        <circle cx="12" cy="6" r="2" />
+                        <circle cx="12" cy="12" r="2" />
+                        <circle cx="12" cy="18" r="2" />
+                      </svg>
+                    </button>
+
+                    {openMenuCode === item.code && menuPosition ? (
+                      <div
+                        ref={menuRef}
+                        className="fixed z-50 mt-1 w-56 rounded-lg border border-slate-200 bg-white py-1 shadow-xl"
+                        style={{
+                          left: `${menuPosition.left}px`,
+                          top: `${menuPosition.top}px`,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Link
+                          to={`/admin/tipy-materiala/${item.code}`}
+                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                          title="Редактировать тип материала"
+                          onClick={() => {
+                            setOpenMenuCode(null);
+                            setMenuPosition(null);
+                          }}
+                        >
+                          <svg
+                            className="size-4"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            aria-hidden
+                          >
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                          </svg>
+                          Редактировать
+                        </Link>
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                      {item.code}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 font-medium text-slate-900">{item.label}</td>
+                  <td className="px-4 py-3 text-slate-700">
+                    {item.collectionFields.length}
+                  </td>
+                  <td className="px-4 py-3 text-slate-500">Не настроен</td>
+                  <td className="px-4 py-3 text-slate-700">
+                    {item.incomingControlFields.length}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MaterialTypeEditorContent() {
+  const { materialTypeCode } = useParams<{ materialTypeCode: string }>();
+  const navigate = useNavigate();
+  const { materialTypes, updateMaterialTypeSettings } = useProduction();
   const selected = useMemo(
-    () => materialTypes.find((item) => item.code === selectedCode) ?? materialTypes[0],
-    [materialTypes, selectedCode],
+    () => materialTypes.find((item) => item.code === materialTypeCode) ?? null,
+    [materialTypes, materialTypeCode],
   );
   const [draft, setDraft] = useState<MaterialTypeSettings | null>(
     selected ? clone(selected) : null,
@@ -182,25 +349,19 @@ function MaterialTypesAdminContent() {
     setSavedAt(new Date().toISOString());
   };
 
-  if (!draft || materialTypes.length === 0) {
+  if (!selected || !draft) {
     return (
       <div className="p-6 md:p-8">
-        <h1 className="text-xl font-semibold text-slate-800">Типы материала</h1>
-        <div className="mt-6 rounded-lg border border-dashed border-slate-200 bg-white p-6">
-          <div className="text-sm font-semibold text-slate-800">
-            Типы материала не найдены
-          </div>
-          <p className="mt-1 text-sm text-slate-600">
-            Очистите локальные настройки или восстановите стандартные типы материала.
-          </p>
-          <button
-            type="button"
-            onClick={resetMaterialTypeSettings}
-            className="mt-4 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        <div className="mb-4">
+          <Link
+            to="/admin/tipy-materiala"
+            className="text-sm text-slate-500 transition hover:text-slate-700"
+            title="К списку типов материала"
           >
-            Восстановить типы
-          </button>
+            ← Назад
+          </Link>
         </div>
+        <p className="text-sm text-slate-500">Тип материала не найден.</p>
       </div>
     );
   }
@@ -209,143 +370,151 @@ function MaterialTypesAdminContent() {
 
   return (
     <div className="p-6 md:p-8">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-800">Типы материала</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Настройка полей регистрации и входного контроля для фиксированных типов материала.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={resetMaterialTypeSettings}
-            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Восстановить типы
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            Сохранить настройки
-          </button>
-        </div>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(360px,0.85fr)_minmax(0,1.35fr)]">
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-600">
-              <tr>
-                <th className="px-4 py-3 font-medium">Тип материала</th>
-                <th className="px-4 py-3 font-medium">Поля забора</th>
-                <th className="px-4 py-3 font-medium">Входной контроль</th>
-                <th className="px-4 py-3 font-medium">Действия</th>
-              </tr>
-            </thead>
-            <tbody>
-              {materialTypes.map((item) => {
-                const active = item.code === draft.code;
-                return (
-                  <tr
-                    key={item.code}
-                    className={[
-                      "border-t border-slate-100",
-                      active ? "bg-blue-50/40" : "hover:bg-slate-50/80",
-                    ].join(" ")}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-900">{item.label}</span>
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
-                          {item.code}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {item.collectionFields.length}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {item.incomingControlFields.length}
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedCode(item.code)}
-                        className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                      >
-                        {active ? "Открыто" : "Редактировать"}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="space-y-4">
-          <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="text-sm font-semibold text-slate-800">Общее</div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="block text-xs font-medium text-slate-600">
-                Код
-                <input
-                  value={draft.code}
-                  readOnly
-                  className="mt-1 w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500"
-                />
-              </label>
-              <label className="block text-xs font-medium text-slate-600">
-                Название
-                <input
-                  value={draft.label}
-                  readOnly
-                  className="mt-1 w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-500"
-                />
-              </label>
-            </div>
-            <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              Изменения применяются только к новым заказам. Уже созданные заказы сохраняют свои поля.
-            </div>
-            {hasErrors ? (
-              <div className="mt-3 text-sm text-red-700">
-                Проверьте обязательные поля и варианты списков.
-              </div>
-            ) : savedAt ? (
-              <div className="mt-3 text-sm text-emerald-700">
-                Сохранено {new Date(savedAt).toLocaleTimeString("ru-RU", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </div>
-            ) : null}
+      <div className="mb-6">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-medium text-slate-500">
+            <Link
+              to="/admin/tipy-materiala"
+              className="inline-flex items-center gap-2 rounded-md px-1.5 py-1 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900"
+              title="К списку типов материала"
+              aria-label="Назад к списку типов материала"
+            >
+              <span aria-hidden>←</span>
+              <span>Назад</span>
+            </Link>
+            <span>Администрирование</span>
+            <span className="text-slate-300">›</span>
+            <Link
+              to="/admin/tipy-materiala"
+              className="rounded-sm underline decoration-slate-300 underline-offset-2 transition hover:text-slate-700"
+              title="К списку типов материала"
+            >
+              Типы материала
+            </Link>
+            <span className="text-slate-300">›</span>
+            <span className="max-w-[60ch] truncate text-slate-700">
+              {draft.label}
+            </span>
           </div>
 
-          <FieldSectionEditor
-            title="Забор"
-            emptyButtonLabel="Добавить поле забора"
-            section="collectionFields"
-            fields={draft.collectionFields}
-            errors={errors}
-            onAdd={addField}
-            onDelete={deleteField}
-            onPatch={patchField}
-          />
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <div className="max-w-2xl px-1 py-0.5 text-left text-2xl font-bold leading-tight text-slate-900 md:text-3xl">
+                <span className="min-w-0 truncate">{draft.label}</span>
+              </div>
+              <span
+                className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-slate-600/10"
+                title="Код фиксированного типа материала"
+              >
+                {draft.code}
+              </span>
+              {savedAt ? (
+                <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-600/20">
+                  Сохранено {new Date(savedAt).toLocaleTimeString("ru-RU", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              ) : null}
+            </div>
 
-          <FieldSectionEditor
-            title="Входной контроль"
-            emptyButtonLabel="Добавить показатель ВК"
-            section="incomingControlFields"
-            fields={draft.incomingControlFields}
-            errors={errors}
-            onAdd={addField}
-            onDelete={deleteField}
-            onPatch={patchField}
-          />
+            <button
+              type="button"
+              onClick={handleSave}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Сохранить настройки
+            </button>
+          </div>
         </div>
+
+        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Изменения применяются только к новым заказам. Уже созданные заказы сохраняют свои поля.
+        </div>
+        {hasErrors ? (
+          <div className="mt-3 text-sm text-red-700">
+            Проверьте обязательные поля и варианты списков.
+          </div>
+        ) : null}
+      </div>
+
+      <Tab.Group>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-2">
+          <Tab.List className="flex flex-wrap gap-2">
+            {MATERIAL_EDITOR_TABS.map((tab) => (
+              <Tab
+                key={tab.key}
+                className={({ selected: isSelected }) =>
+                  [
+                    "rounded-md px-3 py-2 text-sm font-medium outline-none transition",
+                    isSelected
+                      ? "bg-blue-600 text-white"
+                      : "text-slate-700 hover:bg-slate-100",
+                  ].join(" ")
+                }
+              >
+                {tab.label}
+              </Tab>
+            ))}
+          </Tab.List>
+        </div>
+
+        <Tab.Panels className="pt-4">
+          <Tab.Panel>
+            <FieldSectionEditor
+              title="Забор"
+              emptyButtonLabel="Добавить поле забора"
+              section="collectionFields"
+              fields={draft.collectionFields}
+              errors={errors}
+              onAdd={addField}
+              onDelete={deleteField}
+              onPatch={patchField}
+            />
+          </Tab.Panel>
+          <Tab.Panel>
+            <MaterialBalancePlaceholder
+              onBackToProducts={() => navigate("/admin/konstruktor-ver2")}
+            />
+          </Tab.Panel>
+          <Tab.Panel>
+            <FieldSectionEditor
+              title="Входной контроль"
+              emptyButtonLabel="Добавить показатель ВК"
+              section="incomingControlFields"
+              fields={draft.incomingControlFields}
+              errors={errors}
+              onAdd={addField}
+              onDelete={deleteField}
+              onPatch={patchField}
+            />
+          </Tab.Panel>
+        </Tab.Panels>
+      </Tab.Group>
+    </div>
+  );
+}
+
+function MaterialBalancePlaceholder({
+  onBackToProducts,
+}: {
+  onBackToProducts: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="text-sm font-semibold text-slate-800">Материальный баланс</div>
+      <div className="mt-3 rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-600">
+        <div className="font-medium text-slate-800">Раздел пока пуст.</div>
+        <p className="mt-1">
+          Настройки списания и расходников будут задаваться в настройках продукта.
+        </p>
+        <button
+          type="button"
+          onClick={onBackToProducts}
+          className="mt-3 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+        >
+          Перейти к продуктам
+        </button>
       </div>
     </div>
   );
