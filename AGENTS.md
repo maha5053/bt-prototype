@@ -58,9 +58,12 @@ npm run deploy
 ## Команды и правила сессии
 
 - `@end-session` — завершить рабочую сессию через repo skill `$end-session`: обновить `AGENTS.md`/`agents-done.md`, проверить сборку, сделать коммит, push и `npm run deploy`.
+- GSD установлен локально для Codex в `.codex/get-shit-done/`, версия `1.42.2`; `.codex/` добавлен в `.gitignore` и не коммитится. Проверка: `gsd-sdk --version` из корня репозитория. После нового Codex-сеанса должны быть доступны команды/skills GSD вроде `$gsd-map-codebase`.
 
 ## Последняя сессия (агент)
 
+- **Эта сессия (GSD planning):** создана `.planning/`-структура GSD для customer feedback по заказам/продуктам: code map, `PROJECT.md`, `REQUIREMENTS.md`, `ROADMAP.md`, `STATE.md`, research notes по коже/хранению. Phase 1 **Product and Material Settings Foundation** доведена до `01-CONTEXT.md` и `01-UI-SPEC.md`; следующий шаг — `$gsd-plan-phase 1`, затем `$gsd-execute-phase 1 --interactive`. Коммитить/пушить только по явной команде; `.codex/` локальная и игнорируется.
+- **Эта сессия (GSD):** установлен `gsd-build/get-shit-done` для Codex в локальную `.codex/` через `npx get-shit-done-cc@latest --codex --local --profile=core`; CLI `gsd-sdk v1.42.2` доступен из `/home/maria/.local/bin/gsd-sdk`. `.codex/` игнорируется git, коммит `d48ed63` добавил правило `.codex/` в `.gitignore`.
 - **Эта сессия (конструктор ver2 + сессии):** в «Продукты» добавлена пустая вкладка **«Регистрация»** перед производством/КК; для таких этапов редактор показывает «Раздел пока пуст.» без автосоздания шагов. Добавлен repo skill `$end-session` и команда `@end-session` для обновления памяти, build, commit, push и deploy (`src/pages/ConstructorPages.tsx`, `src/pages/ConstructorV2Pages.tsx`, `.agents/skills/end-session/*`, `AGENTS.md`).
 - **Эта сессия (поступления UI):** в модалке добавления позиции поле товара заменено на `Combobox`-автокомплит по названию/производителю/группе/артикулу; при выборе номенклатуры лот сбрасывается (`src/pages/ReceiptsPages.tsx`).
 - **Эта сессия (поступления dev/mock):** на списке поступлений добавлена devtools-шестерёнка, очищает только `bio-receipts`; в мок `rcpt-001` добавлен входной контроль, все `spec-01`…`spec-15` = **«Да»** (`src/pages/ReceiptsPages.tsx`, `src/mocks/receiptsData.ts`).
