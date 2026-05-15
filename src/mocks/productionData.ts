@@ -124,6 +124,7 @@ export interface StageTemplate {
 export interface ProcessTemplate {
   id: string;
   name: string;
+  materialTypeCode?: MaterialTypeCode;
   /** ISO datetime when archived. Archived templates are read-only and hidden from "start production" chooser. */
   archivedAt?: string;
   stages: StageTemplate[];
@@ -159,6 +160,45 @@ export interface ProductionRejectionAttachment {
 
 export type FieldValue = string | number | boolean | null;
 
+export type MaterialTypeCode = "blood" | "skin";
+
+export type ConfigurableMaterialFieldType =
+  | "text"
+  | "number"
+  | "date"
+  | "checkbox"
+  | "select";
+
+export interface ConfigurableMaterialField {
+  id: string;
+  label: string;
+  type: ConfigurableMaterialFieldType;
+  required: boolean;
+  defaultValue?: FieldValue;
+  unit?: string;
+  helpText?: string;
+  options?: string[];
+}
+
+export interface MaterialTypeSettings {
+  code: MaterialTypeCode;
+  label: string;
+  collectionFields: ConfigurableMaterialField[];
+  incomingControlFields: ConfigurableMaterialField[];
+  updatedAt?: string;
+}
+
+export interface ProductionOrderSettingsSnapshot {
+  product: {
+    templateId: string;
+    templateName: string;
+    materialTypeCode: MaterialTypeCode;
+  };
+  materialType: MaterialTypeSettings;
+  storage?: null;
+  registrationMaterialBalance?: [];
+}
+
 export interface StepExecution {
   stepTemplateId: string;
   name: string;
@@ -192,6 +232,7 @@ export interface ProductionOrder {
   id: string;
   templateId: string;
   templateName: string;
+  settingsSnapshot?: ProductionOrderSettingsSnapshot;
   status: ProductionOrderStatus;
   currentStageIndex: number;
   createdAt: string;
@@ -212,6 +253,174 @@ export type SystemFieldRegistry = {
   registration: FieldDefinition[];
   release: FieldDefinition[];
 };
+
+export const MATERIAL_TYPE_LABELS: Record<MaterialTypeCode, string> = {
+  blood: "Кровь",
+  skin: "Кожа",
+};
+
+export const DEFAULT_MATERIAL_TYPE_SETTINGS: MaterialTypeSettings[] = [
+  {
+    code: "blood",
+    label: MATERIAL_TYPE_LABELS.blood,
+    collectionFields: [
+      {
+        id: "bloodVolume",
+        label: "Объём забранной крови",
+        type: "number",
+        required: false,
+        unit: "мл",
+        defaultValue: null,
+        helpText: "Фактический объём забранного материала.",
+      },
+      {
+        id: "containerType",
+        label: "Тип контейнера",
+        type: "select",
+        required: false,
+        options: ["гемакон", "пробирки"],
+        defaultValue: "гемакон",
+        helpText: "Контейнер, в котором материал поступает на регистрацию.",
+      },
+    ],
+    incomingControlFields: [
+      {
+        id: "integrity",
+        label: "Целостность",
+        type: "select",
+        required: false,
+        options: ["не нарушена", "нарушена"],
+        defaultValue: "не нарушена",
+      },
+      {
+        id: "volumeOk",
+        label: "Объём",
+        type: "select",
+        required: false,
+        options: ["соответствует", "не соответствует"],
+        defaultValue: "соответствует",
+      },
+      {
+        id: "hemolysis",
+        label: "Гемолиз",
+        type: "select",
+        required: false,
+        options: ["нет", "да"],
+        defaultValue: "нет",
+      },
+      {
+        id: "assignedStatus",
+        label: "Присвоен статус",
+        type: "select",
+        required: false,
+        options: ["Разрешено", "Брак"],
+        defaultValue: "Разрешено",
+      },
+    ],
+  },
+  {
+    code: "skin",
+    label: MATERIAL_TYPE_LABELS.skin,
+    collectionFields: [
+      {
+        id: "anatomicalSite",
+        label: "Анатомическая область",
+        type: "text",
+        required: true,
+        defaultValue: "",
+        helpText: "Откуда получен кожный материал.",
+      },
+      {
+        id: "biopsyType",
+        label: "Тип биопсии",
+        type: "select",
+        required: false,
+        options: ["панч-биопсия", "эксцизионная", "инцизионная"],
+        defaultValue: "панч-биопсия",
+      },
+      {
+        id: "fragmentCount",
+        label: "Количество фрагментов",
+        type: "number",
+        required: false,
+        defaultValue: null,
+        unit: "шт",
+      },
+      {
+        id: "fragmentSize",
+        label: "Размер фрагмента",
+        type: "text",
+        required: false,
+        defaultValue: "",
+        unit: "мм",
+      },
+      {
+        id: "orientation",
+        label: "Ориентация/маркировка",
+        type: "text",
+        required: false,
+        defaultValue: "",
+      },
+      {
+        id: "containerMedium",
+        label: "Контейнер/среда",
+        type: "select",
+        required: false,
+        options: ["стерильный контейнер", "физиологический раствор", "фиксатор"],
+        defaultValue: "стерильный контейнер",
+      },
+      {
+        id: "fixationTime",
+        label: "Время фиксации",
+        type: "date",
+        required: false,
+        defaultValue: null,
+      },
+      {
+        id: "clinicalHistory",
+        label: "Клинические сведения",
+        type: "text",
+        required: false,
+        defaultValue: "",
+        helpText: "Краткий контекст для материала, если нужен в протоколе.",
+      },
+    ],
+    incomingControlFields: [
+      {
+        id: "containerIntegrity",
+        label: "Целостность контейнера",
+        type: "select",
+        required: false,
+        options: ["не нарушена", "нарушена"],
+        defaultValue: "не нарушена",
+      },
+      {
+        id: "labeling",
+        label: "Маркировка",
+        type: "select",
+        required: false,
+        options: ["соответствует", "не соответствует"],
+        defaultValue: "соответствует",
+      },
+      {
+        id: "materialCondition",
+        label: "Состояние материала",
+        type: "select",
+        required: false,
+        options: ["пригоден", "требует уточнения", "брак"],
+        defaultValue: "пригоден",
+      },
+      {
+        id: "assignedStatus",
+        label: "Присвоен статус",
+        type: "select",
+        required: false,
+        options: ["Разрешено", "Брак"],
+        defaultValue: "Разрешено",
+      },
+    ],
+  },
+];
 
 const CURRENT_USER = "Смирнова А.";
 
@@ -248,7 +457,12 @@ function emptyStepExecution(step: StepTemplate): StepExecution {
 
 export function buildOrderFromTemplate(
   template: ProcessTemplate,
-  input?: { id?: string; createdBy?: string; createdAt?: string },
+  input?: {
+    id?: string;
+    createdBy?: string;
+    createdAt?: string;
+    settingsSnapshot?: ProductionOrderSettingsSnapshot;
+  },
 ): ProductionOrder {
   const now = input?.createdAt ?? new Date().toISOString();
   const createdBy = input?.createdBy ?? CURRENT_USER;
@@ -265,6 +479,7 @@ export function buildOrderFromTemplate(
     id: input?.id ?? String(Date.now()),
     templateId: template.id,
     templateName: template.name,
+    settingsSnapshot: input?.settingsSnapshot,
     status: "in_progress",
     currentStageIndex: 0,
     createdAt: now,
@@ -278,7 +493,7 @@ export function buildOrderFromTemplate(
  * (экспорт из localStorage). После очистки storage подставляется с id `tpl-thrombogel-new`.
  */
 export const THROMBOGEL_NEW_TEMPLATE: ProcessTemplate =
-  thrombogelNewSeed as ProcessTemplate;
+  { ...(thrombogelNewSeed as ProcessTemplate), materialTypeCode: "blood" };
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -347,6 +562,7 @@ export function createTemplateWithSystemStages(
   return {
     id: input.id,
     name: input.name,
+    materialTypeCode: "blood",
     stages: stageTypes.map((type) => ({
       id: `stg-${type}`,
       name: defaultStageName(type),
@@ -481,6 +697,7 @@ export function mergeProductionTemplatesWithBaseline(
         typeof st.name === "string" && st.name.trim().length > 0
           ? st.name
           : bt.name,
+      materialTypeCode: st.materialTypeCode ?? bt.materialTypeCode ?? "blood",
       stages: mergeProductionStages(st.stages, bt.stages),
     };
   });
@@ -490,7 +707,13 @@ export function mergeProductionTemplatesWithBaseline(
     (st) => !baselineList.some((bt) => bt.id === st.id),
   );
 
-  return reconcileRuntimeV2Templates([...mergedBaseline, ...clone(extraStored)]);
+  return reconcileRuntimeV2Templates([
+    ...mergedBaseline,
+    ...clone(extraStored).map((st) => ({
+      ...st,
+      materialTypeCode: st.materialTypeCode ?? "blood",
+    })),
+  ]);
 }
 
 const RUNTIME_V2_PREFIX = "tpl-runtime-v2-";
@@ -511,6 +734,7 @@ export function reconcileRuntimeV2Templates(
     return {
       ...t,
       name: source.name,
+      materialTypeCode: source.materialTypeCode ?? "blood",
       stages: t.stages.map((stage) =>
         stage.type === "production"
           ? { ...prodClone, id: stage.id, name: stage.name }

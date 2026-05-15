@@ -15,6 +15,7 @@ import type {
   StepActionTemplate,
   FieldDefinition,
   FieldType,
+  MaterialTypeCode,
 } from "../mocks/productionData";
 import { createTemplateWithSystemStages } from "../mocks/productionData";
 
@@ -280,7 +281,7 @@ export function ConstructorEditorView({
 }) {
   const { templateId } = useParams<{ templateId: string }>();
   const navigate = useNavigate();
-  const { templates, updateTemplate, createTemplate, orders } = useProduction();
+  const { templates, updateTemplate, createTemplate, orders, materialTypes } = useProduction();
   const controlsEnabled = !readOnly;
   const templateNameInputRef = useRef<HTMLInputElement | null>(null);
   const [editingStepById, setEditingStepById] = useState<Record<string, boolean>>(
@@ -428,7 +429,10 @@ export function ConstructorEditorView({
     );
   }
 
-  const used = orders.filter((o) => o.templateId === template.id).length;
+  const runtimeTemplateId = `tpl-runtime-v2-${template.id}`;
+  const used = orders.filter(
+    (o) => o.templateId === template.id || o.templateId === runtimeTemplateId,
+  ).length;
   const isArchived = Boolean(template.archivedAt);
   const locked = templateId ? isArchived || used > 0 : false;
   if (locked && !readOnly) {
@@ -1004,6 +1008,30 @@ export function ConstructorEditorView({
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <label className="block text-xs font-medium text-slate-600">
+          Тип материала
+          <select
+            value={template.materialTypeCode ?? "blood"}
+            disabled={!controlsEnabled}
+            onChange={(e) => {
+              const materialTypeCode = e.target.value as MaterialTypeCode;
+              patchTemplate((prev) => ({ ...prev, materialTypeCode }));
+            }}
+            className="mt-1 w-full max-w-sm rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:bg-slate-50 disabled:text-slate-500"
+          >
+            {materialTypes.map((item) => (
+              <option key={item.code} value={item.code}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="mt-2 text-sm text-slate-500">
+          Используется для полей регистрации и входного контроля в новых заказах. Уже созданные заказы не изменяются.
+        </p>
       </div>
 
       <Tab.Group

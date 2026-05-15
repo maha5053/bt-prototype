@@ -38,6 +38,7 @@ export const SIDEBAR_BY_SECTION: Record<
   admin: [
     { path: "/admin/polzovateli", label: "Пользователи" },
     { path: "/admin/konstruktor-ver2", label: "Продукты" },
+    { path: "/admin/tipy-materiala", label: "Типы материала" },
   ],
 };
 
