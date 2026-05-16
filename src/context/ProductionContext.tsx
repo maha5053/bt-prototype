@@ -122,6 +122,9 @@ function normalizeMaterialTypeSettings(
       collectionFields: Array.isArray(found.collectionFields)
         ? found.collectionFields
         : clone(base.collectionFields),
+      materialBalanceItems: Array.isArray(found.materialBalanceItems)
+        ? found.materialBalanceItems
+        : clone(base.materialBalanceItems),
       incomingControlFields: Array.isArray(found.incomingControlFields)
         ? found.incomingControlFields
         : clone(base.incomingControlFields),
@@ -146,7 +149,7 @@ function buildSettingsSnapshot(input: {
     },
     materialType: clone(materialType),
     storage: null,
-    registrationMaterialBalance: [],
+    registrationMaterialBalance: clone(materialType.materialBalanceItems ?? []),
   };
 }
 

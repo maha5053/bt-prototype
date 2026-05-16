@@ -51,19 +51,19 @@ Plans:
 - [ ] 02-03: Replace hard-coded registration/incoming-control rendering with snapshot-driven fields.
 
 ### Phase 3: Product Process Settings
-**Goal**: Add product-controlled storage and registration material balance while preserving production defaults and optional action inputs.
+**Goal**: Add product-controlled storage and runtime registration material balance while preserving production defaults and optional action inputs.
 **Depends on**: Phase 2
 **Requirements**: PROD-02, PROD-03, PROD-04, PROD-05, PROD-06, PROD-07, RUN-03, RUN-04, RUN-05, RUN-06, RUN-07, ACT-01, ACT-02
 **Success Criteria** (what must be TRUE):
   1. Product can enable one storage stage after production and define its fields/defaults.
-  2. Product can configure registration material balance rows using existing consumable source.
+  2. Material type settings can configure registration material balance rows using existing consumable source.
   3. Material balance rows store default quantities and default-off write-off intent without stock deduction.
   4. Production action input values are optional even when the action is required.
 **Plans**: 4 plans
 
 Plans:
 - [ ] 03-01: Add storage stage settings to product editor and order snapshots.
-- [ ] 03-02: Add registration material balance settings and runtime display.
+- [ ] 03-02: Render registration material balance from material type snapshot at runtime.
 - [ ] 03-03: Apply product defaults for registration and production material balance.
 - [ ] 03-04: Make production action input values optional in validation/completion.
 

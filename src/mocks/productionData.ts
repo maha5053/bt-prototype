@@ -180,10 +180,20 @@ export interface ConfigurableMaterialField {
   options?: string[];
 }
 
+export interface MaterialTypeBalanceItem {
+  id: string;
+  name: string;
+  unit: string;
+  defaultQuantity?: number | null;
+  /** Прототип хранит намерение списания, но фактического складского списания пока нет. */
+  writeOffOnRegistrationComplete?: boolean;
+}
+
 export interface MaterialTypeSettings {
   code: MaterialTypeCode;
   label: string;
   collectionFields: ConfigurableMaterialField[];
+  materialBalanceItems: MaterialTypeBalanceItem[];
   incomingControlFields: ConfigurableMaterialField[];
   updatedAt?: string;
 }
@@ -196,7 +206,7 @@ export interface ProductionOrderSettingsSnapshot {
   };
   materialType: MaterialTypeSettings;
   storage?: null;
-  registrationMaterialBalance?: [];
+  registrationMaterialBalance?: MaterialTypeBalanceItem[];
 }
 
 export interface StepExecution {
@@ -283,6 +293,7 @@ export const DEFAULT_MATERIAL_TYPE_SETTINGS: MaterialTypeSettings[] = [
         helpText: "Контейнер, в котором материал поступает на регистрацию.",
       },
     ],
+    materialBalanceItems: [],
     incomingControlFields: [
       {
         id: "integrity",
@@ -385,6 +396,7 @@ export const DEFAULT_MATERIAL_TYPE_SETTINGS: MaterialTypeSettings[] = [
         helpText: "Краткий контекст для материала, если нужен в протоколе.",
       },
     ],
+    materialBalanceItems: [],
     incomingControlFields: [
       {
         id: "containerIntegrity",

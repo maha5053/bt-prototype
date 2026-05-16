@@ -89,6 +89,14 @@
 
 ## Журнал сессий (кратко)
 
+### 2026-05-16 — Phase 1 типы материала и матбаланс регистрации
+
+- Завершена и опубликована основа Phase 1: список типов материала `/admin/tipy-materiala`, отдельная страница редактирования `/admin/tipy-materiala/:materialTypeCode`, вкладки **Забор / Материальный баланс / Входной контроль**.
+- В `MaterialTypeSettings` добавлены `materialBalanceItems`: расходник/материал из `ACTION_CONSUMABLE_CATALOG`, количество по умолчанию, флаг `writeOffOnRegistrationComplete`. Флаг информационный, фактического складского списания нет.
+- Новые заказы snapshot-ят настройки типа материала, включая строки матбаланса; runtime-отображение матбаланса в регистрации остаётся следующим шагом.
+- Файлы: `src/pages/MaterialTypesAdminPage.tsx`, `src/mocks/productionData.ts`, `src/context/ProductionContext.tsx`, `src/App.tsx`, `.planning/*`, `AGENTS.md`.
+- Проверка: `npm run build` проходит; остаётся предупреждение Vite о JS chunk > 500 kB.
+
 ### Архив правок из `agents.md`
 
 - **Поступления:** добавлен раздел `/sklad/postupleniya` с кнопкой «Создать поступление» и страницей черновика `/sklad/postupleniya/:receiptId`; строки добавляются через модалку, документ хранится в localStorage (`bio-receipts`) (`src/App.tsx`, `src/pages/ReceiptsPages.tsx`, `src/context/ReceiptsContext.tsx`, `src/mocks/receiptsData.ts`).

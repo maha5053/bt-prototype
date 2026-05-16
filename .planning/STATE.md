@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: phase-1-complete
-last_updated: "2026-05-15T16:30:00.000Z"
+last_updated: "2026-05-16T00:00:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 1
@@ -14,7 +14,7 @@ progress:
 
 # Project State
 
-**Last Updated:** 2026-05-15
+**Last Updated:** 2026-05-16
 
 ## Project Reference
 
@@ -64,6 +64,7 @@ $gsd-plan-phase 2
 - Material type list is fixed in code for this milestone.
 - Material type settings live on a separate admin page.
 - Product changes affect only newly created orders.
+- Registration material balance rows are configured on material type settings; product storage and production defaults remain later work.
 - QC is independent from release/order completion.
 - QC deviations show a badge but do not change order status.
 - Privileged correction can edit completed stages and must be audited.
@@ -71,12 +72,13 @@ $gsd-plan-phase 2
 
 ## Open Questions
 
-- Confirm during implementation whether registration material balance is configured only per product, or material type provides defaults that products copy/override. Current plan uses material type defaults plus product/order snapshots to satisfy both stated directions.
 - Confirm whether Phase 2 should reuse the existing hard-coded registration patient fields as system fields and append material-driven fields after them, or fully replace the material-specific subsection only.
 - Confirm whether storage fields use the existing date control only, or need a datetime-like text input until a datetime field type is added.
 
 ## Recent Activity
 
+- Material type editor reworked to list/editor structure matching Products; editor tabs are `Забор`, `Материальный баланс`, `Входной контроль`.
+- Material balance settings are now stored on material types as rows from `ACTION_CONSUMABLE_CATALOG` with default quantity and informational write-off-on-registration-complete flag. Runtime registration rendering remains pending.
 - Phase 1 completed on branch `codex-phase-1-foundation-wip`: material type settings model, admin page `/admin/tipy-materiala`, product material type selector, global padded incoming sample IDs, and order settings snapshots.
 - Phase 1 summaries created for plans 01-01, 01-02, and 01-03.
 - `npm run build` passed after Phase 1; Vite warned that JS chunk is larger than 500 kB.
