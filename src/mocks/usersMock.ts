@@ -28,6 +28,7 @@ export type AccessLevel = "none" | "read" | "write";
 export type PermissionKey =
   | "registration"
   | "production"
+  | "storage"
   | "qualityControl"
   | "release"
   | "approval";
@@ -40,6 +41,7 @@ export type ProductionPermissions = Record<PermissionKey, AccessLevel>;
 export const USER_GROUP_LABELS: { id: UserGroupId; label: string }[] = [
   { id: "registration", label: "Регистрация" },
   { id: "production", label: "Производство" },
+  { id: "storage", label: "Хранение" },
   { id: "qualityControl", label: "Контроль" },
   { id: "release", label: "Выдача" },
   { id: "approval", label: "Одобрение" },
@@ -52,6 +54,7 @@ export const PERMISSION_MATRIX_COLUMN_LABELS: {
 }[] = [
   { key: "registration", label: "Регистрация" },
   { key: "production", label: "Производство" },
+  { key: "storage", label: "Хранение" },
   { key: "qualityControl", label: "Контроль" },
   { key: "release", label: "Выдача" },
   { key: "approval", label: "Одобрение" },
@@ -251,8 +254,9 @@ export function stageTypeToPermissionKey(
     case "registration":
       return "registration";
     case "production":
-    case "storage":
       return "production";
+    case "storage":
+      return "storage";
     case "quality_control":
       return "qualityControl";
     case "release":
