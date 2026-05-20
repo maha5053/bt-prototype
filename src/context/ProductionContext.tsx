@@ -7,6 +7,8 @@ import {
   type ReactNode,
 } from "react";
 import {
+  type ConfigurableMaterialField,
+  type ConfigurableMaterialFieldType,
   DEFAULT_MATERIAL_TYPE_SETTINGS,
   DEFAULT_SYSTEM_FIELD_REGISTRY,
   INITIAL_PROCESS_TEMPLATES,
@@ -108,27 +110,137 @@ function normalizeMaterialTypeCode(code: unknown): MaterialTypeCode {
   return code === "skin" ? "skin" : "blood";
 }
 
+function normalizeFieldOptions(options: unknown): string[] {
+  if (!Array.isArray(options)) return [];
+  const next: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of options) {
+    if (typeof raw !== "string") continue;
+    const value = raw.trim();
+    if (!value) continue;
+    const key = value.toLocaleLowerCase("ru");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    next.push(value);
+  }
+  return next;
+}
+
+function normalizeFieldDefaultValue(input: {
+  type: ConfigurableMaterialFieldType;
+  value: unknown;
+  options: string[];
+}): FieldValue {
+  if (input.type === "checkbox") {
+    return typeof input.value === "boolean" ? input.value : false;
+  }
+  if (input.type === "number") {
+    if (typeof input.value === "number" && Number.isFinite(input.value)) return input.value;
+    if (typeof input.value === "string" && input.value.trim() !== "") {
+      const parsed = Number(input.value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }
+  if (input.type === "select") {
+    if (typeof input.value !== "string") return null;
+    const trimmed = input.value.trim();
+    if (!trimmed) return null;
+    return input.options.some((option) => option === trimmed) ? trimmed : null;
+  }
+  return typeof input.value === "string" ? input.value.trim() : "";
+}
+
+function normalizeFieldOkOption(input: {
+  type: ConfigurableMaterialFieldType;
+  okOption: unknown;
+  options: string[];
+}): string | undefined {
+  if (input.type !== "select") return undefined;
+  if (typeof input.okOption !== "string") return undefined;
+  const trimmed = input.okOption.trim();
+  if (!trimmed) return undefined;
+  return input.options.some((option) => option === trimmed) ? trimmed : undefined;
+}
+
+function normalizeMaterialField(
+  input: ConfigurableMaterialField,
+  fallback: ConfigurableMaterialField,
+): ConfigurableMaterialField {
+  const type: ConfigurableMaterialFieldType =
+    input.type === "number" ||
+    input.type === "date" ||
+    input.type === "checkbox" ||
+    input.type === "select" ||
+    input.type === "text"
+      ? input.type
+      : fallback.type;
+  const options = type === "select" ? normalizeFieldOptions(input.options) : undefined;
+  return {
+    ...fallback,
+    ...input,
+    id: typeof input.id === "string" && input.id.trim() ? input.id.trim() : fallback.id,
+    label:
+      typeof input.label === "string" && input.label.trim() ? input.label.trim() : fallback.label,
+    type,
+    required: Boolean(input.required),
+    options,
+    unit: typeof input.unit === "string" ? input.unit.trim() : "",
+    helpText: typeof input.helpText === "string" ? input.helpText.trim() : "",
+    defaultValue: normalizeFieldDefaultValue({
+      type,
+      value: input.defaultValue,
+      options: options ?? [],
+    }),
+    okOption: normalizeFieldOkOption({
+      type,
+      okOption: input.okOption,
+      options: options ?? [],
+    }),
+  };
+}
+
+function normalizeMaterialFieldList(
+  input: unknown,
+  fallback: ConfigurableMaterialField[],
+): ConfigurableMaterialField[] {
+  if (!Array.isArray(input)) return clone(fallback);
+  const next = input
+    .filter((item): item is ConfigurableMaterialField => Boolean(item && typeof item === "object"))
+    .map((item, idx) =>
+      normalizeMaterialField(item, fallback[idx] ?? fallback[Math.max(0, fallback.length - 1)]!),
+    );
+  if (!next.length) return clone(fallback);
+  return next;
+}
+
+function normalizeSingleMaterialTypeSettings(
+  input: MaterialTypeSettings,
+  base: MaterialTypeSettings,
+): MaterialTypeSettings {
+  return {
+    ...clone(base),
+    ...input,
+    code: base.code,
+    label: base.label,
+    collectionFields: normalizeMaterialFieldList(input.collectionFields, base.collectionFields),
+    materialBalanceItems: Array.isArray(input.materialBalanceItems)
+      ? clone(input.materialBalanceItems)
+      : clone(base.materialBalanceItems),
+    incomingControlFields: normalizeMaterialFieldList(
+      input.incomingControlFields,
+      base.incomingControlFields,
+    ),
+  };
+}
+
 function normalizeMaterialTypeSettings(
   stored: MaterialTypeSettings[] | undefined,
 ): MaterialTypeSettings[] {
   return DEFAULT_MATERIAL_TYPE_SETTINGS.map((base) => {
     const found = stored?.find((item) => item.code === base.code);
     if (!found) return clone(base);
-    return {
-      ...clone(base),
-      ...found,
-      code: base.code,
-      label: base.label,
-      collectionFields: Array.isArray(found.collectionFields)
-        ? found.collectionFields
-        : clone(base.collectionFields),
-      materialBalanceItems: Array.isArray(found.materialBalanceItems)
-        ? found.materialBalanceItems
-        : clone(base.materialBalanceItems),
-      incomingControlFields: Array.isArray(found.incomingControlFields)
-        ? found.incomingControlFields
-        : clone(base.incomingControlFields),
-    };
+    return normalizeSingleMaterialTypeSettings(found, base);
   });
 }
 
@@ -141,15 +253,20 @@ function buildSettingsSnapshot(input: {
     input.materialTypes.find((item) => item.code === materialTypeCode) ??
     DEFAULT_MATERIAL_TYPE_SETTINGS.find((item) => item.code === materialTypeCode) ??
     DEFAULT_MATERIAL_TYPE_SETTINGS[0]!;
+  const normalizedMaterialType = normalizeSingleMaterialTypeSettings(
+    materialType,
+    DEFAULT_MATERIAL_TYPE_SETTINGS.find((item) => item.code === materialTypeCode) ??
+      DEFAULT_MATERIAL_TYPE_SETTINGS[0]!,
+  );
   return {
     product: {
       templateId: input.template.id,
       templateName: input.template.name,
       materialTypeCode,
     },
-    materialType: clone(materialType),
+    materialType: clone(normalizedMaterialType),
     storage: null,
-    registrationMaterialBalance: clone(materialType.materialBalanceItems ?? []),
+    registrationMaterialBalance: clone(normalizedMaterialType.materialBalanceItems ?? []),
   };
 }
 
@@ -327,15 +444,12 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
   const updateMaterialTypeSettings = useCallback((settings: MaterialTypeSettings) => {
     setState((prev) => {
       const code = normalizeMaterialTypeCode(settings.code);
+      const base =
+        DEFAULT_MATERIAL_TYPE_SETTINGS.find((item) => item.code === code) ??
+        DEFAULT_MATERIAL_TYPE_SETTINGS[0]!;
       const nextMaterialTypes = prev.materialTypes.map((item) =>
         item.code === code
-          ? {
-              ...settings,
-              code,
-              label: DEFAULT_MATERIAL_TYPE_SETTINGS.find((base) => base.code === code)
-                ?.label ?? settings.label,
-              updatedAt: new Date().toISOString(),
-            }
+          ? { ...normalizeSingleMaterialTypeSettings(settings, base), updatedAt: new Date().toISOString() }
           : item,
       );
       const next = { ...prev, materialTypes: nextMaterialTypes };

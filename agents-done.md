@@ -89,6 +89,17 @@
 
 ## Журнал сессий (кратко)
 
+### 2026-05-20 — Phase 2 регистрация из snapshot + настраиваемый OK во входном контроле
+
+- Закрыт основной runtime-фокус Phase 2: на странице заказа регистрация выводит поля `Забор` и `Входной контроль` из `order.settingsSnapshot.materialType` вместо жёсткой привязки к blood-полям.
+- В `Типы материала` включено автосохранение (кнопка сохранения убрана), стабилизирована нормализация полей/опций, исправлено добавление новых строк в textarea списка опций.
+- Добавлена настройка `Опция ОК` только для вкладки `Входной контроль` (для `select`), сохранение в `materialType` snapshot и runtime-подсветка зелёный/красный по этой опции; для старых snapshot оставлен fallback.
+- UI регистрации: заголовок блока забора переименован в **«Забор материала (Тип материала)»**.
+- Обновлены GSD-артефакты Phase 2: `02-01-SUMMARY.md`, прогресс в `.planning/ROADMAP.md`, `.planning/REQUIREMENTS.md`, `.planning/STATE.md`.
+- Файлы: `src/pages/MaterialTypesAdminPage.tsx`, `src/context/ProductionContext.tsx`, `src/pages/ProductionPages.tsx`, `src/mocks/productionData.ts`, `.planning/phases/02-material-driven-registration/*`, `.planning/{ROADMAP,REQUIREMENTS,STATE}.md`, `AGENTS.md`.
+- Проверка: `npm run build` проходит; остаётся предупреждение Vite о JS chunk > 500 kB.
+- Риск/хвост: формально в roadmap Phase 2 остаётся `02-02` (seed/default verification) как отдельный шаг.
+
 ### 2026-05-16 — Phase 1 типы материала и матбаланс регистрации
 
 - Завершена и опубликована основа Phase 1: список типов материала `/admin/tipy-materiala`, отдельная страница редактирования `/admin/tipy-materiala/:materialTypeCode`, вкладки **Забор / Материальный баланс / Входной контроль**.

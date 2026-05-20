@@ -46,9 +46,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: Implement material type field editor for collection and incoming control.
+- [x] 02-01: Implement material type field editor for collection and incoming control.
 - [ ] 02-02: Seed blood and skin material type defaults.
-- [ ] 02-03: Replace hard-coded registration/incoming-control rendering with snapshot-driven fields.
+- [x] 02-03: Replace hard-coded registration/incoming-control rendering with snapshot-driven fields.
 
 ### Phase 3: Product Process Settings
 **Goal**: Add product-controlled storage and runtime registration material balance while preserving production defaults and optional action inputs.
@@ -107,7 +107,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Product and Material Settings Foundation | 3/3 | Complete | 2026-05-15 |
-| 2. Material-Driven Registration | 0/3 | Not started | - |
+| 2. Material-Driven Registration | 2/3 | In progress | - |
 | 3. Product Process Settings | 0/4 | Not started | - |
 | 4. Independent Quality Control | 0/3 | Not started | - |
 | 5. Privileged Corrections and Audit | 0/3 | Not started | - |

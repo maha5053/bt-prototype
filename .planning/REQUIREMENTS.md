@@ -22,7 +22,7 @@
 - [x] **MAT-06**: Each configurable field supports required flag, default value, unit, and help text.
 - [ ] **MAT-07**: Blood material type defaults include current fields `Объём забранной крови (мл)` and `Тип контейнера`.
 - [ ] **MAT-08**: Skin material type defaults include biopsy/site/container/fixation-oriented fields from `.planning/research/MATERIAL_AND_STORAGE_NOTES.md`.
-- [ ] **MAT-09**: Incoming control requiredness follows the current order creation form behavior unless explicitly changed in material type settings.
+- [x] **MAT-09**: Incoming control requiredness follows the current order creation form behavior unless explicitly changed in material type settings.
 
 ### Product Settings
 
@@ -36,8 +36,8 @@
 
 ### Order Runtime
 
-- [ ] **RUN-01**: Registration section renders collection fields from the order's material type snapshot.
-- [ ] **RUN-02**: Registration section renders incoming control fields from the order's material type snapshot.
+- [x] **RUN-01**: Registration section renders collection fields from the order's material type snapshot.
+- [x] **RUN-02**: Registration section renders incoming control fields from the order's material type snapshot.
 - [ ] **RUN-03**: Registration section renders registration material balance from the order/product snapshot.
 - [ ] **RUN-04**: If storage is enabled for the order's product snapshot, storage appears after production with configured fields.
 - [ ] **RUN-05**: If storage is disabled, the order flow omits storage.
@@ -107,7 +107,7 @@
 | MAT-06 | Phase 1 | Complete |
 | MAT-07 | Phase 2 | Pending |
 | MAT-08 | Phase 2 | Pending |
-| MAT-09 | Phase 2 | Pending |
+| MAT-09 | Phase 2 | Complete |
 | PROD-01 | Phase 1 | Complete |
 | PROD-02 | Phase 3 | Pending |
 | PROD-03 | Phase 3 | Pending |
@@ -115,8 +115,8 @@
 | PROD-05 | Phase 3 | Complete |
 | PROD-06 | Phase 3 | Pending |
 | PROD-07 | Phase 3 | Complete |
-| RUN-01 | Phase 2 | Pending |
-| RUN-02 | Phase 2 | Pending |
+| RUN-01 | Phase 2 | Complete |
+| RUN-02 | Phase 2 | Complete |
 | RUN-03 | Phase 3 | Pending |
 | RUN-04 | Phase 3 | Pending |
 | RUN-05 | Phase 3 | Pending |

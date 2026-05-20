@@ -51,8 +51,103 @@ function optionsToText(options: string[] | undefined): string {
 function textToOptions(value: string): string[] {
   return value
     .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+    .map((line) => line.trim());
+}
+
+function normalizeOptions(options: string[] | undefined): string[] {
+  const next: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of options ?? []) {
+    const value = raw.trim();
+    if (!value) continue;
+    const key = value.toLocaleLowerCase("ru");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    next.push(value);
+  }
+  return next;
+}
+
+function normalizeField(field: ConfigurableMaterialField): ConfigurableMaterialField {
+  const options = field.type === "select" ? normalizeOptions(field.options) : undefined;
+  const okOption =
+    typeof field.okOption === "string" ? field.okOption.trim() : undefined;
+  const normalizedOkOption =
+    field.type === "select" &&
+    Boolean(okOption) &&
+    options?.some((option) => option === okOption)
+      ? okOption
+      : undefined;
+  const normalized: ConfigurableMaterialField = {
+    ...field,
+    id: field.id.trim(),
+    label: field.label.trim(),
+    unit: (field.unit ?? "").trim(),
+    helpText: (field.helpText ?? "").trim(),
+    options,
+    okOption: normalizedOkOption,
+  };
+
+  if (field.type === "checkbox") {
+    normalized.defaultValue = Boolean(field.defaultValue);
+    return normalized;
+  }
+
+  if (field.type === "number") {
+    const parsed =
+      typeof field.defaultValue === "number"
+        ? field.defaultValue
+        : typeof field.defaultValue === "string" && field.defaultValue.trim() !== ""
+          ? Number(field.defaultValue)
+          : null;
+    normalized.defaultValue = Number.isFinite(parsed) ? parsed : null;
+    return normalized;
+  }
+
+  if (field.type === "select") {
+    if (
+      typeof field.defaultValue === "string" &&
+      options?.some((option) => option === field.defaultValue)
+    ) {
+      normalized.defaultValue = field.defaultValue;
+    } else {
+      normalized.defaultValue = null;
+    }
+    return normalized;
+  }
+
+  normalized.defaultValue =
+    typeof field.defaultValue === "string" ? field.defaultValue.trim() : "";
+  return normalized;
+}
+
+function normalizeSettings(settings: MaterialTypeSettings): MaterialTypeSettings {
+  return {
+    ...settings,
+    collectionFields: settings.collectionFields.map(normalizeField),
+    incomingControlFields: settings.incomingControlFields.map(normalizeField),
+  };
+}
+
+function settingsComparableSignature(settings: MaterialTypeSettings): string {
+  const normalized = normalizeSettings(settings);
+  return JSON.stringify({
+    code: normalized.code,
+    label: normalized.label,
+    collectionFields: normalized.collectionFields,
+    incomingControlFields: normalized.incomingControlFields,
+    materialBalanceItems: normalized.materialBalanceItems,
+  });
+}
+
+function areErrorsEqual(a: ErrorMap, b: ErrorMap): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
 }
 
 function defaultValueForType(
@@ -81,25 +176,44 @@ function validateSettings(settings: MaterialTypeSettings): ErrorMap {
   const errors: ErrorMap = {};
   (["collectionFields", "incomingControlFields"] as FieldSection[]).forEach(
     (section) => {
-      const seen = new Map<string, string>();
+      const seenLabels = new Map<string, string>();
+      const seenIds = new Map<string, string>();
       settings[section].forEach((field) => {
+        const id = field.id.trim();
         const label = field.label.trim();
         const baseKey = `${section}:${field.id}`;
+        if (!id) {
+          errors[`${baseKey}:label`] = "Поле имеет пустой идентификатор.";
+        } else {
+          const duplicateId = seenIds.get(id.toLocaleLowerCase("ru"));
+          if (duplicateId) {
+            errors[`${baseKey}:label`] = "Повторяющийся идентификатор поля.";
+            errors[`${section}:${duplicateId}:label`] = "Повторяющийся идентификатор поля.";
+          } else {
+            seenIds.set(id.toLocaleLowerCase("ru"), field.id);
+          }
+        }
         if (!label) {
           errors[`${baseKey}:label`] = "Укажите название поля.";
         } else {
-          const duplicate = seen.get(label.toLocaleLowerCase("ru"));
+          const duplicate = seenLabels.get(label.toLocaleLowerCase("ru"));
           if (duplicate) {
             errors[`${baseKey}:label`] =
               "Поле с таким названием уже есть в этом разделе.";
             errors[`${section}:${duplicate}:label`] =
               "Поле с таким названием уже есть в этом разделе.";
           } else {
-            seen.set(label.toLocaleLowerCase("ru"), field.id);
+            seenLabels.set(label.toLocaleLowerCase("ru"), field.id);
           }
         }
-        if (field.type === "select" && !field.options?.length) {
-          errors[`${baseKey}:options`] = "Добавьте хотя бы один вариант списка.";
+        if (field.type === "select") {
+          const normalizedOptions = normalizeOptions(field.options);
+          if (!normalizedOptions.length) {
+            errors[`${baseKey}:options`] = "Добавьте хотя бы один вариант списка.";
+          } else if ((field.options?.length ?? 0) !== normalizedOptions.length) {
+            errors[`${baseKey}:options`] =
+              "Варианты списка должны быть уникальными и непустыми.";
+          }
         }
       });
     },
@@ -300,12 +414,26 @@ function MaterialTypeEditorContent() {
     setDraft(clone(selected));
     setErrors({});
     setSavedAt(null);
-  }, [selected]);
+  }, [materialTypeCode, selected?.code]);
+
+  useEffect(() => {
+    if (!draft || !selected) return;
+    const normalizedDraft = normalizeSettings(draft);
+    const nextErrors = validateSettings(normalizedDraft);
+    setErrors((prev) => (areErrorsEqual(prev, nextErrors) ? prev : nextErrors));
+    if (Object.keys(nextErrors).length > 0) return;
+    if (settingsComparableSignature(normalizedDraft) === settingsComparableSignature(selected)) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      updateMaterialTypeSettings(normalizedDraft);
+      setSavedAt(new Date().toISOString());
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [draft, selected, updateMaterialTypeSettings]);
 
   const patchDraft = (updater: (prev: MaterialTypeSettings) => MaterialTypeSettings) => {
     setDraft((prev) => (prev ? updater(prev) : prev));
-    setErrors({});
-    setSavedAt(null);
   };
 
   const patchField = (
@@ -381,15 +509,6 @@ function MaterialTypeEditorContent() {
     }));
   };
 
-  const handleSave = () => {
-    if (!draft) return;
-    const nextErrors = validateSettings(draft);
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
-    updateMaterialTypeSettings(draft);
-    setSavedAt(new Date().toISOString());
-  };
-
   if (!selected || !draft) {
     return (
       <div className="p-6 md:p-8">
@@ -458,14 +577,6 @@ function MaterialTypeEditorContent() {
                 </span>
               ) : null}
             </div>
-
-            <button
-              type="button"
-              onClick={handleSave}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              Сохранить настройки
-            </button>
           </div>
         </div>
 
@@ -811,6 +922,9 @@ function FieldSectionEditor({
                 <th className="px-3 py-2 font-medium">Тип</th>
                 <th className="px-3 py-2 font-medium">Обязательное</th>
                 <th className="px-3 py-2 font-medium">Значение по умолчанию</th>
+                {section === "incomingControlFields" ? (
+                  <th className="px-3 py-2 font-medium">Опция ОК</th>
+                ) : null}
                 <th className="px-3 py-2 font-medium">Ед. изм.</th>
                 <th className="px-3 py-2 font-medium">Подсказка</th>
                 <th className="px-3 py-2 font-medium text-right">Действия</th>
@@ -883,6 +997,7 @@ function FieldRow({
               defaultValue: valueFromInput("", nextType),
               options:
                 nextType === "select" ? prev.options?.length ? prev.options : [""] : undefined,
+              okOption: undefined,
             }));
           }}
           className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
@@ -945,7 +1060,9 @@ function FieldRow({
           />
         ) : (
           <input
-            type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+            type={
+              field.type === "number" ? "number" : field.type === "date" ? "date" : "text"
+            }
             value={String(defaultValueForType(field.defaultValue, field.type))}
             onChange={(e) =>
               onPatch(section, field.id, (prev) => ({
@@ -957,6 +1074,31 @@ function FieldRow({
           />
         )}
       </td>
+      {section === "incomingControlFields" ? (
+        <td className="px-3 py-2">
+          {field.type === "select" ? (
+            <select
+              value={field.okOption ?? ""}
+              onChange={(e) =>
+                onPatch(section, field.id, (prev) => ({
+                  ...prev,
+                  okOption: e.target.value || undefined,
+                }))
+              }
+              className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+            >
+              <option value="">Не выбрано</option>
+              {normalizeOptions(field.options).map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-xs text-slate-400">—</span>
+          )}
+        </td>
+      ) : null}
       <td className="px-3 py-2">
         <input
           value={field.unit ?? ""}

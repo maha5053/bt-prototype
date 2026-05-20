@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: phase-1-complete
-last_updated: "2026-05-16T00:00:00.000Z"
+status: phase-2-in-progress
+last_updated: "2026-05-20T00:00:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 16
-  completed_plans: 3
-  percent: 19
+  completed_plans: 5
+  percent: 31
 ---
 
 # Project State
 
-**Last Updated:** 2026-05-16
+**Last Updated:** 2026-05-20
 
 ## Project Reference
 
@@ -26,7 +26,7 @@ See: `.planning/PROJECT.md` (updated 2026-05-15)
 ## Current Milestone
 
 **Name:** Customer feedback: configurable order creation and product settings
-**Status:** Phase 1 complete; ready to plan/execute Phase 2
+**Status:** Phase 2 in progress (02-01 and 02-03 implemented)
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Codebase map:** `.planning/codebase/`
@@ -47,12 +47,6 @@ Phase 1 is complete.
 - `.planning/phases/01-product-and-material-settings-foundation/01-03-SUMMARY.md`
 
 Next recommended GSD step:
-
-```text
-$gsd-discuss-phase 2
-```
-
-or, if the existing roadmap details are enough:
 
 ```text
 $gsd-plan-phase 2
@@ -77,8 +71,13 @@ $gsd-plan-phase 2
 
 ## Recent Activity
 
+- Phase 2 plan summary added: `.planning/phases/02-material-driven-registration/02-01-SUMMARY.md`.
+- Material type settings editor switched to autosave and save button removed; select-options editing UX fixed.
+- Incoming control settings gained configurable `okOption` per select field.
+- Registration runtime now renders collection and incoming-control fields from order material snapshot.
+- Incoming control badge sentiment in registration now follows configured `okOption` with legacy fallback behavior.
 - Material type editor reworked to list/editor structure matching Products; editor tabs are `Забор`, `Материальный баланс`, `Входной контроль`.
-- Material balance settings are now stored on material types as rows from `ACTION_CONSUMABLE_CATALOG` with default quantity and informational write-off-on-registration-complete flag. Runtime registration rendering remains pending.
+- Material balance settings are stored on material types as rows from `ACTION_CONSUMABLE_CATALOG` with default quantity and informational write-off-on-registration-complete flag.
 - Phase 1 completed on branch `codex-phase-1-foundation-wip`: material type settings model, admin page `/admin/tipy-materiala`, product material type selector, global padded incoming sample IDs, and order settings snapshots.
 - Phase 1 summaries created for plans 01-01, 01-02, and 01-03.
 - `npm run build` passed after Phase 1; Vite warned that JS chunk is larger than 500 kB.

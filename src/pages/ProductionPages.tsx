@@ -17,9 +17,11 @@ import { useCurrentUser } from "../context/CurrentUserContext";
 import { canEditStage as canEditStageByPerm, canViewStage } from "../mocks/usersMock";
 import {
   PRODUCTION_REJECTION_PHASE_LABELS,
+  type ConfigurableMaterialField,
   type FieldDefinition,
   type FieldReferenceRange,
   type FieldValue,
+  type MaterialTypeSettings,
   type ProcessTemplate,
   type ProductionOrder,
   type ProductionOrderStatus,
@@ -41,11 +43,14 @@ import {
 const REJECTION_PHASE_OPTIONS = Object.entries(
   PRODUCTION_REJECTION_PHASE_LABELS,
 ) as [ProductionRejectionPhase, string][];
+type FieldSentiment = "positive" | "negative";
 
 const DEVIATION_SECTION_HEADER_ID = "sec-dev";
 const DEVIATION_FLAG_FIELD_ID = "devFlag";
 const DEVIATION_NOTES_FIELD_ID = "devNotes";
 const DEVIATION_SUMMARY_FIELD_ID = "devSummary";
+const REGISTRATION_COLLECTION_SECTION_ID = "sec-blood";
+const REGISTRATION_INCOMING_QC_SECTION_ID = "sec-qc";
 
 const DEVIATION_FIELDS_BASELINE: FieldDefinition[] = [
   {
@@ -114,6 +119,131 @@ function ensureReleaseDeviationLayout(fields: FieldDefinition[]): FieldDefinitio
     summary,
     ...filteredTail,
   ];
+}
+
+function mapMaterialFieldToRuntimeFieldDefinition(
+  field: ConfigurableMaterialField,
+): FieldDefinition {
+  return {
+    id: field.id,
+    label: field.label,
+    type: field.type,
+    required: Boolean(field.required),
+    unit: field.unit?.trim() ? field.unit.trim() : undefined,
+    options:
+      field.type === "select" ? (field.options ?? []).filter((opt) => opt.trim()) : undefined,
+    placeholder: field.helpText?.trim() ? field.helpText.trim() : undefined,
+  };
+}
+
+function resolveIncomingQcSentimentBySettings(input: {
+  materialType: MaterialTypeSettings | undefined;
+  fieldId: string;
+  rawValue: FieldValue;
+}): FieldSentiment | undefined {
+  if (typeof input.rawValue !== "string") return undefined;
+  const value = input.rawValue.trim();
+  if (!value) return undefined;
+
+  const configuredField = input.materialType?.incomingControlFields?.find(
+    (f) => f.id === input.fieldId,
+  );
+  const configuredOk = configuredField?.okOption?.trim();
+  if (configuredOk) {
+    return value === configuredOk ? "positive" : "negative";
+  }
+
+  // Backward-compatible fallback for old snapshots without okOption.
+  const v = value.toLowerCase();
+  if (input.fieldId === "integrity" || input.fieldId === "containerIntegrity") {
+    if (v === "не нарушена") return "positive";
+    if (v === "нарушена") return "negative";
+  }
+  if (input.fieldId === "volumeOk" || input.fieldId === "labeling") {
+    if (v === "соответствует") return "positive";
+    if (v === "не соответствует") return "negative";
+  }
+  if (input.fieldId === "hemolysis") {
+    if (v === "нет") return "positive";
+    if (v === "да") return "negative";
+  }
+  if (input.fieldId === "assignedStatus") {
+    if (v === "разрешено") return "positive";
+    if (v === "брак") return "negative";
+  }
+  if (input.fieldId === "materialCondition") {
+    if (v === "пригоден") return "positive";
+    if (v === "брак") return "negative";
+  }
+  return undefined;
+}
+
+function materialTypeDefaultValues(
+  materialType: MaterialTypeSettings | undefined,
+): Record<string, FieldValue> {
+  const map: Record<string, FieldValue> = {};
+  if (!materialType) return map;
+  for (const field of [
+    ...materialType.collectionFields,
+    ...materialType.incomingControlFields,
+  ]) {
+    const value = field.defaultValue;
+    if (value == null) continue;
+    if (typeof value === "string" && value.trim() === "") continue;
+    map[field.id] = value;
+  }
+  return map;
+}
+
+function deriveRegistrationFieldsFromSnapshot(
+  baseFields: FieldDefinition[],
+  materialType: MaterialTypeSettings | undefined,
+): FieldDefinition[] {
+  if (!materialType) return baseFields;
+
+  const collectionFields = materialType.collectionFields.map(
+    mapMaterialFieldToRuntimeFieldDefinition,
+  );
+  const incomingControlFields = materialType.incomingControlFields.map(
+    mapMaterialFieldToRuntimeFieldDefinition,
+  );
+
+  type Section = { header: FieldDefinition | null; fields: FieldDefinition[] };
+  const sections: Section[] = [];
+  let current: Section | null = null;
+  const ensureDefault = () => {
+    if (current) return;
+    current = { header: null, fields: [] };
+    sections.push(current);
+  };
+
+  for (const field of baseFields) {
+    if (field.type === "section_header") {
+      current = { header: field, fields: [] };
+      sections.push(current);
+      continue;
+    }
+    ensureDefault();
+    current!.fields.push(field);
+  }
+
+  const patched = sections.map((section) => {
+    const headerId = section.header?.id;
+    if (headerId === REGISTRATION_COLLECTION_SECTION_ID) {
+      return { ...section, fields: collectionFields };
+    }
+    if (headerId === REGISTRATION_INCOMING_QC_SECTION_ID) {
+      return { ...section, fields: incomingControlFields };
+    }
+    return section;
+  });
+
+  const out: FieldDefinition[] = [];
+  for (const section of patched) {
+    if (section.header) out.push(section.header);
+    out.push(...section.fields);
+  }
+  return out;
 }
 
 function collectAllDeviations(order: ProductionOrder): string {
@@ -2852,6 +2982,10 @@ function StepsStage({
     sequentialLockEnabled && activeStepIndex > firstIncompleteIndex;
   const activeStepTpl = stepsTpl[activeStepIndex];
   const activeStepExec = stepsExec[activeStepIndex];
+  const registrationDefaults = useMemo(
+    () => materialTypeDefaultValues(order.settingsSnapshot?.materialType),
+    [order.settingsSnapshot?.materialType],
+  );
   const activeStepTplFields = useMemo(() => {
     if (!activeStepTpl) return [];
     // Deviation block exists in registration baseline and must be available
@@ -2865,8 +2999,14 @@ function StepsStage({
         ? ensureReleaseDeviationLayout(activeStepTpl.fields)
         : ensureDeviationFields(activeStepTpl.fields);
     }
+    if (stageTemplate.type === "registration") {
+      return deriveRegistrationFieldsFromSnapshot(
+        activeStepTpl.fields,
+        order.settingsSnapshot?.materialType,
+      );
+    }
     return activeStepTpl.fields;
-  }, [activeStepTpl, stageTemplate.type]);
+  }, [activeStepTpl, order.settingsSnapshot?.materialType, stageTemplate.type]);
 
   const missingRequiredActions = (() => {
     if (stageTemplate.type !== "production") return false;
@@ -2910,7 +3050,11 @@ function StepsStage({
       if (f.refDeviations && f.refDeviations.length > 0) return false;
       if (f.computeRule) return false;
 
-      const raw = activeStepExec.fieldValues[f.id];
+      const rawFromExecution = activeStepExec.fieldValues[f.id];
+      const raw =
+        rawFromExecution == null && stageTemplate.type === "registration"
+          ? registrationDefaults[f.id] ?? rawFromExecution
+          : rawFromExecution;
       if (raw === null || raw === undefined) return true;
 
       switch (f.type) {
@@ -3673,6 +3817,10 @@ function FormFields({
         : ensureDeviationFields(stepTemplate.fields),
     [stageType, stepTemplate.fields],
   );
+  const registrationDefaults = useMemo(
+    () => materialTypeDefaultValues(order.settingsSnapshot?.materialType),
+    [order.settingsSnapshot?.materialType],
+  );
 
   const resolveValue = (field: FieldDefinition): FieldValue => {
     if (stageType === "release" && field.id === DEVIATION_SUMMARY_FIELD_ID) {
@@ -3748,7 +3896,13 @@ function FormFields({
       }
       return null;
     }
-    return stepExecution.fieldValues[field.id] ?? null;
+    const raw = stepExecution.fieldValues[field.id];
+    if (raw !== null && raw !== undefined) return raw;
+    if (stageType === "registration") {
+      const fallback = registrationDefaults[field.id];
+      if (fallback !== undefined) return fallback;
+    }
+    return null;
   };
 
   // Conditional required field:
@@ -3857,8 +4011,6 @@ function FormFields({
       </label>
     );
   };
-
-  type FieldSentiment = "positive" | "negative";
 
   const renderFieldCustom = (
     field: FieldDefinition,
@@ -4161,6 +4313,7 @@ function FormFields({
           const isRegistrationBalanceGroup =
             stageType === "registration" && g.headerField?.id === "sec-balance";
           const isDeviationGroup = g.headerField?.id === DEVIATION_SECTION_HEADER_ID;
+          const materialTypeLabel = order.settingsSnapshot?.materialType?.label?.trim() ?? "";
 
           const renderCommonDataGrid = () => {
             const byId = new Map(g.fields.map((f) => [f.id, f] as const));
@@ -4225,23 +4378,9 @@ function FormFields({
             );
           };
 
-          const renderBloodCollectionGrid = () => {
-            const byId = new Map(g.fields.map((f) => [f.id, f] as const));
-            const volume = byId.get("bloodVolume") ?? null;
-            const container = byId.get("containerType") ?? null;
-            return (
-              <div className="flex flex-col gap-4 md:flex-row md:items-end md:gap-4">
-                {volume ? (
-                  <div className="min-w-0 md:shrink-0">
-                    {renderFieldCustom(volume, "md:w-[24ch] md:max-w-[24ch]")}
-                  </div>
-                ) : null}
-                {container ? (
-                  <div className="min-w-0 md:flex-1">{renderFieldCustom(container)}</div>
-                ) : null}
-              </div>
-            );
-          };
+          const renderCollectionStack = () => (
+            <div className="space-y-3">{g.fields.map((f) => renderFieldCustom(f))}</div>
+          );
 
           const renderBalanceTable = () => {
             const inputCls =
@@ -4328,39 +4467,14 @@ function FormFields({
             );
           };
 
-          const resolveIncomingQcSentiment = (
-            fieldId: string,
-            rawValue: FieldValue,
-          ): FieldSentiment | undefined => {
-            if (typeof rawValue !== "string") return undefined;
-            const v = rawValue.trim().toLowerCase();
-            if (!v) return undefined;
-            if (fieldId === "integrity") {
-              if (v === "не нарушена") return "positive";
-              if (v === "нарушена") return "negative";
-            }
-            if (fieldId === "volumeOk") {
-              if (v === "соответствует") return "positive";
-              if (v === "не соответствует") return "negative";
-            }
-            if (fieldId === "hemolysis") {
-              if (v === "нет") return "positive";
-              if (v === "да") return "negative";
-            }
-            if (fieldId === "assignedStatus") {
-              if (v === "разрешено") return "positive";
-              if (v === "брак") return "negative";
-            }
-            return undefined;
-          };
-
           const renderIncomingQcStack = () => (
             <div className="space-y-3">
               {g.fields.map((f) => {
-                const sentiment = resolveIncomingQcSentiment(
-                  f.id,
-                  resolveValue(f),
-                );
+                const sentiment = resolveIncomingQcSentimentBySettings({
+                  materialType: order.settingsSnapshot?.materialType,
+                  fieldId: f.id,
+                  rawValue: resolveValue(f),
+                });
                 return renderFieldCustom(f, undefined, sentiment);
               })}
             </div>
@@ -4422,14 +4536,20 @@ function FormFields({
               storageKey={storageKey}
               defaultOpen
               forceOpen={forceOpen}
-              title={g.title}
+              title={
+                isRegistrationBloodGroup
+                  ? materialTypeLabel
+                    ? `Забор материала (${materialTypeLabel})`
+                    : "Забор материала"
+                  : g.title
+              }
               right={right}
             >
               <NestedRailBlock tone="muted" showRail={false}>
                 {isRegistrationCommonGroup ? (
                   renderCommonDataGrid()
                 ) : isRegistrationBloodGroup ? (
-                  renderBloodCollectionGrid()
+                  renderCollectionStack()
                 ) : isRegistrationIncomingQcGroup ? (
                   renderIncomingQcStack()
                 ) : isRegistrationBalanceGroup ? (

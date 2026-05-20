@@ -178,6 +178,8 @@ export interface ConfigurableMaterialField {
   unit?: string;
   helpText?: string;
   options?: string[];
+  /** Для входного контроля (select): вариант, который считается "ок" (зелёная подсветка). */
+  okOption?: string;
 }
 
 export interface MaterialTypeBalanceItem {
@@ -302,6 +304,7 @@ export const DEFAULT_MATERIAL_TYPE_SETTINGS: MaterialTypeSettings[] = [
         required: false,
         options: ["не нарушена", "нарушена"],
         defaultValue: "не нарушена",
+        okOption: "не нарушена",
       },
       {
         id: "volumeOk",
@@ -310,6 +313,7 @@ export const DEFAULT_MATERIAL_TYPE_SETTINGS: MaterialTypeSettings[] = [
         required: false,
         options: ["соответствует", "не соответствует"],
         defaultValue: "соответствует",
+        okOption: "соответствует",
       },
       {
         id: "hemolysis",
@@ -318,6 +322,7 @@ export const DEFAULT_MATERIAL_TYPE_SETTINGS: MaterialTypeSettings[] = [
         required: false,
         options: ["нет", "да"],
         defaultValue: "нет",
+        okOption: "нет",
       },
       {
         id: "assignedStatus",
@@ -326,6 +331,7 @@ export const DEFAULT_MATERIAL_TYPE_SETTINGS: MaterialTypeSettings[] = [
         required: false,
         options: ["Разрешено", "Брак"],
         defaultValue: "Разрешено",
+        okOption: "Разрешено",
       },
     ],
   },
@@ -405,6 +411,7 @@ export const DEFAULT_MATERIAL_TYPE_SETTINGS: MaterialTypeSettings[] = [
         required: false,
         options: ["не нарушена", "нарушена"],
         defaultValue: "не нарушена",
+        okOption: "не нарушена",
       },
       {
         id: "labeling",
@@ -413,6 +420,7 @@ export const DEFAULT_MATERIAL_TYPE_SETTINGS: MaterialTypeSettings[] = [
         required: false,
         options: ["соответствует", "не соответствует"],
         defaultValue: "соответствует",
+        okOption: "соответствует",
       },
       {
         id: "materialCondition",
@@ -421,6 +429,7 @@ export const DEFAULT_MATERIAL_TYPE_SETTINGS: MaterialTypeSettings[] = [
         required: false,
         options: ["пригоден", "требует уточнения", "брак"],
         defaultValue: "пригоден",
+        okOption: "пригоден",
       },
       {
         id: "assignedStatus",
@@ -429,6 +438,7 @@ export const DEFAULT_MATERIAL_TYPE_SETTINGS: MaterialTypeSettings[] = [
         required: false,
         options: ["Разрешено", "Брак"],
         defaultValue: "Разрешено",
+        okOption: "Разрешено",
       },
     ],
   },
