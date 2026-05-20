@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import { ProductionJournalDevTools } from "../components/ProductionJournalDevTools";
 import {
@@ -15,7 +16,12 @@ import {
 } from "../context/ProductionContext";
 import { useCurrentUser } from "../context/CurrentUserContext";
 import { getStoragePlaceCatalogOptions } from "../mocks/storagePlacesMeta";
-import { canEditStage as canEditStageByPerm, canViewStage } from "../mocks/usersMock";
+import {
+  canEditStage as canEditStageByPerm,
+  canViewStage,
+  displayNameForUserId,
+  USERS,
+} from "../mocks/usersMock";
 import {
   PRODUCTION_REJECTION_PHASE_LABELS,
   type ConfigurableMaterialField,
@@ -55,6 +61,15 @@ const DEVIATION_NOTES_FIELD_ID = "devNotes";
 const DEVIATION_SUMMARY_FIELD_ID = "devSummary";
 const REGISTRATION_COLLECTION_SECTION_ID = "sec-blood";
 const REGISTRATION_INCOMING_QC_SECTION_ID = "sec-qc";
+
+/** Узкое поле — как «Дата рождения» на вкладке регистрации. */
+const ORDER_FIELD_SM_WRAP = "min-w-0 w-full md:w-auto md:shrink-0";
+const ORDER_FIELD_SM_INPUT = "w-full md:w-[24ch] md:max-w-[24ch]";
+
+/** Среднее поле в строке (делит ряд пополам с соседним). */
+const ORDER_FIELD_MD_WRAP = "min-w-0 w-full md:flex-1 md:basis-0";
+
+const ORDER_FIELD_INPUT_CLS = "w-full";
 
 const DEVIATION_FIELDS_BASELINE: FieldDefinition[] = [
   {
@@ -129,12 +144,16 @@ function mapMaterialFieldToRuntimeFieldDefinition(
   field: ConfigurableMaterialField,
 ): FieldDefinition {
   const isStorageLocation = field.id === "storageLocation";
-  const type = isStorageLocation ? "select" : field.type;
+  const isStorageResponsible = field.id === "storageResponsible";
+  const type =
+    isStorageLocation || isStorageResponsible ? "select" : field.type;
   const options = isStorageLocation
     ? getStoragePlaceCatalogOptions()
-    : type === "select"
-      ? (field.options ?? []).filter((opt) => opt.trim())
-      : undefined;
+    : isStorageResponsible
+      ? [...USERS]
+      : type === "select"
+        ? (field.options ?? []).filter((opt) => opt.trim())
+        : undefined;
   return {
     id: field.id,
     label: field.label,
@@ -231,12 +250,17 @@ function todayDateOnly(): string {
 
 function storageSettingsDefaultValues(
   storage: ProductStorageSettings | null | undefined,
+  currentUserId?: string,
 ): Record<string, FieldValue> {
   const map: Record<string, FieldValue> = {};
   if (!storage?.enabled) return map;
   for (const field of storage.fields) {
     if (field.id === "storageStart") {
       map[field.id] = todayDateOnly();
+      continue;
+    }
+    if (field.id === "storageResponsible" && currentUserId) {
+      map[field.id] = currentUserId;
       continue;
     }
     const value = field.defaultValue;
@@ -256,7 +280,11 @@ function fieldValueWithStageDefaults(input: {
 }): FieldValue {
   const { field, rawFromExecution, stageType, registrationDefaults, storageDefaults } =
     input;
-  if (rawFromExecution !== null && rawFromExecution !== undefined) {
+  const hasStoredValue =
+    rawFromExecution !== null &&
+    rawFromExecution !== undefined &&
+    !(typeof rawFromExecution === "string" && rawFromExecution.trim() === "");
+  if (hasStoredValue) {
     return rawFromExecution;
   }
   if (stageType === "registration") {
@@ -1907,6 +1935,7 @@ function ProductionOrderContent() {
                 activeStepIndex={activeStepIndex}
                 onSelectStep={setActiveStepIndex}
                 canEdit={canEditStage}
+                currentUserId={currentUser.id}
                 hasApprovalPermission={permissions.approval === "write"}
                 canApproveReleaseTechProcess={canApproveReleaseTechProcess}
                 onApproveReleaseTechProcess={() => {
@@ -3008,6 +3037,7 @@ function StepsStage({
   activeStepIndex,
   onSelectStep,
   canEdit,
+  currentUserId,
   hasApprovalPermission,
   canApproveReleaseTechProcess,
   onApproveReleaseTechProcess,
@@ -3023,6 +3053,7 @@ function StepsStage({
   activeStepIndex: number;
   onSelectStep: (idx: number) => void;
   canEdit: boolean;
+  currentUserId: string;
   hasApprovalPermission: boolean;
   canApproveReleaseTechProcess: boolean;
   onApproveReleaseTechProcess: () => void;
@@ -3090,8 +3121,12 @@ function StepsStage({
     ],
   );
   const storageDefaults = useMemo(
-    () => storageSettingsDefaultValues(order.settingsSnapshot?.storage),
-    [order.settingsSnapshot?.storage],
+    () =>
+      storageSettingsDefaultValues(
+        order.settingsSnapshot?.storage,
+        currentUserId,
+      ),
+    [order.settingsSnapshot?.storage, currentUserId],
   );
   const activeStepTplFields = useMemo(() => {
     if (!activeStepTpl) return [];
@@ -3401,6 +3436,7 @@ function StepsStage({
                 !stageMarkedComplete &&
                 stepsExec[activeStepIndex]?.status !== "completed"
               }
+              currentUserId={currentUserId}
               onChange={(fieldId, value) =>
                 onChangeField(activeStepIndex, fieldId, value)
               }
@@ -3905,6 +3941,7 @@ function FormFields({
   stepTemplate,
   stepExecution,
   canEdit,
+  currentUserId,
   onChange,
   onChangeConsumableQty,
   onChangeEquipment,
@@ -3915,6 +3952,7 @@ function FormFields({
   stepTemplate: StepTemplate | undefined;
   stepExecution: ProductionOrder["stages"][number]["steps"][number] | undefined;
   canEdit: boolean;
+  currentUserId: string;
   onChange: (fieldId: string, value: FieldValue) => void;
   onChangeConsumableQty: (consumableId: string, qty: number | null) => void;
   onChangeEquipment: (equipmentId: string, applied: boolean) => void;
@@ -3945,8 +3983,12 @@ function FormFields({
     ],
   );
   const storageDefaults = useMemo(
-    () => storageSettingsDefaultValues(order.settingsSnapshot?.storage),
-    [order.settingsSnapshot?.storage],
+    () =>
+      storageSettingsDefaultValues(
+        order.settingsSnapshot?.storage,
+        currentUserId,
+      ),
+    [order.settingsSnapshot?.storage, currentUserId],
   );
 
   const resolveValue = (field: FieldDefinition): FieldValue => {
@@ -4439,6 +4481,8 @@ function FormFields({
             stageType === "registration" && g.headerField?.id === "sec-qc";
           const isRegistrationBalanceGroup =
             stageType === "registration" && g.headerField?.id === "sec-balance";
+          const isStorageDataGroup =
+            stageType === "storage" && g.id === "grp-default";
           const isDeviationGroup = g.headerField?.id === DEVIATION_SECTION_HEADER_ID;
           const materialTypeLabel = order.settingsSnapshot?.materialType?.label?.trim() ?? "";
 
@@ -4461,16 +4505,15 @@ function FormFields({
                   <div className="md:col-span-12">
                     <div className="flex flex-col gap-4 md:flex-row md:items-end md:gap-4">
                       {dob ? (
-                        <div className="min-w-0 md:shrink-0">
-                          {renderFieldCustom(dob, "md:w-[24ch] md:max-w-[24ch]")}
+                        <div className={ORDER_FIELD_SM_WRAP}>
+                          {renderFieldCustom(dob, ORDER_FIELD_SM_INPUT)}
                         </div>
                       ) : null}
                       {age ? (
-                        <div className="min-w-0 md:shrink-0">
+                        <div className={ORDER_FIELD_SM_WRAP}>
                           {renderFieldCustom(
                             age,
-                            // Align with DOB width, keep input compact inside.
-                            "md:w-[24ch] md:max-w-[24ch] w-28 tabular-nums",
+                            `${ORDER_FIELD_SM_INPUT} tabular-nums`,
                           )}
                         </div>
                       ) : null}
@@ -4481,12 +4524,8 @@ function FormFields({
                   <div className="md:col-span-12">
                     <div className="flex flex-col gap-4 md:flex-row md:items-end md:gap-4">
                       {department ? (
-                        <div className="min-w-0 md:shrink-0">
-                          {renderFieldCustom(
-                            department,
-                            // Longest option: "Травматология" (~12ch). +50% запас + UI padding/chevron.
-                            "md:w-[24ch] md:max-w-[24ch]",
-                          )}
+                        <div className={ORDER_FIELD_SM_WRAP}>
+                          {renderFieldCustom(department, ORDER_FIELD_SM_INPUT)}
                         </div>
                       ) : null}
                       {ib ? (
@@ -4508,6 +4547,90 @@ function FormFields({
           const renderCollectionStack = () => (
             <div className="space-y-3">{g.fields.map((f) => renderFieldCustom(f))}</div>
           );
+
+          const renderStorageDataGrid = () => {
+            const byId = new Map(g.fields.map((f) => [f.id, f] as const));
+            const condition = byId.get("storageCondition") ?? null;
+            const location = byId.get("storageLocation") ?? null;
+            const start = byId.get("storageStart") ?? null;
+            const end = byId.get("storageEnd") ?? null;
+            const temperature = byId.get("storageTemperature") ?? null;
+            const container = byId.get("storageContainer") ?? null;
+            const responsible = byId.get("storageResponsible") ?? null;
+
+            const used = new Set([
+              "storageCondition",
+              "storageLocation",
+              "storageStart",
+              "storageEnd",
+              "storageTemperature",
+              "storageContainer",
+              "storageResponsible",
+            ]);
+            const rest = g.fields.filter((f) => !used.has(f.id));
+
+            const storageRow = (children: ReactNode) => (
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:gap-4">
+                {children}
+              </div>
+            );
+
+            const smCell = (field: FieldDefinition, inputClassName?: string) => (
+              <div key={field.id} className={ORDER_FIELD_SM_WRAP}>
+                {renderFieldCustom(
+                  field,
+                  [ORDER_FIELD_SM_INPUT, inputClassName].filter(Boolean).join(" "),
+                )}
+              </div>
+            );
+
+            const mdCell = (field: FieldDefinition) => (
+              <div key={field.id} className={ORDER_FIELD_MD_WRAP}>
+                {renderFieldCustom(field, ORDER_FIELD_INPUT_CLS)}
+              </div>
+            );
+
+            return (
+              <div className="space-y-4">
+                {location || condition
+                  ? storageRow(
+                      <>
+                        {location ? mdCell(location) : null}
+                        {condition ? mdCell(condition) : null}
+                      </>,
+                    )
+                  : null}
+                {start || end
+                  ? storageRow(
+                      <>
+                        {start ? smCell(start) : null}
+                        {end ? smCell(end) : null}
+                      </>,
+                    )
+                  : null}
+                {container || temperature
+                  ? storageRow(
+                      <>
+                        {container ? mdCell(container) : null}
+                        {temperature
+                          ? smCell(temperature, "tabular-nums")
+                          : null}
+                      </>,
+                    )
+                  : null}
+                {responsible
+                  ? storageRow(
+                      <div className="min-w-0 w-full md:max-w-md md:shrink-0">
+                        {renderFieldCustom(responsible, ORDER_FIELD_INPUT_CLS)}
+                      </div>,
+                    )
+                  : null}
+                {rest.map((f) => (
+                  <div key={f.id}>{renderFieldRow(f)}</div>
+                ))}
+              </div>
+            );
+          };
 
           const renderBalanceTable = () => {
             const inputCls =
@@ -4681,6 +4804,8 @@ function FormFields({
                   renderIncomingQcStack()
                 ) : isRegistrationBalanceGroup ? (
                   renderBalanceTable()
+                ) : isStorageDataGroup ? (
+                  renderStorageDataGrid()
                 ) : isDeviationGroup ? (
                   renderDeviationStack()
                 ) : (
@@ -5001,7 +5126,9 @@ function FieldInput({
         <option value="">Выберите…</option>
         {(field.options ?? []).map((opt) => (
           <option key={opt} value={opt}>
-            {opt}
+            {field.id === "storageResponsible"
+              ? displayNameForUserId(opt)
+              : opt}
           </option>
         ))}
       </select>

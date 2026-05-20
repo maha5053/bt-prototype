@@ -2,6 +2,7 @@
 
 import thrombogelNewSeed from "./thrombogelNewSeed.json";
 import { getStoragePlaceCatalogOptions } from "./storagePlacesMeta";
+import { USERS } from "./usersMock";
 
 export type Role = string;
 
@@ -73,9 +74,10 @@ export const DEFAULT_STORAGE_STAGE_FIELDS: ConfigurableMaterialField[] = [
   {
     id: "storageResponsible",
     label: "Ответственный",
-    type: "text",
+    type: "select",
     required: false,
-    defaultValue: "",
+    options: [...USERS],
+    defaultValue: null,
   },
 ];
 
@@ -665,14 +667,24 @@ function defaultStageName(type: StageType): string {
 }
 
 function materialFieldToRuntimeField(field: ConfigurableMaterialField): FieldDefinition {
+  const isStorageLocation = field.id === "storageLocation";
+  const isStorageResponsible = field.id === "storageResponsible";
+  const type =
+    isStorageLocation || isStorageResponsible ? "select" : field.type;
+  const options = isStorageLocation
+    ? getStoragePlaceCatalogOptions()
+    : isStorageResponsible
+      ? [...USERS]
+      : type === "select"
+        ? (field.options ?? []).filter((opt) => opt.trim())
+        : undefined;
   return {
     id: field.id,
     label: field.label,
-    type: field.type,
+    type,
     required: Boolean(field.required),
     unit: field.unit?.trim() ? field.unit.trim() : undefined,
-    options:
-      field.type === "select" ? (field.options ?? []).filter((opt) => opt.trim()) : undefined,
+    options,
     placeholder: field.helpText?.trim() ? field.helpText.trim() : undefined,
   };
 }
@@ -731,6 +743,19 @@ export function normalizeProductStorageSettings(
       };
       if (baseField.id === "storageLocation") {
         const options = getStoragePlaceCatalogOptions();
+        const storedDefault =
+          typeof found.defaultValue === "string" ? found.defaultValue.trim() : "";
+        return {
+          ...merged,
+          type: "select",
+          options,
+          defaultValue:
+            storedDefault && options.includes(storedDefault) ? storedDefault : null,
+          helpText: "",
+        };
+      }
+      if (baseField.id === "storageResponsible") {
+        const options = [...USERS];
         const storedDefault =
           typeof found.defaultValue === "string" ? found.defaultValue.trim() : "";
         return {
