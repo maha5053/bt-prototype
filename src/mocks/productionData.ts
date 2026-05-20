@@ -1,6 +1,7 @@
 /** Моки и типы для модуля «Производство». */
 
 import thrombogelNewSeed from "./thrombogelNewSeed.json";
+import { getStoragePlaceCatalogOptions } from "./storagePlacesMeta";
 
 export type Role = string;
 
@@ -35,10 +36,10 @@ export const DEFAULT_STORAGE_STAGE_FIELDS: ConfigurableMaterialField[] = [
   {
     id: "storageLocation",
     label: "Место хранения",
-    type: "text",
+    type: "select",
     required: true,
-    defaultValue: "",
-    helpText: "Комната, морозильник, полка, короб, ячейка.",
+    options: getStoragePlaceCatalogOptions(),
+    defaultValue: null,
   },
   {
     id: "storageStart",
@@ -76,22 +77,12 @@ export const DEFAULT_STORAGE_STAGE_FIELDS: ConfigurableMaterialField[] = [
     required: false,
     defaultValue: "",
   },
-  {
-    id: "storageDeviation",
-    label: "Отклонения условий хранения",
-    type: "checkbox",
-    required: false,
-    defaultValue: false,
-  },
-  {
-    id: "storageDeviationNotes",
-    label: "Описание отклонений",
-    type: "text",
-    required: false,
-    defaultValue: "",
-    helpText: "Температурное отклонение, повреждение, проблема доступа.",
-  },
 ];
+
+const DEPRECATED_STORAGE_FIELD_IDS = new Set([
+  "storageDeviation",
+  "storageDeviationNotes",
+]);
 
 export const DEFAULT_PRODUCT_STORAGE_SETTINGS: ProductStorageSettings = {
   enabled: false,
@@ -707,32 +698,51 @@ export function normalizeProductStorageSettings(
 ): ProductStorageSettings {
   const base = clone(DEFAULT_PRODUCT_STORAGE_SETTINGS);
   if (!input) return base;
-  const fields = Array.isArray(input.fields) && input.fields.length > 0
-    ? input.fields
-    : base.fields;
+  const storedById = new Map<string, ConfigurableMaterialField>();
+  for (const field of input.fields ?? []) {
+    if (typeof field.id !== "string" || !field.id.trim()) continue;
+    const id = field.id.trim();
+    if (DEPRECATED_STORAGE_FIELD_IDS.has(id)) continue;
+    storedById.set(id, field);
+  }
   return {
     enabled: Boolean(input.enabled),
-    fields: fields.map((field, idx) => {
-      const fallback = base.fields[idx] ?? base.fields[0]!;
-      return {
-        ...fallback,
-        ...field,
-        id: typeof field.id === "string" && field.id.trim() ? field.id.trim() : fallback.id,
+    fields: base.fields.map((baseField) => {
+      const found = storedById.get(baseField.id);
+      if (!found) return { ...baseField };
+      const merged: ConfigurableMaterialField = {
+        ...baseField,
+        ...found,
+        id: baseField.id,
         label:
-          typeof field.label === "string" && field.label.trim()
-            ? field.label.trim()
-            : fallback.label,
+          typeof found.label === "string" && found.label.trim()
+            ? found.label.trim()
+            : baseField.label,
         type:
-          field.type === "number" ||
-          field.type === "date" ||
-          field.type === "checkbox" ||
-          field.type === "select" ||
-          field.type === "text"
-            ? field.type
-            : fallback.type,
-        required: Boolean(field.required),
-        options: field.type === "select" ? field.options ?? fallback.options : undefined,
+          found.type === "number" ||
+          found.type === "date" ||
+          found.type === "checkbox" ||
+          found.type === "select" ||
+          found.type === "text"
+            ? found.type
+            : baseField.type,
+        required: Boolean(found.required),
+        options: found.type === "select" ? found.options ?? baseField.options : undefined,
       };
+      if (baseField.id === "storageLocation") {
+        const options = getStoragePlaceCatalogOptions();
+        const storedDefault =
+          typeof found.defaultValue === "string" ? found.defaultValue.trim() : "";
+        return {
+          ...merged,
+          type: "select",
+          options,
+          defaultValue:
+            storedDefault && options.includes(storedDefault) ? storedDefault : null,
+          helpText: "",
+        };
+      }
+      return merged;
     }),
   };
 }
