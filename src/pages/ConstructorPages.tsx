@@ -2132,7 +2132,7 @@ export function ConstructorEditorView({
 
                                       <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-3">
                                         <div className="mb-2 text-sm font-semibold text-slate-800">
-                                          Расходные материалы и материалы
+                                          Расходники и материалы
                                         </div>
                                         {step.consumables.length === 0 ? (
                                           <div className="rounded-md border border-dashed border-slate-200 bg-white px-3 py-4 text-sm text-slate-600">
