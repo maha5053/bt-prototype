@@ -57,14 +57,6 @@ export const DEFAULT_STORAGE_STAGE_FIELDS: ConfigurableMaterialField[] = [
     defaultValue: null,
   },
   {
-    id: "storageTemperature",
-    label: "Фактическая температура",
-    type: "number",
-    required: false,
-    unit: "°C",
-    defaultValue: null,
-  },
-  {
     id: "storageContainer",
     label: "Контейнер хранения",
     type: "text",
@@ -84,6 +76,7 @@ export const DEFAULT_STORAGE_STAGE_FIELDS: ConfigurableMaterialField[] = [
 const DEPRECATED_STORAGE_FIELD_IDS = new Set([
   "storageDeviation",
   "storageDeviationNotes",
+  "storageTemperature",
 ]);
 
 export const DEFAULT_PRODUCT_STORAGE_SETTINGS: ProductStorageSettings = {
@@ -769,6 +762,17 @@ export function normalizeProductStorageSettings(
       }
       return merged;
     }),
+  };
+}
+
+/** Убирает устаревшие поля хранения из снимка настроек заказа. */
+export function normalizeOrderSettingsSnapshot(
+  snapshot: ProductionOrderSettingsSnapshot,
+): ProductionOrderSettingsSnapshot {
+  if (!snapshot.storage) return snapshot;
+  return {
+    ...snapshot,
+    storage: normalizeProductStorageSettings(snapshot.storage),
   };
 }
 

@@ -11,6 +11,7 @@ import {
   type ConfigurableMaterialFieldType,
   DEFAULT_MATERIAL_TYPE_SETTINGS,
   normalizeRegistrationMaterialBalance,
+  normalizeOrderSettingsSnapshot,
   normalizeProductStorageSettings,
   resolveOrderStageTemplates,
   DEFAULT_SYSTEM_FIELD_REGISTRY,
@@ -57,6 +58,16 @@ function nextProductionOrderId(orders: ProductionOrder[]): string {
 
 function normalizeOrderId(id: string): string {
   return id.replace(/^po-?/i, "");
+}
+
+function normalizeOrdersSnapshots(orders: ProductionOrder[]): ProductionOrder[] {
+  return orders.map((order) => {
+    if (!order.settingsSnapshot) return order;
+    return {
+      ...order,
+      settingsSnapshot: normalizeOrderSettingsSnapshot(order.settingsSnapshot),
+    };
+  });
 }
 
 function normalizeOrdersIds(orders: ProductionOrder[]): ProductionOrder[] {
@@ -443,10 +454,11 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
         materialTypes: normalizeMaterialTypeSettings(undefined),
       };
     }
-    const storedOrders =
+    const storedOrders = normalizeOrdersSnapshots(
       Array.isArray(stored.orders) && stored.orders.length > 0
         ? normalizeOrdersIds(stored.orders)
-        : [...INITIAL_PRODUCTION_ORDERS];
+        : [...INITIAL_PRODUCTION_ORDERS],
+    );
     const merged = {
       templates: mergeProductionTemplatesWithBaseline(
         stored.templates,

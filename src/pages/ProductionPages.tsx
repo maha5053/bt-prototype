@@ -4554,7 +4554,6 @@ function FormFields({
             const location = byId.get("storageLocation") ?? null;
             const start = byId.get("storageStart") ?? null;
             const end = byId.get("storageEnd") ?? null;
-            const temperature = byId.get("storageTemperature") ?? null;
             const container = byId.get("storageContainer") ?? null;
             const responsible = byId.get("storageResponsible") ?? null;
 
@@ -4563,7 +4562,6 @@ function FormFields({
               "storageLocation",
               "storageStart",
               "storageEnd",
-              "storageTemperature",
               "storageContainer",
               "storageResponsible",
             ]);
@@ -4608,15 +4606,8 @@ function FormFields({
                       </>,
                     )
                   : null}
-                {container || temperature
-                  ? storageRow(
-                      <>
-                        {container ? mdCell(container) : null}
-                        {temperature
-                          ? smCell(temperature, "tabular-nums")
-                          : null}
-                      </>,
-                    )
+                {container
+                  ? storageRow(mdCell(container))
                   : null}
                 {responsible
                   ? storageRow(
