@@ -39,3 +39,8 @@ export const ALL_STORAGE_PLACES_META: StoragePlaceMeta[] = [
   { name: 'Холодильник Реагенты', writeOffOnTransfer: false, quarantineZone: false },
   { name: 'Карантин', writeOffOnTransfer: false, quarantineZone: true },
 ]
+
+/** Справочник мест хранения для выпадающих списков (поступления, заказы, инвентаризация). */
+export function getStoragePlaceCatalogOptions(): string[] {
+  return ALL_STORAGE_PLACES_META.map((place) => place.name)
+}

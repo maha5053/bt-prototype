@@ -14,6 +14,7 @@ import {
   type UpdateFieldValueInput,
 } from "../context/ProductionContext";
 import { useCurrentUser } from "../context/CurrentUserContext";
+import { getStoragePlaceCatalogOptions } from "../mocks/storagePlacesMeta";
 import { canEditStage as canEditStageByPerm, canViewStage } from "../mocks/usersMock";
 import {
   PRODUCTION_REJECTION_PHASE_LABELS,
@@ -126,15 +127,22 @@ function ensureReleaseDeviationLayout(fields: FieldDefinition[]): FieldDefinitio
 function mapMaterialFieldToRuntimeFieldDefinition(
   field: ConfigurableMaterialField,
 ): FieldDefinition {
+  const isStorageLocation = field.id === "storageLocation";
+  const type = isStorageLocation ? "select" : field.type;
+  const options = isStorageLocation
+    ? getStoragePlaceCatalogOptions()
+    : type === "select"
+      ? (field.options ?? []).filter((opt) => opt.trim())
+      : undefined;
   return {
     id: field.id,
     label: field.label,
-    type: field.type,
+    type,
     required: Boolean(field.required),
     unit: field.unit?.trim() ? field.unit.trim() : undefined,
-    options:
-      field.type === "select" ? (field.options ?? []).filter((opt) => opt.trim()) : undefined,
-    placeholder: field.helpText?.trim() ? field.helpText.trim() : undefined,
+    options,
+    placeholder:
+      !isStorageLocation && field.helpText?.trim() ? field.helpText.trim() : undefined,
   };
 }
 
