@@ -235,9 +235,9 @@ function deriveRegistrationFieldsFromSnapshot(
   const incomingControlFields = materialType.incomingControlFields.map(
     mapMaterialFieldToRuntimeFieldDefinition,
   );
-  const balanceFields = (
-    snapshot.registrationMaterialBalance ?? materialType.materialBalanceItems
-  ).map(balanceItemToFieldDefinition);
+  const balanceFields = (snapshot.registrationMaterialBalance ?? []).map(
+    balanceItemToFieldDefinition,
+  );
 
   type Section = { header: FieldDefinition | null; fields: FieldDefinition[] };
   const sections: Section[] = [];

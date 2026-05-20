@@ -287,10 +287,19 @@ export interface MaterialTypeSettings {
   code: MaterialTypeCode;
   label: string;
   collectionFields: ConfigurableMaterialField[];
-  materialBalanceItems: MaterialTypeBalanceItem[];
   incomingControlFields: ConfigurableMaterialField[];
   updatedAt?: string;
 }
+
+/** Дефолтные строки матбаланса регистрации для продукта «Тромбогель» (совпадают с полями шаблона). */
+export const DEFAULT_REGISTRATION_MATERIAL_BALANCE_BLOOD: MaterialTypeBalanceItem[] = [
+  { id: "syringe20", name: "Шприцы 20", unit: "шт", defaultQuantity: null },
+  { id: "syringe30", name: "Шприцы 30", unit: "шт", defaultQuantity: null },
+  { id: "hemacon", name: "Гемакон", unit: "шт", defaultQuantity: null },
+  { id: "gauze", name: "Стерильные марлевые салфетки", unit: "шт", defaultQuantity: null },
+  { id: "alcohol", name: "Спирт", unit: "мл", defaultQuantity: null },
+  { id: "citrate", name: "Цитрат Na", unit: "мл", defaultQuantity: null },
+];
 
 export interface ProductionOrderSettingsSnapshot {
   product: {
@@ -386,14 +395,6 @@ export const DEFAULT_MATERIAL_TYPE_SETTINGS: MaterialTypeSettings[] = [
         defaultValue: "гемакон",
         helpText: "Контейнер, в котором материал поступает на регистрацию.",
       },
-    ],
-    materialBalanceItems: [
-      { id: "syringe20", name: "Шприцы 20", unit: "шт", defaultQuantity: null },
-      { id: "syringe30", name: "Шприцы 30", unit: "шт", defaultQuantity: null },
-      { id: "hemacon", name: "Гемакон", unit: "шт", defaultQuantity: null },
-      { id: "gauze", name: "Стерильные марлевые салфетки", unit: "шт", defaultQuantity: null },
-      { id: "alcohol", name: "Спирт", unit: "мл", defaultQuantity: null },
-      { id: "citrate", name: "Цитрат Na", unit: "мл", defaultQuantity: null },
     ],
     incomingControlFields: [
       {
@@ -512,7 +513,6 @@ export const DEFAULT_MATERIAL_TYPE_SETTINGS: MaterialTypeSettings[] = [
         helpText: "Краткий клинический контекст или показание к исследованию.",
       },
     ],
-    materialBalanceItems: [],
     incomingControlFields: [
       {
         id: "containerIntegrity",
@@ -632,6 +632,9 @@ export const THROMBOGEL_NEW_TEMPLATE: ProcessTemplate = {
   ...(thrombogelNewSeed as ProcessTemplate),
   materialTypeCode: "blood",
   storageStage: DEFAULT_PRODUCT_STORAGE_SETTINGS,
+  registrationMaterialBalance: DEFAULT_REGISTRATION_MATERIAL_BALANCE_BLOOD.map((item) => ({
+    ...item,
+  })),
 };
 
 function clone<T>(value: T): T {
@@ -683,32 +686,20 @@ function materialFieldToRuntimeField(field: ConfigurableMaterialField): FieldDef
   };
 }
 
-export function mergeRegistrationMaterialBalanceForSnapshot(input: {
-  materialTypeItems: MaterialTypeBalanceItem[];
-  productItems?: MaterialTypeBalanceItem[];
-}): MaterialTypeBalanceItem[] {
-  const base = clone(input.materialTypeItems ?? []);
-  const overrides = input.productItems ?? [];
-  if (!overrides.length) return base;
-  const overrideById = new Map(overrides.map((item) => [item.id, item]));
-  const merged = base.map((item) => {
-    const override = overrideById.get(item.id);
-    if (!override) return clone(item);
-    return {
-      ...clone(item),
-      defaultQuantity:
-        override.defaultQuantity !== undefined
-          ? override.defaultQuantity
-          : item.defaultQuantity,
-      writeOffOnRegistrationComplete:
-        override.writeOffOnRegistrationComplete ?? item.writeOffOnRegistrationComplete,
-    };
-  });
-  for (const item of overrides) {
-    if (base.some((row) => row.id === item.id)) continue;
-    merged.push(clone(item));
-  }
-  return merged;
+export function normalizeRegistrationMaterialBalance(
+  items?: MaterialTypeBalanceItem[] | null,
+): MaterialTypeBalanceItem[] {
+  if (!Array.isArray(items)) return [];
+  return items.map((item) => ({
+    id: item.id,
+    name: item.name,
+    unit: item.unit?.trim() ? item.unit.trim() : "шт",
+    defaultQuantity:
+      typeof item.defaultQuantity === "number" && Number.isFinite(item.defaultQuantity)
+        ? Math.max(0, Math.floor(item.defaultQuantity))
+        : null,
+    writeOffOnRegistrationComplete: Boolean(item.writeOffOnRegistrationComplete),
+  }));
 }
 
 export function normalizeProductStorageSettings(

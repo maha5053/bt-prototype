@@ -10,7 +10,7 @@ import {
   type ConfigurableMaterialField,
   type ConfigurableMaterialFieldType,
   DEFAULT_MATERIAL_TYPE_SETTINGS,
-  mergeRegistrationMaterialBalanceForSnapshot,
+  normalizeRegistrationMaterialBalance,
   normalizeProductStorageSettings,
   resolveOrderStageTemplates,
   DEFAULT_SYSTEM_FIELD_REGISTRY,
@@ -248,9 +248,6 @@ function normalizeSingleMaterialTypeSettings(
     code: base.code,
     label: base.label,
     collectionFields: normalizeMaterialFieldList(input.collectionFields, base.collectionFields),
-    materialBalanceItems: Array.isArray(input.materialBalanceItems)
-      ? clone(input.materialBalanceItems)
-      : clone(base.materialBalanceItems),
     incomingControlFields: normalizeMaterialFieldList(
       input.incomingControlFields,
       base.incomingControlFields,
@@ -283,10 +280,9 @@ function buildSettingsSnapshot(input: {
       DEFAULT_MATERIAL_TYPE_SETTINGS[0]!,
   );
   const storageStage = normalizeProductStorageSettings(input.template.storageStage);
-  const registrationMaterialBalance = mergeRegistrationMaterialBalanceForSnapshot({
-    materialTypeItems: normalizedMaterialType.materialBalanceItems ?? [],
-    productItems: input.template.registrationMaterialBalance,
-  });
+  const registrationMaterialBalance = normalizeRegistrationMaterialBalance(
+    input.template.registrationMaterialBalance,
+  );
   return {
     product: {
       templateId: input.template.id,

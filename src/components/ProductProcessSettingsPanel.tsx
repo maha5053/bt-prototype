@@ -9,6 +9,7 @@ import {
   DEFAULT_PRODUCT_STORAGE_SETTINGS,
   normalizeProductStorageSettings,
 } from "../mocks/productionData";
+import { RegistrationMaterialBalanceEditor } from "./RegistrationMaterialBalanceEditor";
 
 type PanelProps = {
   template: ProcessTemplate;
@@ -17,24 +18,19 @@ type PanelProps = {
   onPatch: (updater: (prev: ProcessTemplate) => ProcessTemplate) => void;
 };
 
-function balanceItemFromMaterialType(
-  items: MaterialTypeBalanceItem[],
-  productItems: MaterialTypeBalanceItem[] | undefined,
+function normalizeBalanceItems(
+  items: MaterialTypeBalanceItem[] | undefined,
 ): MaterialTypeBalanceItem[] {
-  const overrideById = new Map((productItems ?? []).map((item) => [item.id, item]));
-  return items.map((item) => {
-    const override = overrideById.get(item.id);
-    return {
-      ...item,
-      defaultQuantity:
-        override?.defaultQuantity !== undefined
-          ? override.defaultQuantity
-          : item.defaultQuantity,
-      writeOffOnRegistrationComplete:
-        override?.writeOffOnRegistrationComplete ??
-        item.writeOffOnRegistrationComplete,
-    };
-  });
+  return (items ?? []).map((item) => ({
+    id: item.id,
+    name: item.name,
+    unit: item.unit?.trim() ? item.unit.trim() : "шт",
+    defaultQuantity:
+      typeof item.defaultQuantity === "number" && Number.isFinite(item.defaultQuantity)
+        ? Math.max(0, Math.floor(item.defaultQuantity))
+        : null,
+    writeOffOnRegistrationComplete: Boolean(item.writeOffOnRegistrationComplete),
+  }));
 }
 
 /** Вкладка «Регистрация»: тип материала и матбаланс. */
@@ -45,29 +41,46 @@ export function ProductRegistrationTabContent({
   onPatch,
 }: PanelProps) {
   const materialTypeCode = (template.materialTypeCode ?? "blood") as MaterialTypeCode;
-  const materialType =
-    materialTypes.find((item) => item.code === materialTypeCode) ?? null;
-  const balanceRows = balanceItemFromMaterialType(
-    materialType?.materialBalanceItems ?? [],
-    template.registrationMaterialBalance,
-  );
+  const balanceRows = normalizeBalanceItems(template.registrationMaterialBalance);
 
-  const patchBalance = (
+  const patchBalanceList = (
+    updater: (rows: MaterialTypeBalanceItem[]) => MaterialTypeBalanceItem[],
+  ) => {
+    onPatch((prev) => ({
+      ...prev,
+      registrationMaterialBalance: updater(
+        normalizeBalanceItems(prev.registrationMaterialBalance),
+      ),
+    }));
+  };
+
+  const addBalanceItem = (item: { id: string; name: string }) => {
+    patchBalanceList((rows) => {
+      if (rows.some((row) => row.id === item.id)) return rows;
+      return [
+        ...rows,
+        {
+          id: item.id,
+          name: item.name,
+          unit: "шт",
+          defaultQuantity: null,
+          writeOffOnRegistrationComplete: false,
+        },
+      ];
+    });
+  };
+
+  const patchBalanceItem = (
     itemId: string,
     updater: (row: MaterialTypeBalanceItem) => MaterialTypeBalanceItem,
   ) => {
-    onPatch((prev) => {
-      const base = balanceItemFromMaterialType(
-        materialType?.materialBalanceItems ?? [],
-        prev.registrationMaterialBalance,
-      );
-      return {
-        ...prev,
-        registrationMaterialBalance: base.map((row) =>
-          row.id === itemId ? updater(row) : row,
-        ),
-      };
-    });
+    patchBalanceList((rows) =>
+      rows.map((row) => (row.id === itemId ? updater(row) : row)),
+    );
+  };
+
+  const removeBalanceItem = (itemId: string) => {
+    patchBalanceList((rows) => rows.filter((row) => row.id !== itemId));
   };
 
   return (
@@ -80,14 +93,9 @@ export function ProductRegistrationTabContent({
             disabled={disabled}
             onChange={(e) => {
               const nextCode = e.target.value as MaterialTypeCode;
-              const nextMaterialType =
-                materialTypes.find((item) => item.code === nextCode) ?? null;
               onPatch((prev) => ({
                 ...prev,
                 materialTypeCode: nextCode,
-                registrationMaterialBalance: nextMaterialType
-                  ? JSON.parse(JSON.stringify(nextMaterialType.materialBalanceItems))
-                  : [],
               }));
             }}
             className="mt-1 w-full max-w-sm rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:bg-slate-50 disabled:text-slate-500"
@@ -105,80 +113,13 @@ export function ProductRegistrationTabContent({
         </p>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 className="text-sm font-semibold text-slate-800">
-          Материальный баланс регистрации
-        </h3>
-        <p className="mt-1 text-sm text-slate-500">
-          Строки берутся из типа материала «{materialType?.label ?? "—"}». Здесь задаются
-          количества по умолчанию для новых заказов.
-        </p>
-        {balanceRows.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-600">
-            В типе материала нет строк матбаланса. Добавьте их в{" "}
-            <span className="font-medium">Типы материала → Материальный баланс</span>.
-          </p>
-        ) : (
-          <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
-            <table className="min-w-full text-sm">
-              <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Наименование</th>
-                  <th className="px-3 py-2 font-medium">Кол-во по умолчанию</th>
-                  <th className="px-3 py-2 font-medium">Ед.</th>
-                  <th className="px-3 py-2 font-medium">
-                    Списание при завершении регистрации
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {balanceRows.map((row) => (
-                  <tr key={row.id}>
-                    <td className="px-3 py-2 text-slate-800">{row.name}</td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        disabled={disabled}
-                        value={
-                          typeof row.defaultQuantity === "number" &&
-                          Number.isFinite(row.defaultQuantity)
-                            ? row.defaultQuantity
-                            : ""
-                        }
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          const defaultQuantity =
-                            raw === "" ? null : Math.max(0, Math.floor(Number(raw)));
-                          patchBalance(row.id, (prev) => ({ ...prev, defaultQuantity }));
-                        }}
-                        className="w-24 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                      />
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">{row.unit}</td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="checkbox"
-                        disabled={disabled}
-                        checked={Boolean(row.writeOffOnRegistrationComplete)}
-                        onChange={(e) => {
-                          patchBalance(row.id, (prev) => ({
-                            ...prev,
-                            writeOffOnRegistrationComplete: e.target.checked,
-                          }));
-                        }}
-                        className="size-4 rounded border-slate-300 text-blue-600"
-                        aria-label={`Списание: ${row.name}`}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <RegistrationMaterialBalanceEditor
+        items={balanceRows}
+        disabled={disabled}
+        onAdd={addBalanceItem}
+        onPatch={patchBalanceItem}
+        onRemove={removeBalanceItem}
+      />
     </div>
   );
 }
@@ -220,11 +161,10 @@ export function ProductStorageTabContent({
         />
         <span>
           <span className="block text-sm font-semibold text-slate-800">
-            Этап хранения после производства
+            Включить хранение
           </span>
           <span className="mt-1 block text-sm text-slate-500">
-            Если включено, в новых заказах после производства появится этап «Хранение» с
-            настраиваемыми полями.
+            Если включено, в новых заказах после производства появится этап «Хранение».
           </span>
         </span>
       </label>
