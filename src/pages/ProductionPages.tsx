@@ -25,6 +25,7 @@ import {
   type MaterialTypeBalanceItem,
   type MaterialTypeSettings,
   type ProcessTemplate,
+  type ProductStorageSettings,
   type ProductionOrderSettingsSnapshot,
   type ProductionOrder,
   type ProductionOrderStatus,
@@ -218,6 +219,55 @@ function registrationMaterialBalanceDefaults(
     }
   }
   return map;
+}
+
+function todayDateOnly(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function storageSettingsDefaultValues(
+  storage: ProductStorageSettings | null | undefined,
+): Record<string, FieldValue> {
+  const map: Record<string, FieldValue> = {};
+  if (!storage?.enabled) return map;
+  for (const field of storage.fields) {
+    if (field.id === "storageStart") {
+      map[field.id] = todayDateOnly();
+      continue;
+    }
+    const value = field.defaultValue;
+    if (value == null) continue;
+    if (typeof value === "string" && value.trim() === "") continue;
+    map[field.id] = value;
+  }
+  return map;
+}
+
+function fieldValueWithStageDefaults(input: {
+  field: FieldDefinition;
+  rawFromExecution: FieldValue;
+  stageType: StageType;
+  registrationDefaults: Record<string, FieldValue>;
+  storageDefaults: Record<string, FieldValue>;
+}): FieldValue {
+  const { field, rawFromExecution, stageType, registrationDefaults, storageDefaults } =
+    input;
+  if (rawFromExecution !== null && rawFromExecution !== undefined) {
+    return rawFromExecution;
+  }
+  if (stageType === "registration") {
+    const fallback = registrationDefaults[field.id];
+    if (fallback !== undefined) return fallback;
+  }
+  if (stageType === "storage") {
+    const fallback = storageDefaults[field.id];
+    if (fallback !== undefined) return fallback;
+  }
+  return rawFromExecution;
 }
 
 function balanceItemToFieldDefinition(item: MaterialTypeBalanceItem): FieldDefinition {
@@ -3039,6 +3089,10 @@ function StepsStage({
       order.settingsSnapshot?.registrationMaterialBalance,
     ],
   );
+  const storageDefaults = useMemo(
+    () => storageSettingsDefaultValues(order.settingsSnapshot?.storage),
+    [order.settingsSnapshot?.storage],
+  );
   const activeStepTplFields = useMemo(() => {
     if (!activeStepTpl) return [];
     // Deviation block exists in registration baseline and must be available
@@ -3109,11 +3163,13 @@ function StepsStage({
       if (f.refDeviations && f.refDeviations.length > 0) return false;
       if (f.computeRule) return false;
 
-      const rawFromExecution = activeStepExec.fieldValues[f.id];
-      const raw =
-        rawFromExecution == null && stageTemplate.type === "registration"
-          ? registrationDefaults[f.id] ?? rawFromExecution
-          : rawFromExecution;
+      const raw = fieldValueWithStageDefaults({
+        field: f,
+        rawFromExecution: activeStepExec.fieldValues[f.id],
+        stageType: stageTemplate.type,
+        registrationDefaults,
+        storageDefaults,
+      });
       if (raw === null || raw === undefined) return true;
 
       switch (f.type) {
@@ -3888,6 +3944,10 @@ function FormFields({
       order.settingsSnapshot?.registrationMaterialBalance,
     ],
   );
+  const storageDefaults = useMemo(
+    () => storageSettingsDefaultValues(order.settingsSnapshot?.storage),
+    [order.settingsSnapshot?.storage],
+  );
 
   const resolveValue = (field: FieldDefinition): FieldValue => {
     if (stageType === "release" && field.id === DEVIATION_SUMMARY_FIELD_ID) {
@@ -3963,13 +4023,13 @@ function FormFields({
       }
       return null;
     }
-    const raw = stepExecution.fieldValues[field.id];
-    if (raw !== null && raw !== undefined) return raw;
-    if (stageType === "registration") {
-      const fallback = registrationDefaults[field.id];
-      if (fallback !== undefined) return fallback;
-    }
-    return null;
+    return fieldValueWithStageDefaults({
+      field,
+      rawFromExecution: stepExecution.fieldValues[field.id],
+      stageType,
+      registrationDefaults,
+      storageDefaults,
+    });
   };
 
   // Conditional required field:

@@ -89,6 +89,15 @@
 
 ## Журнал сессий (кратко)
 
+### 2026-05-20 — @end-session: матбаланс на продукте, хранение в заказе, права «Хранение»
+
+- Матбаланс регистрации: убрана вкладка у типа материала; настройка строк на вкладке **Регистрация** продукта (`registrationMaterialBalance`, каталог расходников, UI как в производстве).
+- Хранение в заказе: «Место хранения» — select из `ALL_STORAGE_PLACES_META`; убраны поля `storageDeviation` / `storageDeviationNotes` (остаётся стандартный блок «Отклонения»); «Дата начала хранения» предзаполняется текущей датой.
+- Продукты ver2: вкладка **Хранение** без шагов; подписи «Расходники и материалы», «Включить хранение»; селект типа материала на отдельной строке.
+- `/admin/polzovateli`: колонка и группа права **Хранение** (`storage`), этап `storage` в заказе проверяется отдельно от производства.
+- Файлы: `RegistrationMaterialBalanceEditor.tsx`, `ProductProcessSettingsPanel.tsx`, `productionData.ts`, `storagePlacesMeta.ts`, `ProductionPages.tsx`, `MaterialTypesAdminPage.tsx`, `ConstructorPages.tsx`, `ConstructorV2Pages.tsx`, `usersMock.ts`, `ProductionContext.tsx`.
+- Проверка: `npm run build` (предупреждение Vite chunk > 500 kB); commit, push, `npm run deploy`.
+
 ### 2026-05-20 — @end-session: Phase 3 + вкладки продукта + devtools типов материала
 
 - Phase 3 complete: product storage toggle, registration material balance on product/order, optional `storage` stage in orders, balance runtime from snapshot.
