@@ -34,6 +34,7 @@ const CONSTRUCTOR_V2_ALLOW_STEPS: Partial<
   Record<StageTemplate["type"], boolean>
 > = {
   registration: false,
+  storage: false,
   quality_control: false,
 };
 

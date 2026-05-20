@@ -380,15 +380,7 @@ export function ConstructorEditorView({
             name: "Хранение",
             type: "storage" as const,
             isSystem: true,
-            steps: [
-              {
-                id: "step-storage-editor",
-                name: "",
-                fields: [],
-                consumables: [],
-                equipment: [],
-              },
-            ],
+            steps: [],
           } satisfies StageTemplate;
         }
         return null;
@@ -410,6 +402,7 @@ export function ConstructorEditorView({
     // Ensure it's present so the UI doesn't get stuck in an "add first step" state.
     for (const stage of orderedStages) {
       if (allowSteps(stage.type)) continue;
+      if (productSettingsInTabs && isEmptyStage(stage.type)) continue;
       if (stage.steps.length > 0) continue;
       const newStepId = uid("step");
       patchStage(stage.id, (prev) => {
@@ -1048,14 +1041,9 @@ export function ConstructorEditorView({
               disabled={!controlsEnabled}
               onChange={(e) => {
                 const materialTypeCode = e.target.value as MaterialTypeCode;
-                const materialType =
-                  materialTypes.find((item) => item.code === materialTypeCode) ?? null;
                 patchTemplate((prev) => ({
                   ...prev,
                   materialTypeCode,
-                  registrationMaterialBalance: materialType
-                    ? JSON.parse(JSON.stringify(materialType.materialBalanceItems))
-                    : [],
                 }));
               }}
               className="mt-1 w-full max-w-sm rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:bg-slate-50 disabled:text-slate-500"
@@ -2992,8 +2980,8 @@ export function ConstructorEditorView({
                   </div>
                 )}
 
-                <div className="pt-1">
-                  {allowSteps(stage.type) ? (
+                {allowSteps(stage.type) && !isEmptyStage(stage.type) ? (
+                  <div className="pt-1">
                     <button
                       type="button"
                       className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
@@ -3001,8 +2989,8 @@ export function ConstructorEditorView({
                     >
                       + Шаг
                     </button>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
               </div>
             </Tab.Panel>
           ))}
