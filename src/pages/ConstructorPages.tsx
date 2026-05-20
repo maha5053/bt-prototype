@@ -1034,27 +1034,31 @@ export function ConstructorEditorView({
 
       {!productSettingsInTabs ? (
         <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-          <label className="block text-xs font-medium text-slate-600">
+          <label
+            htmlFor="template-material-type"
+            className="block text-xs font-medium text-slate-600"
+          >
             Тип материала
-            <select
-              value={template.materialTypeCode ?? "blood"}
-              disabled={!controlsEnabled}
-              onChange={(e) => {
-                const materialTypeCode = e.target.value as MaterialTypeCode;
-                patchTemplate((prev) => ({
-                  ...prev,
-                  materialTypeCode,
-                }));
-              }}
-              className="mt-1 w-full max-w-sm rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:bg-slate-50 disabled:text-slate-500"
-            >
-              {materialTypes.map((item) => (
-                <option key={item.code} value={item.code}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
           </label>
+          <select
+            id="template-material-type"
+            value={template.materialTypeCode ?? "blood"}
+            disabled={!controlsEnabled}
+            onChange={(e) => {
+              const materialTypeCode = e.target.value as MaterialTypeCode;
+              patchTemplate((prev) => ({
+                ...prev,
+                materialTypeCode,
+              }));
+            }}
+            className="mt-1 block w-full max-w-sm rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:bg-slate-50 disabled:text-slate-500"
+          >
+            {materialTypes.map((item) => (
+              <option key={item.code} value={item.code}>
+                {item.label}
+              </option>
+            ))}
+          </select>
           <p className="mt-2 text-sm text-slate-500">
             Используется для полей регистрации и входного контроля в новых заказах. Уже
             созданные заказы не изменяются.
