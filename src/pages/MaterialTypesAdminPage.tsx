@@ -1,6 +1,7 @@
 import { Combobox, Tab } from "@headlessui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { MaterialTypesDevTools } from "../components/MaterialTypesDevTools";
 import { ProductionProvider, useProduction } from "../context/ProductionContext";
 import { ACTION_CONSUMABLE_CATALOG } from "../mocks/constructorV2Catalog";
 import type {
@@ -238,7 +239,7 @@ export function MaterialTypeEditorPage() {
 }
 
 function MaterialTypesListContent() {
-  const { materialTypes, resetMaterialTypeSettings } = useProduction();
+  const { materialTypes } = useProduction();
   const [openMenuCode, setOpenMenuCode] = useState<string | null>(null);
   const [menuPosition, setMenuPosition] = useState<{ left: number; top: number } | null>(
     null,
@@ -265,20 +266,11 @@ function MaterialTypesListContent() {
 
   return (
     <div className="relative p-6 md:p-8">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-800">Типы материала</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Настройка фиксированных типов материала для новых заказов.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={resetMaterialTypeSettings}
-          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Восстановить типы
-        </button>
+      <div className="mb-6">
+        <h1 className="text-xl font-semibold text-slate-800">Типы материала</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Настройка фиксированных типов материала для новых заказов.
+        </p>
       </div>
 
       {materialTypes.length === 0 ? (
@@ -287,7 +279,8 @@ function MaterialTypesListContent() {
             Типы материала не найдены
           </div>
           <p className="mt-1 text-sm text-slate-600">
-            Очистите локальные настройки или восстановите стандартные типы материала.
+            Используйте инструменты разработчика (шестерёнка внизу справа), чтобы сбросить
+            настройки типов материала.
           </p>
         </div>
       ) : (
@@ -392,6 +385,8 @@ function MaterialTypesListContent() {
           </table>
         </div>
       )}
+
+      <MaterialTypesDevTools />
     </div>
   );
 }

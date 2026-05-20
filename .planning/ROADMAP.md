@@ -11,7 +11,7 @@ This milestone turns the existing order/product prototype into a configurable or
 - Decimal phases (2.1, 2.2): Urgent insertions if discovered mid-milestone
 
 - [x] **Phase 1: Product and Material Settings Foundation** - Add stable data model, admin navigation, sample ID sequencing, and snapshot rules.
-- [ ] **Phase 2: Material-Driven Registration** - Move collection and incoming control fields into material type settings and order creation.
+- [x] **Phase 2: Material-Driven Registration** - Move collection and incoming control fields into material type settings and order creation.
 - [ ] **Phase 3: Product Process Settings** - Add storage and registration material balance settings, defaults, and optional action inputs.
 - [ ] **Phase 4: Independent Quality Control** - Split QC from the main order stage line and allow QC at any time.
 - [ ] **Phase 5: Privileged Corrections and Audit** - Add correction group/permission and post-completion edit logging.
@@ -47,7 +47,7 @@ Plans:
 
 Plans:
 - [x] 02-01: Implement material type field editor for collection and incoming control.
-- [ ] 02-02: Seed blood and skin material type defaults.
+- [x] 02-02: Seed blood and skin material type defaults.
 - [x] 02-03: Replace hard-coded registration/incoming-control rendering with snapshot-driven fields.
 
 ### Phase 3: Product Process Settings
@@ -107,7 +107,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Product and Material Settings Foundation | 3/3 | Complete | 2026-05-15 |
-| 2. Material-Driven Registration | 2/3 | In progress | - |
+| 2. Material-Driven Registration | 3/3 | Complete | 2026-05-20 |
 | 3. Product Process Settings | 0/4 | Not started | - |
 | 4. Independent Quality Control | 0/3 | Not started | - |
 | 5. Privileged Corrections and Audit | 0/3 | Not started | - |

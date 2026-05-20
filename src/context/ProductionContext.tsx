@@ -205,13 +205,34 @@ function normalizeMaterialFieldList(
   fallback: ConfigurableMaterialField[],
 ): ConfigurableMaterialField[] {
   if (!Array.isArray(input)) return clone(fallback);
-  const next = input
-    .filter((item): item is ConfigurableMaterialField => Boolean(item && typeof item === "object"))
-    .map((item, idx) =>
-      normalizeMaterialField(item, fallback[idx] ?? fallback[Math.max(0, fallback.length - 1)]!),
-    );
-  if (!next.length) return clone(fallback);
-  return next;
+
+  const stored = input.filter(
+    (item): item is ConfigurableMaterialField => Boolean(item && typeof item === "object"),
+  );
+  if (!stored.length) return clone(fallback);
+
+  const fallbackById = new Map(fallback.map((field) => [field.id, field]));
+  const storedById = new Map<string, ConfigurableMaterialField>();
+  for (const item of stored) {
+    if (typeof item.id !== "string" || !item.id.trim()) continue;
+    const id = item.id.trim();
+    const base = fallbackById.get(id);
+    storedById.set(id, normalizeMaterialField(item, base ?? item));
+  }
+
+  const merged: ConfigurableMaterialField[] = fallback.map((baseField) => {
+    const found = storedById.get(baseField.id);
+    return found ? normalizeMaterialField(found, baseField) : clone(baseField);
+  });
+
+  for (const item of stored) {
+    if (typeof item.id !== "string" || !item.id.trim()) continue;
+    const id = item.id.trim();
+    if (fallbackById.has(id)) continue;
+    merged.push(normalizeMaterialField(item, item));
+  }
+
+  return merged;
 }
 
 function normalizeSingleMaterialTypeSettings(

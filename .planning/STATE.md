@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: phase-2-in-progress
-last_updated: "2026-05-20T00:00:00.000Z"
+status: phase-3-next
+last_updated: "2026-05-20T12:00:00.000Z"
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 16
-  completed_plans: 5
-  percent: 31
+  completed_plans: 6
+  percent: 38
 ---
 
 # Project State
@@ -21,35 +21,26 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-05-15)
 
 **Core value:** Users can create and manage a production order from a configured product while the order captures the right material-specific registration, control, storage, production, and QC data without hard-coded process assumptions.
-**Current focus:** Phase 2: Material-Driven Registration
+**Current focus:** Phase 3: Product Process Settings
 
 ## Current Milestone
 
 **Name:** Customer feedback: configurable order creation and product settings
-**Status:** Phase 2 in progress (02-01 and 02-03 implemented)
+**Status:** Phase 2 complete; Phase 3 not started
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Codebase map:** `.planning/codebase/`
 
-## Completed Phase
+## Completed Phases
 
-Phase 1 is complete.
+**Phase 1** — Product and Material Settings Foundation (2026-05-15). See `.planning/phases/01-product-and-material-settings-foundation/`.
 
-**Context:** `.planning/phases/01-product-and-material-settings-foundation/01-CONTEXT.md`
-**Discussion log:** `.planning/phases/01-product-and-material-settings-foundation/01-DISCUSSION-LOG.md`
-**UI contract:** `.planning/phases/01-product-and-material-settings-foundation/01-UI-SPEC.md`
-**Plans/Summaries:**
-- `.planning/phases/01-product-and-material-settings-foundation/01-01-PLAN.md`
-- `.planning/phases/01-product-and-material-settings-foundation/01-01-SUMMARY.md`
-- `.planning/phases/01-product-and-material-settings-foundation/01-02-PLAN.md`
-- `.planning/phases/01-product-and-material-settings-foundation/01-02-SUMMARY.md`
-- `.planning/phases/01-product-and-material-settings-foundation/01-03-PLAN.md`
-- `.planning/phases/01-product-and-material-settings-foundation/01-03-SUMMARY.md`
+**Phase 2** — Material-Driven Registration (2026-05-20). Context: `.planning/phases/02-material-driven-registration/02-CONTEXT.md`; summaries: `02-01-SUMMARY.md`, `02-02-SUMMARY.md`.
 
 Next recommended GSD step:
 
 ```text
-$gsd-plan-phase 2
+$gsd-plan-phase 3
 ```
 
 ## Decisions to Preserve
@@ -66,11 +57,11 @@ $gsd-plan-phase 2
 
 ## Open Questions
 
-- Confirm whether Phase 2 should reuse the existing hard-coded registration patient fields as system fields and append material-driven fields after them, or fully replace the material-specific subsection only.
-- Confirm whether storage fields use the existing date control only, or need a datetime-like text input until a datetime field type is added.
+- Confirm whether storage fields use the existing date control only, or need a datetime-like text input until a datetime field type is added (Phase 3).
 
 ## Recent Activity
 
+- Phase 2 plan 02-02 complete: blood/skin defaults aligned with research; field merge by id in `ProductionContext`.
 - Phase 2 plan summary added: `.planning/phases/02-material-driven-registration/02-01-SUMMARY.md`.
 - Material type settings editor switched to autosave and save button removed; select-options editing UX fixed.
 - Incoming control settings gained configurable `okOption` per select field.

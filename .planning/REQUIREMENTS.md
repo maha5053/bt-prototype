@@ -7,7 +7,7 @@
 
 ### Order Creation
 
-- [ ] **ORD-01**: User can create an order by selecting only a product.
+- [x] **ORD-01**: User can create an order by selecting only a product.
 - [x] **ORD-02**: A new order receives an incoming sample ID formatted as `YYYYMMDD-001`, with the numeric part padded to three digits.
 - [x] **ORD-03**: Incoming sample ID sequencing is global across orders, not reset by date.
 - [x] **ORD-04**: A created order snapshots product and material settings so later settings changes affect only new orders.
@@ -20,8 +20,8 @@
 - [x] **MAT-04**: Admin can configure incoming control fields per material type.
 - [x] **MAT-05**: Configurable fields support text, number, date, checkbox, and select types.
 - [x] **MAT-06**: Each configurable field supports required flag, default value, unit, and help text.
-- [ ] **MAT-07**: Blood material type defaults include current fields `Объём забранной крови (мл)` and `Тип контейнера`.
-- [ ] **MAT-08**: Skin material type defaults include biopsy/site/container/fixation-oriented fields from `.planning/research/MATERIAL_AND_STORAGE_NOTES.md`.
+- [x] **MAT-07**: Blood material type defaults include current fields `Объём забранной крови (мл)` and `Тип контейнера`.
+- [x] **MAT-08**: Skin material type defaults include biopsy/site/container/fixation-oriented fields from `.planning/research/MATERIAL_AND_STORAGE_NOTES.md`.
 - [x] **MAT-09**: Incoming control requiredness follows the current order creation form behavior unless explicitly changed in material type settings.
 
 ### Product Settings
@@ -95,7 +95,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ORD-01 | Phase 2 | Pending |
+| ORD-01 | Phase 2 | Complete |
 | ORD-02 | Phase 1 | Complete |
 | ORD-03 | Phase 1 | Complete |
 | ORD-04 | Phase 1 | Complete |
@@ -105,8 +105,8 @@
 | MAT-04 | Phase 2 | Complete |
 | MAT-05 | Phase 1 | Complete |
 | MAT-06 | Phase 1 | Complete |
-| MAT-07 | Phase 2 | Pending |
-| MAT-08 | Phase 2 | Pending |
+| MAT-07 | Phase 2 | Complete |
+| MAT-08 | Phase 2 | Complete |
 | MAT-09 | Phase 2 | Complete |
 | PROD-01 | Phase 1 | Complete |
 | PROD-02 | Phase 3 | Pending |

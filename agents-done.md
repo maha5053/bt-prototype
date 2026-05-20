@@ -89,6 +89,14 @@
 
 ## Журнал сессий (кратко)
 
+### 2026-05-20 — Phase 2 plan 02-02: дефолты крови и кожи
+
+- Обновлены `DEFAULT_MATERIAL_TYPE_SETTINGS`: кровь — подпись `Объём забранной крови (мл)`; кожа — поля по research (место биопсии, тип биопсии с `срез`/`другое`, контейнер/среда с формалином/Мишелем и т.д., время фиксатора, клиническое показание).
+- `normalizeMaterialFieldList` в `ProductionContext` мержит сохранённые схемы с дефолтами по `id` (миграция localStorage без потери кастомных полей).
+- Phase 2 закрыта в roadmap (02-01/02-02/02-03); MAT-07, MAT-08, ORD-01 отмечены выполненными.
+- Файлы: `src/mocks/productionData.ts`, `src/context/ProductionContext.tsx`, `.planning/phases/02-material-driven-registration/02-02-*`, `.planning/{ROADMAP,REQUIREMENTS,STATE}.md`.
+- Проверка: `npm run build` проходит.
+
 ### 2026-05-20 — Phase 2 регистрация из snapshot + настраиваемый OK во входном контроле
 
 - Закрыт основной runtime-фокус Phase 2: на странице заказа регистрация выводит поля `Забор` и `Входной контроль` из `order.settingsSnapshot.materialType` вместо жёсткой привязки к blood-полям.
@@ -98,7 +106,7 @@
 - Обновлены GSD-артефакты Phase 2: `02-01-SUMMARY.md`, прогресс в `.planning/ROADMAP.md`, `.planning/REQUIREMENTS.md`, `.planning/STATE.md`.
 - Файлы: `src/pages/MaterialTypesAdminPage.tsx`, `src/context/ProductionContext.tsx`, `src/pages/ProductionPages.tsx`, `src/mocks/productionData.ts`, `.planning/phases/02-material-driven-registration/*`, `.planning/{ROADMAP,REQUIREMENTS,STATE}.md`, `AGENTS.md`.
 - Проверка: `npm run build` проходит; остаётся предупреждение Vite о JS chunk > 500 kB.
-- Риск/хвост: формально в roadmap Phase 2 остаётся `02-02` (seed/default verification) как отдельный шаг.
+- Хвост закрыт в сессии 02-02 (дефолты крови/кожи и merge по id).
 
 ### 2026-05-16 — Phase 1 типы материала и матбаланс регистрации
 
