@@ -4,6 +4,14 @@
 
 ---
 
+## Сессия 2026-05-20 (@end-session)
+
+- **Хранение в заказе:** ответственный — select из `MOCK_USERS`, дефолт `currentUser.id`, отображение ФИО в UI; поля в 4 строках (`renderStorageDataGrid`, `ORDER_FIELD_SM_*` / `ORDER_FIELD_MD_WRAP`); убрана **Фактическая температура** из дефолтов и deprecated-миграции (`productionData.ts`, `ProductionContext.tsx` — `normalizeOrderSettingsSnapshot`).
+- **Продукты → вкладка Хранение:** только «Включить хранение», таблица полей/обязательности удалена (`ProductProcessSettingsPanel.tsx`).
+- **Регистрация:** дата рождения и возраст снова рядом без разъезда (`md:w-auto` на узкой обёртке).
+- **Проверка:** `npm run build` OK (предупреждение Vite chunk > 500 kB).
+- **Дальше:** Phase 4 — independent QC (`$gsd-plan-phase 4`).
+
 ## GitHub Pages + SPA (Browser Router)
 
 Прямые URL вида `/bt-prototype/sklad/...` на GitHub Pages не отдаются как файлы — нужен fallback.

@@ -172,46 +172,6 @@ export function ProductStorageTabContent({
           </span>
         </span>
       </label>
-
-      {storage.enabled ? (
-        <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-3 py-2 font-medium">Поле</th>
-                <th className="px-3 py-2 font-medium">Тип</th>
-                <th className="px-3 py-2 font-medium">Обяз.</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {storage.fields.map((field, idx) => (
-                <tr key={field.id}>
-                  <td className="px-3 py-2 text-slate-800">{field.label}</td>
-                  <td className="px-3 py-2 text-slate-600">{field.type}</td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(field.required)}
-                      disabled={disabled}
-                      onChange={(e) => {
-                        const required = e.target.checked;
-                        patchStorage((prev) => ({
-                          ...prev,
-                          fields: prev.fields.map((row, rowIdx) =>
-                            rowIdx === idx ? { ...row, required } : row,
-                          ),
-                        }));
-                      }}
-                      className="size-4 rounded border-slate-300 text-blue-600"
-                      aria-label={`Обязательное: ${field.label}`}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
     </div>
   );
 }
