@@ -10,6 +10,9 @@ import {
   type ConfigurableMaterialField,
   type ConfigurableMaterialFieldType,
   DEFAULT_MATERIAL_TYPE_SETTINGS,
+  mergeRegistrationMaterialBalanceForSnapshot,
+  normalizeProductStorageSettings,
+  resolveOrderStageTemplates,
   DEFAULT_SYSTEM_FIELD_REGISTRY,
   INITIAL_PROCESS_TEMPLATES,
   INITIAL_PRODUCTION_ORDERS,
@@ -279,6 +282,11 @@ function buildSettingsSnapshot(input: {
     DEFAULT_MATERIAL_TYPE_SETTINGS.find((item) => item.code === materialTypeCode) ??
       DEFAULT_MATERIAL_TYPE_SETTINGS[0]!,
   );
+  const storageStage = normalizeProductStorageSettings(input.template.storageStage);
+  const registrationMaterialBalance = mergeRegistrationMaterialBalanceForSnapshot({
+    materialTypeItems: normalizedMaterialType.materialBalanceItems ?? [],
+    productItems: input.template.registrationMaterialBalance,
+  });
   return {
     product: {
       templateId: input.template.id,
@@ -286,8 +294,8 @@ function buildSettingsSnapshot(input: {
       materialTypeCode,
     },
     materialType: clone(normalizedMaterialType),
-    storage: null,
-    registrationMaterialBalance: clone(normalizedMaterialType.materialBalanceItems ?? []),
+    storage: storageStage.enabled ? clone(storageStage) : null,
+    registrationMaterialBalance: clone(registrationMaterialBalance),
   };
 }
 
@@ -546,24 +554,39 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
       const qcFromSource = source.stages.find((s) => s.type === "quality_control");
       const qcStage = resolveQualityControlStageForV2Runtime(qcFromSource);
       const runtimeTemplateId = `tpl-runtime-v2-${templateId}`;
+      const settingsSnapshot = buildSettingsSnapshot({
+        template: source,
+        materialTypes: materialTypesForSnapshot,
+      });
       const runtimeTemplate: ProcessTemplate = {
         id: runtimeTemplateId,
         name: source.name,
         materialTypeCode: source.materialTypeCode ?? "blood",
-        stages: [
-          getBaselineRegistrationStage(),
-          prodStage ? JSON.parse(JSON.stringify(prodStage)) : {
-            id: "stg-prod",
-            name: "Производство",
-            type: "production",
-            isSystem: true,
-            isSopStage: true,
-            allowedRoles: [],
-            steps: [],
+        storageStage: source.storageStage,
+        registrationMaterialBalance: source.registrationMaterialBalance,
+        stages: resolveOrderStageTemplates({
+          template: {
+            id: runtimeTemplateId,
+            name: source.name,
+            stages: [
+              getBaselineRegistrationStage(),
+              prodStage
+                ? JSON.parse(JSON.stringify(prodStage))
+                : {
+                    id: "stg-prod",
+                    name: "Производство",
+                    type: "production",
+                    isSystem: true,
+                    isSopStage: true,
+                    allowedRoles: [],
+                    steps: [],
+                  },
+              qcStage,
+              getBaselineReleaseStage(),
+            ],
           },
-          qcStage,
-          getBaselineReleaseStage(),
-        ],
+          settingsSnapshot,
+        }),
       };
 
       let created: ProductionOrder | undefined;
@@ -575,10 +598,7 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
           id: orderId,
           createdBy,
           createdAt,
-          settingsSnapshot: buildSettingsSnapshot({
-            template: source,
-            materialTypes: materialTypesForSnapshot,
-          }),
+          settingsSnapshot,
         });
         const withId = withIncomingSampleId(newOrder, incomingId);
         created = withId;

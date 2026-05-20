@@ -7,8 +7,96 @@ export type Role = string;
 export type StageType =
   | "registration"
   | "production"
+  | "storage"
   | "quality_control"
   | "release";
+
+export interface ProductStorageSettings {
+  enabled: boolean;
+  fields: ConfigurableMaterialField[];
+}
+
+export const DEFAULT_STORAGE_STAGE_FIELDS: ConfigurableMaterialField[] = [
+  {
+    id: "storageCondition",
+    label: "Условие хранения",
+    type: "select",
+    required: true,
+    options: [
+      "Комнатная температура",
+      "2–8 °C",
+      "≤ −20 °C",
+      "≤ −70 °C",
+      "LN2 / паровая фаза",
+      "Другое",
+    ],
+    defaultValue: "2–8 °C",
+  },
+  {
+    id: "storageLocation",
+    label: "Место хранения",
+    type: "text",
+    required: true,
+    defaultValue: "",
+    helpText: "Комната, морозильник, полка, короб, ячейка.",
+  },
+  {
+    id: "storageStart",
+    label: "Дата начала хранения",
+    type: "date",
+    required: true,
+    defaultValue: null,
+  },
+  {
+    id: "storageEnd",
+    label: "Дата окончания хранения",
+    type: "date",
+    required: false,
+    defaultValue: null,
+  },
+  {
+    id: "storageTemperature",
+    label: "Фактическая температура",
+    type: "number",
+    required: false,
+    unit: "°C",
+    defaultValue: null,
+  },
+  {
+    id: "storageContainer",
+    label: "Контейнер хранения",
+    type: "text",
+    required: false,
+    defaultValue: "",
+  },
+  {
+    id: "storageResponsible",
+    label: "Ответственный",
+    type: "text",
+    required: false,
+    defaultValue: "",
+  },
+  {
+    id: "storageDeviation",
+    label: "Отклонения условий хранения",
+    type: "checkbox",
+    required: false,
+    defaultValue: false,
+  },
+  {
+    id: "storageDeviationNotes",
+    label: "Описание отклонений",
+    type: "text",
+    required: false,
+    defaultValue: "",
+    helpText: "Температурное отклонение, повреждение, проблема доступа.",
+  },
+];
+
+export const DEFAULT_PRODUCT_STORAGE_SETTINGS: ProductStorageSettings = {
+  enabled: false,
+  fields: DEFAULT_STORAGE_STAGE_FIELDS.map((field) => ({ ...field })),
+};
 
 export type FieldType =
   | "number"
@@ -125,6 +213,10 @@ export interface ProcessTemplate {
   id: string;
   name: string;
   materialTypeCode?: MaterialTypeCode;
+  /** Настройки опционального этапа хранения после производства. */
+  storageStage?: ProductStorageSettings;
+  /** Переопределение строк матбаланса регистрации для новых заказов. */
+  registrationMaterialBalance?: MaterialTypeBalanceItem[];
   /** ISO datetime when archived. Archived templates are read-only and hidden from "start production" chooser. */
   archivedAt?: string;
   stages: StageTemplate[];
@@ -207,8 +299,8 @@ export interface ProductionOrderSettingsSnapshot {
     materialTypeCode: MaterialTypeCode;
   };
   materialType: MaterialTypeSettings;
-  storage?: null;
-  registrationMaterialBalance?: MaterialTypeBalanceItem[];
+  storage: ProductStorageSettings | null;
+  registrationMaterialBalance: MaterialTypeBalanceItem[];
 }
 
 export interface StepExecution {
@@ -295,7 +387,14 @@ export const DEFAULT_MATERIAL_TYPE_SETTINGS: MaterialTypeSettings[] = [
         helpText: "Контейнер, в котором материал поступает на регистрацию.",
       },
     ],
-    materialBalanceItems: [],
+    materialBalanceItems: [
+      { id: "syringe20", name: "Шприцы 20", unit: "шт", defaultQuantity: null },
+      { id: "syringe30", name: "Шприцы 30", unit: "шт", defaultQuantity: null },
+      { id: "hemacon", name: "Гемакон", unit: "шт", defaultQuantity: null },
+      { id: "gauze", name: "Стерильные марлевые салфетки", unit: "шт", defaultQuantity: null },
+      { id: "alcohol", name: "Спирт", unit: "мл", defaultQuantity: null },
+      { id: "citrate", name: "Цитрат Na", unit: "мл", defaultQuantity: null },
+    ],
     incomingControlFields: [
       {
         id: "integrity",
@@ -500,7 +599,11 @@ export function buildOrderFromTemplate(
   const now = input?.createdAt ?? new Date().toISOString();
   const createdBy = input?.createdBy ?? CURRENT_USER;
 
-  const stages: StageExecution[] = template.stages.map((stage, stageIndex) => ({
+  const stageTemplates = resolveOrderStageTemplates({
+    template,
+    settingsSnapshot: input?.settingsSnapshot,
+  });
+  const stages: StageExecution[] = stageTemplates.map((stage, stageIndex) => ({
     stageTemplateId: stage.id,
     name: stage.name,
     type: stage.type,
@@ -525,8 +628,11 @@ export function buildOrderFromTemplate(
  * Шаблон «Тромбогель NEW» из конструктора ver2: тело в `thrombogelNewSeed.json`
  * (экспорт из localStorage). После очистки storage подставляется с id `tpl-thrombogel-new`.
  */
-export const THROMBOGEL_NEW_TEMPLATE: ProcessTemplate =
-  { ...(thrombogelNewSeed as ProcessTemplate), materialTypeCode: "blood" };
+export const THROMBOGEL_NEW_TEMPLATE: ProcessTemplate = {
+  ...(thrombogelNewSeed as ProcessTemplate),
+  materialTypeCode: "blood",
+  storageStage: DEFAULT_PRODUCT_STORAGE_SETTINGS,
+};
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -559,8 +665,139 @@ export const DEFAULT_SYSTEM_FIELD_REGISTRY: SystemFieldRegistry = (() => {
 function defaultStageName(type: StageType): string {
   if (type === "registration") return "Регистрация биоматериала";
   if (type === "production") return "Производство";
+  if (type === "storage") return "Хранение";
   if (type === "quality_control") return "Контроль качества";
   return "Выдача";
+}
+
+function materialFieldToRuntimeField(field: ConfigurableMaterialField): FieldDefinition {
+  return {
+    id: field.id,
+    label: field.label,
+    type: field.type,
+    required: Boolean(field.required),
+    unit: field.unit?.trim() ? field.unit.trim() : undefined,
+    options:
+      field.type === "select" ? (field.options ?? []).filter((opt) => opt.trim()) : undefined,
+    placeholder: field.helpText?.trim() ? field.helpText.trim() : undefined,
+  };
+}
+
+export function mergeRegistrationMaterialBalanceForSnapshot(input: {
+  materialTypeItems: MaterialTypeBalanceItem[];
+  productItems?: MaterialTypeBalanceItem[];
+}): MaterialTypeBalanceItem[] {
+  const base = clone(input.materialTypeItems ?? []);
+  const overrides = input.productItems ?? [];
+  if (!overrides.length) return base;
+  const overrideById = new Map(overrides.map((item) => [item.id, item]));
+  const merged = base.map((item) => {
+    const override = overrideById.get(item.id);
+    if (!override) return clone(item);
+    return {
+      ...clone(item),
+      defaultQuantity:
+        override.defaultQuantity !== undefined
+          ? override.defaultQuantity
+          : item.defaultQuantity,
+      writeOffOnRegistrationComplete:
+        override.writeOffOnRegistrationComplete ?? item.writeOffOnRegistrationComplete,
+    };
+  });
+  for (const item of overrides) {
+    if (base.some((row) => row.id === item.id)) continue;
+    merged.push(clone(item));
+  }
+  return merged;
+}
+
+export function normalizeProductStorageSettings(
+  input: ProductStorageSettings | undefined,
+): ProductStorageSettings {
+  const base = clone(DEFAULT_PRODUCT_STORAGE_SETTINGS);
+  if (!input) return base;
+  const fields = Array.isArray(input.fields) && input.fields.length > 0
+    ? input.fields
+    : base.fields;
+  return {
+    enabled: Boolean(input.enabled),
+    fields: fields.map((field, idx) => {
+      const fallback = base.fields[idx] ?? base.fields[0]!;
+      return {
+        ...fallback,
+        ...field,
+        id: typeof field.id === "string" && field.id.trim() ? field.id.trim() : fallback.id,
+        label:
+          typeof field.label === "string" && field.label.trim()
+            ? field.label.trim()
+            : fallback.label,
+        type:
+          field.type === "number" ||
+          field.type === "date" ||
+          field.type === "checkbox" ||
+          field.type === "select" ||
+          field.type === "text"
+            ? field.type
+            : fallback.type,
+        required: Boolean(field.required),
+        options: field.type === "select" ? field.options ?? fallback.options : undefined,
+      };
+    }),
+  };
+}
+
+export function makeStorageStageTemplate(
+  settings: ProductStorageSettings,
+): StageTemplate {
+  const storageFields = settings.fields.map(materialFieldToRuntimeField);
+  return {
+    id: "stg-storage",
+    name: defaultStageName("storage"),
+    type: "storage",
+    isSystem: true,
+    isSopStage: true,
+    allowedRoles: [],
+    steps: [
+      {
+        id: "step-storage-1",
+        name: "1. Условия и место хранения",
+        sopActions: [],
+        fields: storageFields,
+        consumables: [],
+        equipment: [],
+        hasDeviations: true,
+      },
+    ],
+  };
+}
+
+export function resolveOrderStageTemplates(input: {
+  template: ProcessTemplate;
+  settingsSnapshot?: ProductionOrderSettingsSnapshot;
+}): StageTemplate[] {
+  const storageSettings =
+    input.settingsSnapshot?.storage ??
+    normalizeProductStorageSettings(input.template.storageStage);
+  const stages = input.template.stages.map((stage) => clone(stage));
+  if (!storageSettings.enabled) return stages;
+
+  const storageStage = makeStorageStageTemplate(storageSettings);
+  const next: StageTemplate[] = [];
+  let inserted = false;
+  for (const stage of stages) {
+    if (stage.type === "storage") continue;
+    next.push(stage);
+    if (stage.type === "production" && !inserted) {
+      next.push(storageStage);
+      inserted = true;
+    }
+  }
+  if (!inserted) {
+    const prodIdx = next.findIndex((stage) => stage.type === "production");
+    if (prodIdx >= 0) next.splice(prodIdx + 1, 0, storageStage);
+    else next.push(storageStage);
+  }
+  return next;
 }
 
 function makeStageStep(
@@ -596,6 +833,7 @@ export function createTemplateWithSystemStages(
     id: input.id,
     name: input.name,
     materialTypeCode: "blood",
+    storageStage: clone(DEFAULT_PRODUCT_STORAGE_SETTINGS),
     stages: stageTypes.map((type) => ({
       id: `stg-${type}`,
       name: defaultStageName(type),
@@ -731,6 +969,11 @@ export function mergeProductionTemplatesWithBaseline(
           ? st.name
           : bt.name,
       materialTypeCode: st.materialTypeCode ?? bt.materialTypeCode ?? "blood",
+      storageStage: normalizeProductStorageSettings(
+        st.storageStage ?? bt.storageStage,
+      ),
+      registrationMaterialBalance:
+        st.registrationMaterialBalance ?? bt.registrationMaterialBalance,
       stages: mergeProductionStages(st.stages, bt.stages),
     };
   });
@@ -745,6 +988,7 @@ export function mergeProductionTemplatesWithBaseline(
     ...clone(extraStored).map((st) => ({
       ...st,
       materialTypeCode: st.materialTypeCode ?? "blood",
+      storageStage: normalizeProductStorageSettings(st.storageStage),
     })),
   ]);
 }

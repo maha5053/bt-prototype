@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Combobox, Tab } from "@headlessui/react";
+import {
+  ProductRegistrationTabContent,
+  ProductStorageTabContent,
+} from "../components/ProductProcessSettingsPanel";
 import { ProductionStorageDevTools } from "../components/ProductionStorageDevTools";
 import { ProductionProvider, useProduction } from "../context/ProductionContext";
 import {
@@ -256,6 +260,7 @@ const STAGE_TYPE_ORDER: Array<StageTemplate["type"]> = [
 const STAGE_TYPE_LABEL: Record<StageTemplate["type"], string> = {
   registration: "Регистрация биоматериала",
   production: "Производство",
+  storage: "Хранение",
   quality_control: "Контроль качества",
   release: "Выдача",
 };
@@ -268,6 +273,7 @@ export function ConstructorEditorView({
   allowGroupsByStageType,
   allowStepsByStageType,
   emptyStagesByStageType,
+  productSettingsInTabs = false,
   readOnly = false,
 }: {
   headerTitle: string;
@@ -277,6 +283,8 @@ export function ConstructorEditorView({
   allowGroupsByStageType?: Partial<Record<StageTemplate["type"], boolean>>;
   allowStepsByStageType?: Partial<Record<StageTemplate["type"], boolean>>;
   emptyStagesByStageType?: Partial<Record<StageTemplate["type"], boolean>>;
+  /** Настройки типа материала и хранения — во вкладках Регистрация / Хранение (Продукты ver2). */
+  productSettingsInTabs?: boolean;
   readOnly?: boolean;
 }) {
   const { templateId } = useParams<{ templateId: string }>();
@@ -362,10 +370,31 @@ export function ConstructorEditorView({
   const orderedStages = useMemo(() => {
     if (!template) return [] as StageTemplate[];
     const byType = new Map(template.stages.map((s) => [s.type, s]));
-    return stageTypeOrder.map((type) => byType.get(type)).filter(
-      Boolean,
-    ) as StageTemplate[];
-  }, [template, stageTypeOrder]);
+    return stageTypeOrder
+      .map((type) => {
+        const found = byType.get(type);
+        if (found) return found;
+        if (productSettingsInTabs && type === "storage") {
+          return {
+            id: "stg-storage-editor",
+            name: "Хранение",
+            type: "storage" as const,
+            isSystem: true,
+            steps: [
+              {
+                id: "step-storage-editor",
+                name: "",
+                fields: [],
+                consumables: [],
+                equipment: [],
+              },
+            ],
+          } satisfies StageTemplate;
+        }
+        return null;
+      })
+      .filter(Boolean) as StageTemplate[];
+  }, [template, stageTypeOrder, productSettingsInTabs]);
 
   const allowGroups = (type: StageTemplate["type"]) =>
     allowGroupsByStageType?.[type] ?? true;
@@ -1010,29 +1039,40 @@ export function ConstructorEditorView({
         </div>
       </div>
 
-      <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="block text-xs font-medium text-slate-600">
-          Тип материала
-          <select
-            value={template.materialTypeCode ?? "blood"}
-            disabled={!controlsEnabled}
-            onChange={(e) => {
-              const materialTypeCode = e.target.value as MaterialTypeCode;
-              patchTemplate((prev) => ({ ...prev, materialTypeCode }));
-            }}
-            className="mt-1 w-full max-w-sm rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:bg-slate-50 disabled:text-slate-500"
-          >
-            {materialTypes.map((item) => (
-              <option key={item.code} value={item.code}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p className="mt-2 text-sm text-slate-500">
-          Используется для полей регистрации и входного контроля в новых заказах. Уже созданные заказы не изменяются.
-        </p>
-      </div>
+      {!productSettingsInTabs ? (
+        <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <label className="block text-xs font-medium text-slate-600">
+            Тип материала
+            <select
+              value={template.materialTypeCode ?? "blood"}
+              disabled={!controlsEnabled}
+              onChange={(e) => {
+                const materialTypeCode = e.target.value as MaterialTypeCode;
+                const materialType =
+                  materialTypes.find((item) => item.code === materialTypeCode) ?? null;
+                patchTemplate((prev) => ({
+                  ...prev,
+                  materialTypeCode,
+                  registrationMaterialBalance: materialType
+                    ? JSON.parse(JSON.stringify(materialType.materialBalanceItems))
+                    : [],
+                }));
+              }}
+              className="mt-1 w-full max-w-sm rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 disabled:bg-slate-50 disabled:text-slate-500"
+            >
+              {materialTypes.map((item) => (
+                <option key={item.code} value={item.code}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="mt-2 text-sm text-slate-500">
+            Используется для полей регистрации и входного контроля в новых заказах. Уже
+            созданные заказы не изменяются.
+          </p>
+        </div>
+      ) : null}
 
       <Tab.Group
         selectedIndex={Math.max(
@@ -1074,9 +1114,24 @@ export function ConstructorEditorView({
             <Tab.Panel key={stage.id}>
               <div className="space-y-3">
                 {isEmptyStage(stage.type) ? (
-                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-600">
-                    Раздел пока пуст.
-                  </div>
+                  productSettingsInTabs && stage.type === "registration" && template ? (
+                    <ProductRegistrationTabContent
+                      template={template}
+                      materialTypes={materialTypes}
+                      disabled={!controlsEnabled}
+                      onPatch={patchTemplate}
+                    />
+                  ) : productSettingsInTabs && stage.type === "storage" && template ? (
+                    <ProductStorageTabContent
+                      template={template}
+                      disabled={!controlsEnabled}
+                      onPatch={patchTemplate}
+                    />
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-600">
+                      Раздел пока пуст.
+                    </div>
+                  )
                 ) : stage.steps.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-600">
                     {allowSteps(stage.type) ? "Добавьте первый шаг." : "Подготовка формы этапа…"}

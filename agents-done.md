@@ -89,6 +89,23 @@
 
 ## Журнал сессий (кратко)
 
+### 2026-05-20 — @end-session: Phase 3 + вкладки продукта + devtools типов материала
+
+- Phase 3 complete: product storage toggle, registration material balance on product/order, optional `storage` stage in orders, balance runtime from snapshot.
+- «Продукты» UX: тип материала и матбаланс — вкладка **Регистрация**; этап хранения — вкладка **Хранение** (между Производство и КК).
+- `/admin/tipy-materiala`: `MaterialTypesDevTools` (шестерёнка), убрана кнопка «Восстановить типы».
+- GSD: `.planning/phases/03-*`, ROADMAP/REQUIREMENTS/STATE → Phase 4 next.
+- Проверка: `npm run build`; commit, push, `npm run deploy`.
+
+### 2026-05-20 — Phase 3: хранение, матбаланс регистрации, snapshot
+
+- В редакторе продукта: чекбокс этапа хранения, таблица обязательности полей хранения, матбаланс регистрации с количествами и флагом списания.
+- Тип этапа `storage`, вставка после производства в новых заказах при `storage.enabled`.
+- Регистрация: секция матбаланса из `registrationMaterialBalance` snapshot; дефолты количеств при завершении шага.
+- Кровь: засеяны строки матбаланса (шприцы, гемакон и т.д.).
+- Файлы: `productionData.ts`, `ProductionContext.tsx`, `ProductProcessSettingsPanel.tsx`, `ConstructorPages.tsx`, `ProductionPages.tsx`, `usersMock.ts`, `.planning/phases/03-*`.
+- Проверка: `npm run build` проходит.
+
 ### 2026-05-20 — Phase 2 plan 02-02: дефолты крови и кожи
 
 - Обновлены `DEFAULT_MATERIAL_TYPE_SETTINGS`: кровь — подпись `Объём забранной крови (мл)`; кожа — поля по research (место биопсии, тип биопсии с `срез`/`другое`, контейнер/среда с формалином/Мишелем и т.д., время фиксатора, клиническое показание).

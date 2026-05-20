@@ -9,6 +9,7 @@ import { ProductionTemplatesDevTools } from "../components/ProductionTemplatesDe
 const CONSTRUCTOR_V2_STAGE_ORDER: StageTemplate["type"][] = [
   "registration",
   "production",
+  "storage",
   "quality_control",
 ];
 
@@ -17,6 +18,7 @@ const CONSTRUCTOR_V2_STAGE_LABEL: Partial<
 > = {
   registration: "Регистрация",
   production: "Производство",
+  storage: "Хранение",
   quality_control: "Контроль качества",
 };
 
@@ -39,6 +41,7 @@ const CONSTRUCTOR_V2_EMPTY_STAGES: Partial<
   Record<StageTemplate["type"], boolean>
 > = {
   registration: true,
+  storage: true,
 };
 
 export function ConstructorV2ListPage() {
@@ -60,6 +63,7 @@ export function ConstructorV2EditorPage() {
         allowGroupsByStageType={CONSTRUCTOR_V2_ALLOW_GROUPS}
         allowStepsByStageType={CONSTRUCTOR_V2_ALLOW_STEPS}
         emptyStagesByStageType={CONSTRUCTOR_V2_EMPTY_STAGES}
+        productSettingsInTabs
       />
     </ProductionProvider>
   );
@@ -76,6 +80,7 @@ export function ConstructorV2ViewerPage() {
         allowGroupsByStageType={CONSTRUCTOR_V2_ALLOW_GROUPS}
         allowStepsByStageType={CONSTRUCTOR_V2_ALLOW_STEPS}
         emptyStagesByStageType={CONSTRUCTOR_V2_EMPTY_STAGES}
+        productSettingsInTabs
         readOnly
       />
     </ProductionProvider>

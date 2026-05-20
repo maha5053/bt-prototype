@@ -245,12 +245,13 @@ export type StagePermissionSource =
   | "release";
 
 export function stageTypeToPermissionKey(
-  stageType: StagePermissionSource,
+  stageType: StagePermissionSource | "storage",
 ): PermissionKey {
   switch (stageType) {
     case "registration":
       return "registration";
     case "production":
+    case "storage":
       return "production";
     case "quality_control":
       return "qualityControl";
@@ -263,7 +264,7 @@ export function stageTypeToPermissionKey(
 
 export function canViewStage(
   perms: ProductionPermissions,
-  stageType: StagePermissionSource,
+  stageType: StagePermissionSource | "storage",
 ): boolean {
   const key = stageTypeToPermissionKey(stageType);
   return perms[key] === "read" || perms[key] === "write";
@@ -271,7 +272,7 @@ export function canViewStage(
 
 export function canEditStage(
   perms: ProductionPermissions,
-  stageType: StagePermissionSource,
+  stageType: StagePermissionSource | "storage",
 ): boolean {
   const key = stageTypeToPermissionKey(stageType);
   return perms[key] === "write";

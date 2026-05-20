@@ -21,8 +21,10 @@ import {
   type FieldDefinition,
   type FieldReferenceRange,
   type FieldValue,
+  type MaterialTypeBalanceItem,
   type MaterialTypeSettings,
   type ProcessTemplate,
+  type ProductionOrderSettingsSnapshot,
   type ProductionOrder,
   type ProductionOrderStatus,
   type ProductionRejectionAttachment,
@@ -195,10 +197,36 @@ function materialTypeDefaultValues(
   return map;
 }
 
+function registrationMaterialBalanceDefaults(
+  items: MaterialTypeBalanceItem[] | undefined,
+): Record<string, FieldValue> {
+  const map: Record<string, FieldValue> = {};
+  for (const item of items ?? []) {
+    if (
+      typeof item.defaultQuantity === "number" &&
+      Number.isFinite(item.defaultQuantity)
+    ) {
+      map[item.id] = Math.max(0, Math.floor(item.defaultQuantity));
+    }
+  }
+  return map;
+}
+
+function balanceItemToFieldDefinition(item: MaterialTypeBalanceItem): FieldDefinition {
+  return {
+    id: item.id,
+    label: item.name,
+    type: "number",
+    required: false,
+    unit: item.unit?.trim() ? item.unit.trim() : "шт",
+  };
+}
+
 function deriveRegistrationFieldsFromSnapshot(
   baseFields: FieldDefinition[],
-  materialType: MaterialTypeSettings | undefined,
+  snapshot: ProductionOrderSettingsSnapshot | undefined,
 ): FieldDefinition[] {
+  const materialType = snapshot?.materialType;
   if (!materialType) return baseFields;
 
   const collectionFields = materialType.collectionFields.map(
@@ -207,6 +235,9 @@ function deriveRegistrationFieldsFromSnapshot(
   const incomingControlFields = materialType.incomingControlFields.map(
     mapMaterialFieldToRuntimeFieldDefinition,
   );
+  const balanceFields = (
+    snapshot.registrationMaterialBalance ?? materialType.materialBalanceItems
+  ).map(balanceItemToFieldDefinition);
 
   type Section = { header: FieldDefinition | null; fields: FieldDefinition[] };
   const sections: Section[] = [];
@@ -234,6 +265,12 @@ function deriveRegistrationFieldsFromSnapshot(
     }
     if (headerId === REGISTRATION_INCOMING_QC_SECTION_ID) {
       return { ...section, fields: incomingControlFields };
+    }
+    if (headerId === "sec-balance") {
+      return {
+        ...section,
+        fields: balanceFields.length > 0 ? balanceFields : section.fields,
+      };
     }
     return section;
   });
@@ -2983,13 +3020,27 @@ function StepsStage({
   const activeStepTpl = stepsTpl[activeStepIndex];
   const activeStepExec = stepsExec[activeStepIndex];
   const registrationDefaults = useMemo(
-    () => materialTypeDefaultValues(order.settingsSnapshot?.materialType),
-    [order.settingsSnapshot?.materialType],
+    () => ({
+      ...materialTypeDefaultValues(order.settingsSnapshot?.materialType),
+      ...registrationMaterialBalanceDefaults(
+        order.settingsSnapshot?.registrationMaterialBalance,
+      ),
+    }),
+    [
+      order.settingsSnapshot?.materialType,
+      order.settingsSnapshot?.registrationMaterialBalance,
+    ],
   );
   const activeStepTplFields = useMemo(() => {
     if (!activeStepTpl) return [];
     // Deviation block exists in registration baseline and must be available
     // in every production step + quality control + release (issuance).
+    if (stageTemplate.type === "storage") {
+      const storage = order.settingsSnapshot?.storage;
+      if (!storage?.enabled) return ensureDeviationFields(activeStepTpl.fields);
+      const storageFields = storage.fields.map(mapMaterialFieldToRuntimeFieldDefinition);
+      return ensureDeviationFields(storageFields);
+    }
     if (
       stageTemplate.type === "production" ||
       stageTemplate.type === "quality_control" ||
@@ -3002,11 +3053,11 @@ function StepsStage({
     if (stageTemplate.type === "registration") {
       return deriveRegistrationFieldsFromSnapshot(
         activeStepTpl.fields,
-        order.settingsSnapshot?.materialType,
+        order.settingsSnapshot,
       );
     }
     return activeStepTpl.fields;
-  }, [activeStepTpl, order.settingsSnapshot?.materialType, stageTemplate.type]);
+  }, [activeStepTpl, order.settingsSnapshot, stageTemplate.type]);
 
   const missingRequiredActions = (() => {
     if (stageTemplate.type !== "production") return false;
@@ -3818,8 +3869,16 @@ function FormFields({
     [stageType, stepTemplate.fields],
   );
   const registrationDefaults = useMemo(
-    () => materialTypeDefaultValues(order.settingsSnapshot?.materialType),
-    [order.settingsSnapshot?.materialType],
+    () => ({
+      ...materialTypeDefaultValues(order.settingsSnapshot?.materialType),
+      ...registrationMaterialBalanceDefaults(
+        order.settingsSnapshot?.registrationMaterialBalance,
+      ),
+    }),
+    [
+      order.settingsSnapshot?.materialType,
+      order.settingsSnapshot?.registrationMaterialBalance,
+    ],
   );
 
   const resolveValue = (field: FieldDefinition): FieldValue => {

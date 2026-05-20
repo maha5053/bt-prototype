@@ -12,7 +12,7 @@ This milestone turns the existing order/product prototype into a configurable or
 
 - [x] **Phase 1: Product and Material Settings Foundation** - Add stable data model, admin navigation, sample ID sequencing, and snapshot rules.
 - [x] **Phase 2: Material-Driven Registration** - Move collection and incoming control fields into material type settings and order creation.
-- [ ] **Phase 3: Product Process Settings** - Add storage and registration material balance settings, defaults, and optional action inputs.
+- [x] **Phase 3: Product Process Settings** - Add storage and registration material balance settings, defaults, and optional action inputs.
 - [ ] **Phase 4: Independent Quality Control** - Split QC from the main order stage line and allow QC at any time.
 - [ ] **Phase 5: Privileged Corrections and Audit** - Add correction group/permission and post-completion edit logging.
 
@@ -62,10 +62,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 03-01: Add storage stage settings to product editor and order snapshots.
-- [ ] 03-02: Render registration material balance from material type snapshot at runtime.
-- [ ] 03-03: Apply product defaults for registration and production material balance.
-- [ ] 03-04: Make production action input values optional in validation/completion.
+- [x] 03-01: Add storage stage settings to product editor and order snapshots.
+- [x] 03-02: Render registration material balance from material type snapshot at runtime.
+- [x] 03-03: Apply product defaults for registration and production material balance.
+- [x] 03-04: Make production action input values optional in validation/completion.
 
 ### Phase 4: Independent Quality Control
 **Goal**: Make QC a standalone order panel that can be completed before or after release without changing order status.
@@ -108,6 +108,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 |-------|----------------|--------|-----------|
 | 1. Product and Material Settings Foundation | 3/3 | Complete | 2026-05-15 |
 | 2. Material-Driven Registration | 3/3 | Complete | 2026-05-20 |
-| 3. Product Process Settings | 0/4 | Not started | - |
+| 3. Product Process Settings | 4/4 | Complete | 2026-05-20 |
 | 4. Independent Quality Control | 0/3 | Not started | - |
 | 5. Privileged Corrections and Audit | 0/3 | Not started | - |

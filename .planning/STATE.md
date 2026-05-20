@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: phase-3-next
-last_updated: "2026-05-20T12:00:00.000Z"
+status: phase-4-next
+last_updated: "2026-05-20T18:00:00.000Z"
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 16
-  completed_plans: 6
-  percent: 38
+  completed_plans: 10
+  percent: 63
 ---
 
 # Project State
@@ -21,12 +21,12 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-05-15)
 
 **Core value:** Users can create and manage a production order from a configured product while the order captures the right material-specific registration, control, storage, production, and QC data without hard-coded process assumptions.
-**Current focus:** Phase 3: Product Process Settings
+**Current focus:** Phase 4: Independent Quality Control
 
 ## Current Milestone
 
 **Name:** Customer feedback: configurable order creation and product settings
-**Status:** Phase 2 complete; Phase 3 not started
+**Status:** Phase 3 complete; Phase 4 not started
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Codebase map:** `.planning/codebase/`
@@ -37,10 +37,12 @@ See: `.planning/PROJECT.md` (updated 2026-05-15)
 
 **Phase 2** — Material-Driven Registration (2026-05-20). Context: `.planning/phases/02-material-driven-registration/02-CONTEXT.md`; summaries: `02-01-SUMMARY.md`, `02-02-SUMMARY.md`.
 
+**Phase 3** — Product Process Settings (2026-05-20). Context: `.planning/phases/03-product-process-settings/03-CONTEXT.md`; summaries: `03-01`…`03-04-SUMMARY.md`.
+
 Next recommended GSD step:
 
 ```text
-$gsd-plan-phase 3
+$gsd-plan-phase 4
 ```
 
 ## Decisions to Preserve
@@ -61,6 +63,7 @@ $gsd-plan-phase 3
 
 ## Recent Activity
 
+- Phase 3 complete: product storage toggle, registration material balance on product/snapshot/runtime, optional storage stage in orders, blood balance seed.
 - Phase 2 plan 02-02 complete: blood/skin defaults aligned with research; field merge by id in `ProductionContext`.
 - Phase 2 plan summary added: `.planning/phases/02-material-driven-registration/02-01-SUMMARY.md`.
 - Material type settings editor switched to autosave and save button removed; select-options editing UX fixed.

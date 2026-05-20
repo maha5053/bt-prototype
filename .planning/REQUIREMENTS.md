@@ -27,27 +27,27 @@
 ### Product Settings
 
 - [x] **PROD-01**: Product settings include exactly one selected material type.
-- [ ] **PROD-02**: Product settings can enable or disable one storage stage after production.
-- [ ] **PROD-03**: If storage is enabled, product settings define storage input fields and defaults.
+- [x] **PROD-02**: Product settings can enable or disable one storage stage after production.
+- [x] **PROD-03**: If storage is enabled, product settings define storage input fields and defaults.
 - [x] **PROD-04**: Material type settings define registration material balance rows with consumable, default quantity, and write-off-on-completion flag.
 - [x] **PROD-05**: Registration material balance write-off flag defaults to off.
-- [ ] **PROD-06**: Product settings expose default material balance quantities for registration and production steps.
+- [x] **PROD-06**: Product settings expose default material balance quantities for registration and production steps.
 - [x] **PROD-07**: Material balance consumables are chosen from the same consumable dictionary/source used by production step configuration.
 
 ### Order Runtime
 
 - [x] **RUN-01**: Registration section renders collection fields from the order's material type snapshot.
 - [x] **RUN-02**: Registration section renders incoming control fields from the order's material type snapshot.
-- [ ] **RUN-03**: Registration section renders registration material balance from the order/product snapshot.
-- [ ] **RUN-04**: If storage is enabled for the order's product snapshot, storage appears after production with configured fields.
-- [ ] **RUN-05**: If storage is disabled, the order flow omits storage.
-- [ ] **RUN-06**: Completing registration or production records material balance values but does not decrement stock in the prototype.
-- [ ] **RUN-07**: Order completion is not blocked by missing consumable stock.
+- [x] **RUN-03**: Registration section renders registration material balance from the order/product snapshot.
+- [x] **RUN-04**: If storage is enabled for the order's product snapshot, storage appears after production with configured fields.
+- [x] **RUN-05**: If storage is disabled, the order flow omits storage.
+- [x] **RUN-06**: Completing registration or production records material balance values but does not decrement stock in the prototype.
+- [x] **RUN-07**: Order completion is not blocked by missing consumable stock.
 
 ### Production Actions
 
-- [ ] **ACT-01**: Input fields attached to actions inside production steps are optional.
-- [ ] **ACT-02**: A required production action can be completed even when its attached input value is empty.
+- [x] **ACT-01**: Input fields attached to actions inside production steps are optional.
+- [x] **ACT-02**: A required production action can be completed even when its attached input value is empty.
 
 ### Quality Control
 
@@ -109,21 +109,21 @@
 | MAT-08 | Phase 2 | Complete |
 | MAT-09 | Phase 2 | Complete |
 | PROD-01 | Phase 1 | Complete |
-| PROD-02 | Phase 3 | Pending |
-| PROD-03 | Phase 3 | Pending |
+| PROD-02 | Phase 3 | Complete |
+| PROD-03 | Phase 3 | Complete |
 | PROD-04 | Phase 3 | Complete |
 | PROD-05 | Phase 3 | Complete |
-| PROD-06 | Phase 3 | Pending |
+| PROD-06 | Phase 3 | Complete |
 | PROD-07 | Phase 3 | Complete |
 | RUN-01 | Phase 2 | Complete |
 | RUN-02 | Phase 2 | Complete |
-| RUN-03 | Phase 3 | Pending |
-| RUN-04 | Phase 3 | Pending |
-| RUN-05 | Phase 3 | Pending |
-| RUN-06 | Phase 3 | Pending |
-| RUN-07 | Phase 3 | Pending |
-| ACT-01 | Phase 3 | Pending |
-| ACT-02 | Phase 3 | Pending |
+| RUN-03 | Phase 3 | Complete |
+| RUN-04 | Phase 3 | Complete |
+| RUN-05 | Phase 3 | Complete |
+| RUN-06 | Phase 3 | Complete |
+| RUN-07 | Phase 3 | Complete |
+| ACT-01 | Phase 3 | Complete |
+| ACT-02 | Phase 3 | Complete |
 | QC-01 | Phase 4 | Pending |
 | QC-02 | Phase 4 | Pending |
 | QC-03 | Phase 4 | Pending |
