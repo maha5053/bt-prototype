@@ -7,9 +7,9 @@ last_updated: "2026-05-21T12:00:00.000Z"
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 16
+  total_plans: 15
   completed_plans: 13
-  percent: 81
+  percent: 87
 ---
 
 # Project State
@@ -21,7 +21,7 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-05-15)
 
 **Core value:** Users can create and manage a production order from a configured product while the order captures the right material-specific registration, control, storage, production, and QC data without hard-coded process assumptions.
-**Current focus:** Phase 5: Privileged Corrections and Audit
+**Current focus:** Phase 5: Privileged Corrections
 
 ## Current Milestone
 
@@ -56,7 +56,7 @@ $gsd-plan-phase 5
 - Registration material balance rows are configured on material type settings; product storage and production defaults remain later work.
 - QC is independent from release/order completion.
 - QC deviations show a badge but do not change order status.
-- Privileged correction can edit completed stages and must be audited.
+- Privileged correction can edit completed stages; audit log UI is v2 (AUD-02), not Phase 5.
 - Material balance write-off flag stores intent only; no stock decrement in prototype.
 
 ## Open Questions

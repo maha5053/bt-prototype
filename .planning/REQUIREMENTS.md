@@ -61,7 +61,6 @@
 
 - [ ] **PERM-01**: Admin can assign users to a new group for privileged order correction.
 - [ ] **PERM-02**: Users in that group can edit all data on all order stages, including completed stages.
-- [ ] **PERM-03**: Edits made after a stage is completed are logged with user, timestamp, field/action, old value, and new value.
 - [ ] **PERM-04**: Normal users keep existing read/edit behavior and cannot silently change completed stages.
 
 ## v2 Requirements
@@ -79,6 +78,7 @@
 ### Audit
 
 - **AUD-01**: Audit log can be exported or filtered across all orders.
+- **AUD-02**: Post-completion order edits are logged (user, timestamp, field/action, old/new value) with UI on the order card.
 
 ## Out of Scope
 
@@ -90,6 +90,7 @@
 | Dynamic material type creation | Customer said material type list is fixed in code |
 | Multiple material types per product | Customer said product can have only one material type |
 | Backend authorization | Current app is a localStorage prototype with mock permissions |
+| Post-completion audit log and UI (PERM-03) | Deferred to v2 (AUD-02); Phase 5 covers permissions and editing only |
 
 ## Traceability
 
@@ -131,12 +132,12 @@
 | QC-05 | Phase 4 | Complete |
 | PERM-01 | Phase 5 | Pending |
 | PERM-02 | Phase 5 | Pending |
-| PERM-03 | Phase 5 | Pending |
 | PERM-04 | Phase 5 | Pending |
+| AUD-02 | v2 | Pending |
 
 **Coverage:**
-- v1 requirements: 39 total
-- Mapped to phases: 39
+- v1 requirements: 38 total
+- Mapped to phases: 38
 - Unmapped: 0
 
 ---

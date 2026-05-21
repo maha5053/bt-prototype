@@ -2,7 +2,7 @@
 
 ## Overview
 
-This milestone turns the existing order/product prototype into a configurable order workflow: material type settings become first-class, products snapshot material and process settings into new orders, registration and incoming control stop being hard-coded, optional storage and material balance defaults are supported, QC becomes independent, and privileged correction is audited.
+This milestone turns the existing order/product prototype into a configurable order workflow: material type settings become first-class, products snapshot material and process settings into new orders, registration and incoming control stop being hard-coded, optional storage and material balance defaults are supported, QC becomes independent, and privileged correction permissions are enforced (audit log UI deferred to v2).
 
 ## Phases
 
@@ -14,7 +14,7 @@ This milestone turns the existing order/product prototype into a configurable or
 - [x] **Phase 2: Material-Driven Registration** - Move collection and incoming control fields into material type settings and order creation.
 - [x] **Phase 3: Product Process Settings** - Add storage and registration material balance settings, defaults, and optional action inputs.
 - [x] **Phase 4: Independent Quality Control** - Split QC from the main order stage line and allow QC at any time.
-- [ ] **Phase 5: Privileged Corrections and Audit** - Add correction group/permission and post-completion edit logging.
+- [ ] **Phase 5: Privileged Corrections** - Add correction group/permission and completed-stage editing for privileged users.
 
 ## Phase Details
 
@@ -83,21 +83,19 @@ Plans:
 - [x] 04-02: Relax release/completion dependencies on QC.
 - [x] 04-03: Add QC deviation badge and post-release QC editing behavior.
 
-### Phase 5: Privileged Corrections and Audit
-**Goal**: Allow selected users to correct any order stage data, including completed stages, while logging those edits.
+### Phase 5: Privileged Corrections
+**Goal**: Allow selected users to correct any order stage data, including completed stages, without changing normal users' edit rules.
 **Depends on**: Phase 4
-**Requirements**: PERM-01, PERM-02, PERM-03, PERM-04
+**Requirements**: PERM-01, PERM-02, PERM-04
 **Success Criteria** (what must be TRUE):
   1. Admin can assign multiple users to the privileged correction group.
   2. Privileged users can edit completed stage/order data.
   3. Normal users cannot silently edit completed stages.
-  4. Post-completion edits record user, timestamp, field/action, old value, and new value.
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 Plans:
 - [ ] 05-01: Add correction group/permission to users admin.
 - [ ] 05-02: Apply permission checks to completed-stage editing.
-- [ ] 05-03: Add post-completion edit audit log storage and UI.
 
 ## Progress
 
@@ -110,4 +108,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. Material-Driven Registration | 3/3 | Complete | 2026-05-20 |
 | 3. Product Process Settings | 4/4 | Complete | 2026-05-20 |
 | 4. Independent Quality Control | 3/3 | Complete | 2026-05-21 |
-| 5. Privileged Corrections and Audit | 0/3 | Not started | - |
+| 5. Privileged Corrections | 0/2 | Not started | - |
