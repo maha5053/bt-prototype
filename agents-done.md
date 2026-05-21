@@ -4,6 +4,15 @@
 
 ---
 
+## Сессия 2026-05-21 (@end-session)
+
+- **Phase 4 — Independent Quality Control:** отдельная вкладка КК; степпер только workflow-этапов; `completeStage` пропускает `quality_control`; `updateFieldValue` для КК при `completed`; badge отклонений в журнале и шапке заказа; убрана кнопка «Подтвердить результаты» на КК.
+- **UX:** убрана надпись «Независимый раздел», выравнивание заголовка КК по центру с синей полоской.
+- **GSD:** Phase 4 отмечена complete; Phase 5 без плана 05-03 (audit UI → v2 AUD-02), 2 плана, PERM-01/02/04.
+- **Файлы:** `src/lib/productionQualityControl.ts`, `src/context/ProductionContext.tsx`, `src/pages/ProductionPages.tsx`, `.planning/*`.
+- **Проверка:** `npm run build` OK (Vite chunk > 500 kB).
+- **Дальше:** Phase 5 — privileged corrections (`05-01`, `05-02`).
+
 ## Сессия 2026-05-20 (@end-session)
 
 - **Хранение в заказе:** ответственный — select из `MOCK_USERS`, дефолт `currentUser.id`, отображение ФИО в UI; поля в 4 строках (`renderStorageDataGrid`, `ORDER_FIELD_SM_*` / `ORDER_FIELD_MD_WRAP`); убрана **Фактическая температура** из дефолтов и deprecated-миграции (`productionData.ts`, `ProductionContext.tsx` — `normalizeOrderSettingsSnapshot`).
