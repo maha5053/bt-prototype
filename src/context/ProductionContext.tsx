@@ -39,6 +39,11 @@ import {
   resolveQualityControlStageForV2Runtime,
 } from "../lib/productionSystemStages";
 import { isReleaseTechProcessApproved } from "../lib/productionReleaseAct";
+import {
+  findNextWorkflowStageIndex,
+  isQualityControlStageType,
+  normalizeOrdersWorkflowCurrentStage,
+} from "../lib/productionQualityControl";
 import { PRODUCTION_STORAGE_KEY } from "../lib/productionStorageKey";
 
 const PO_ORDER_ID_RE = /^po-?(\d+)$/i;
@@ -61,13 +66,15 @@ function normalizeOrderId(id: string): string {
 }
 
 function normalizeOrdersSnapshots(orders: ProductionOrder[]): ProductionOrder[] {
-  return orders.map((order) => {
-    if (!order.settingsSnapshot) return order;
-    return {
-      ...order,
-      settingsSnapshot: normalizeOrderSettingsSnapshot(order.settingsSnapshot),
-    };
-  });
+  return normalizeOrdersWorkflowCurrentStage(
+    orders.map((order) => {
+      if (!order.settingsSnapshot) return order;
+      return {
+        ...order,
+        settingsSnapshot: normalizeOrderSettingsSnapshot(order.settingsSnapshot),
+      };
+    }),
+  );
 }
 
 function normalizeOrdersIds(orders: ProductionOrder[]): ProductionOrder[] {
@@ -732,10 +739,13 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
     setState((prev) => {
       const nextOrders = prev.orders.map((o) => {
         if (o.id !== orderId) return o;
-        if (o.status !== "in_progress") return o;
+        if (o.status === "rejected") return o;
         const stage = o.stages[stageIndex];
         const step = stage?.steps[stepIndex];
         if (!stage || !step) return o;
+        if (o.status !== "in_progress" && !isQualityControlStageType(stage.type)) {
+          return o;
+        }
 
         const nextStages = [...o.stages];
         const nextSteps = [...stage.steps];
@@ -925,8 +935,11 @@ export function ProductionProvider({ children }: { children: ReactNode }) {
             completedBy: input.completedBy,
           };
 
-          const nextStageIndex = input.stageIndex + 1;
-          if (nextStages[nextStageIndex]) {
+          const nextStageIndex = findNextWorkflowStageIndex(
+            nextStages,
+            input.stageIndex,
+          );
+          if (nextStageIndex !== null && nextStages[nextStageIndex]) {
             nextStages[nextStageIndex] = {
               ...nextStages[nextStageIndex]!,
               status: "in_progress" as ExecutionStatus,
