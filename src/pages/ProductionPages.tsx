@@ -1974,9 +1974,19 @@ function ProductionOrderContent() {
         <div className="border-b border-slate-200 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="flex items-start gap-3">
+              <div
+                className={[
+                  "flex gap-3",
+                  orderMainTab === "quality_control"
+                    ? "items-center"
+                    : "items-start",
+                ].join(" ")}
+              >
                 <div
-                  className="mt-1 h-10 w-1 rounded-full bg-blue-200"
+                  className={[
+                    "h-10 w-1 shrink-0 rounded-full bg-blue-200",
+                    orderMainTab === "workflow" ? "mt-1" : "",
+                  ].join(" ")}
                   aria-hidden
                 />
                 <div className="min-w-0">
@@ -1991,11 +2001,12 @@ function ProductionOrderContent() {
                     </>
                   ) : (
                     <>
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        Независимый раздел
-                      </div>
-                      <div className="mt-0.5 text-lg font-semibold leading-snug tracking-tight text-slate-900">
+                      <div className="text-lg font-semibold leading-snug tracking-tight text-slate-900">
                         Контроль качества
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        Контроль качества не блокирует выпуск и завершение
+                        заказа.
                       </div>
                     </>
                   )}
@@ -2005,10 +2016,6 @@ function ProductionOrderContent() {
                 <div className="mt-1 text-xs text-slate-500">
                   Завершил: {viewedStepCompletion.by} ·{" "}
                   {formatRuDateTime(viewedStepCompletion.at)}
-                </div>
-              ) : orderMainTab === "quality_control" ? (
-                <div className="mt-1 text-xs text-slate-500">
-                  Контроль качества не блокирует выпуск и завершение заказа.
                 </div>
               ) : null}
             </div>
