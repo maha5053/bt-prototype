@@ -51,11 +51,11 @@
 
 ### Quality Control
 
-- [ ] **QC-01**: Quality control appears as a separate tab or panel in the order card, independent from the main stage line.
-- [ ] **QC-02**: User can fill QC before release, after release, or after order completion.
-- [ ] **QC-03**: User can complete release/order even when QC is not filled.
-- [ ] **QC-04**: QC deviations do not change the order status.
-- [ ] **QC-05**: Order UI shows a separate QC deviation badge when QC contains deviations.
+- [x] **QC-01**: Quality control appears as a separate tab or panel in the order card, independent from the main stage line.
+- [x] **QC-02**: User can fill QC before release, after release, or after order completion.
+- [x] **QC-03**: User can complete release/order even when QC is not filled.
+- [x] **QC-04**: QC deviations do not change the order status.
+- [x] **QC-05**: Order UI shows a separate QC deviation badge when QC contains deviations.
 
 ### Permissions and Audit
 
@@ -124,11 +124,11 @@
 | RUN-07 | Phase 3 | Complete |
 | ACT-01 | Phase 3 | Complete |
 | ACT-02 | Phase 3 | Complete |
-| QC-01 | Phase 4 | Pending |
-| QC-02 | Phase 4 | Pending |
-| QC-03 | Phase 4 | Pending |
-| QC-04 | Phase 4 | Pending |
-| QC-05 | Phase 4 | Pending |
+| QC-01 | Phase 4 | Complete |
+| QC-02 | Phase 4 | Complete |
+| QC-03 | Phase 4 | Complete |
+| QC-04 | Phase 4 | Complete |
+| QC-05 | Phase 4 | Complete |
 | PERM-01 | Phase 5 | Pending |
 | PERM-02 | Phase 5 | Pending |
 | PERM-03 | Phase 5 | Pending |

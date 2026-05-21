@@ -2,31 +2,31 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: phase-4-next
-last_updated: "2026-05-20T18:00:00.000Z"
+status: phase-5-next
+last_updated: "2026-05-21T12:00:00.000Z"
 progress:
   total_phases: 5
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 16
-  completed_plans: 10
-  percent: 63
+  completed_plans: 13
+  percent: 81
 ---
 
 # Project State
 
-**Last Updated:** 2026-05-20
+**Last Updated:** 2026-05-21
 
 ## Project Reference
 
 See: `.planning/PROJECT.md` (updated 2026-05-15)
 
 **Core value:** Users can create and manage a production order from a configured product while the order captures the right material-specific registration, control, storage, production, and QC data without hard-coded process assumptions.
-**Current focus:** Phase 4: Independent Quality Control
+**Current focus:** Phase 5: Privileged Corrections and Audit
 
 ## Current Milestone
 
 **Name:** Customer feedback: configurable order creation and product settings
-**Status:** Phase 3 complete; Phase 4 not started
+**Status:** Phase 4 complete; Phase 5 not started
 **Roadmap:** `.planning/ROADMAP.md`
 **Requirements:** `.planning/REQUIREMENTS.md`
 **Codebase map:** `.planning/codebase/`
@@ -39,10 +39,12 @@ See: `.planning/PROJECT.md` (updated 2026-05-15)
 
 **Phase 3** — Product Process Settings (2026-05-20). Context: `.planning/phases/03-product-process-settings/03-CONTEXT.md`; summaries: `03-01`…`03-04-SUMMARY.md`.
 
+**Phase 4** — Independent Quality Control (2026-05-21). QC tab/panel outside workflow stepper; release/order completion skips QC gate; QC editable after order completion; QC deviation badge (`src/lib/productionQualityControl.ts`, `ProductionContext.tsx`, `ProductionPages.tsx`).
+
 Next recommended GSD step:
 
 ```text
-$gsd-plan-phase 4
+$gsd-plan-phase 5
 ```
 
 ## Decisions to Preserve

@@ -13,7 +13,7 @@ This milestone turns the existing order/product prototype into a configurable or
 - [x] **Phase 1: Product and Material Settings Foundation** - Add stable data model, admin navigation, sample ID sequencing, and snapshot rules.
 - [x] **Phase 2: Material-Driven Registration** - Move collection and incoming control fields into material type settings and order creation.
 - [x] **Phase 3: Product Process Settings** - Add storage and registration material balance settings, defaults, and optional action inputs.
-- [ ] **Phase 4: Independent Quality Control** - Split QC from the main order stage line and allow QC at any time.
+- [x] **Phase 4: Independent Quality Control** - Split QC from the main order stage line and allow QC at any time.
 - [ ] **Phase 5: Privileged Corrections and Audit** - Add correction group/permission and post-completion edit logging.
 
 ## Phase Details
@@ -79,9 +79,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 04-01: Refactor order UI to separate QC from the main stage line.
-- [ ] 04-02: Relax release/completion dependencies on QC.
-- [ ] 04-03: Add QC deviation badge and post-release QC editing behavior.
+- [x] 04-01: Refactor order UI to separate QC from the main stage line.
+- [x] 04-02: Relax release/completion dependencies on QC.
+- [x] 04-03: Add QC deviation badge and post-release QC editing behavior.
 
 ### Phase 5: Privileged Corrections and Audit
 **Goal**: Allow selected users to correct any order stage data, including completed stages, while logging those edits.
@@ -109,5 +109,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 1. Product and Material Settings Foundation | 3/3 | Complete | 2026-05-15 |
 | 2. Material-Driven Registration | 3/3 | Complete | 2026-05-20 |
 | 3. Product Process Settings | 4/4 | Complete | 2026-05-20 |
-| 4. Independent Quality Control | 0/3 | Not started | - |
+| 4. Independent Quality Control | 3/3 | Complete | 2026-05-21 |
 | 5. Privileged Corrections and Audit | 0/3 | Not started | - |
