@@ -49,6 +49,16 @@ import {
   isReleaseTechProcessApproved,
   type ReleaseIssueConfirmSummary,
 } from "../lib/productionReleaseAct";
+import {
+  countWorkflowStages,
+  findQualityControlStageIndex,
+  isQualityControlStageType,
+  isWorkflowStageType,
+  orderHasQualityControlDeviations,
+  qcValueOutOfRange,
+  resolveWorkflowCurrentStageIndex,
+  workflowStageOrdinal,
+} from "../lib/productionQualityControl";
 
 const REJECTION_PHASE_OPTIONS = Object.entries(
   PRODUCTION_REJECTION_PHASE_LABELS,
@@ -412,6 +422,19 @@ const PRODUCTION_LIST_PAGE_SIZE = 15;
 /** Убирает ведущую нумерацию вида «1. » из подписи этапа (пиллы и заголовок). */
 function formatStageLabel(label: string): string {
   return label.replace(/^\d+\.\s*/, "");
+}
+
+type OrderMainPanelTab = "workflow" | "quality_control";
+
+function QcDeviationBadge({ title }: { title?: string }) {
+  return (
+    <span
+      className="inline-flex shrink-0 items-center rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-900 ring-1 ring-inset ring-red-600/20"
+      title={title ?? "В контроле качества есть отклонения"}
+    >
+      Отклонения КК
+    </span>
+  );
 }
 
 /** Ведущий номер из названия шага вида «1. …» для подписей «Действие 1.n». */
@@ -1001,12 +1024,22 @@ function ProductionListContent() {
               ) : (
                 shown.map((order) => {
                   const showCurrentStageColumn = order.status === "in_progress";
-                  const rawStage =
-                    order.stages[order.currentStageIndex]?.name ?? "—";
+                  const workflowIdx = resolveWorkflowCurrentStageIndex(order);
+                  const rawStage = order.stages[workflowIdx]?.name ?? "—";
                   const currentStage =
                     rawStage === "—" ? "—" : formatStageLabel(rawStage);
-                  const currentStageType =
-                    order.stages[order.currentStageIndex]?.type ?? null;
+                  const currentStageType = order.stages[workflowIdx]?.type ?? null;
+                  const orderTemplate =
+                    templates.find((t) => t.id === order.templateId) ?? null;
+                  const qcListIdx = findQualityControlStageIndex(order.stages);
+                  const qcListFields =
+                    qcListIdx >= 0
+                      ? orderTemplate?.stages[qcListIdx]?.steps[0]?.fields
+                      : undefined;
+                  const qcListDeviations = orderHasQualityControlDeviations(
+                    order,
+                    qcListFields,
+                  );
                   const deleteEnabled =
                     order.status === "in_progress" &&
                     currentStageType === "registration";
@@ -1117,7 +1150,10 @@ function ProductionListContent() {
                         {caseNumber || "—"}
                       </td>
                       <td className="px-4 py-3">
-                        <StatusBadge status={order.status} />
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusBadge status={order.status} />
+                          {qcListDeviations ? <QcDeviationBadge /> : null}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {showCurrentStageColumn ? currentStage : ""}
@@ -1380,6 +1416,8 @@ function ProductionOrderContent() {
   const order = normalizedOrderId ? getOrderById(normalizedOrderId) : null;
   const [activeStageIndex, setActiveStageIndex] = useState<number | null>(null);
   const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
+  const [orderMainTab, setOrderMainTab] =
+    useState<OrderMainPanelTab>("workflow");
   const [showReject, setShowReject] = useState(false);
   const [rejectTypicalReason, setRejectTypicalReason] = useState("");
   const [rejectReason, setRejectReason] = useState("");
@@ -1436,11 +1474,10 @@ function ProductionOrderContent() {
     return () => document.removeEventListener("keydown", onKey);
   }, [showReject, requestCloseRejectModal]);
 
-  const effectiveActiveStageIndex =
-    activeStageIndex ?? (order ? order.currentStageIndex : 0);
-
   useEffect(() => {
     setLastSavedAt(null);
+    setOrderMainTab("workflow");
+    setActiveStageIndex(null);
   }, [orderId]);
 
   const patchUpdateFieldValue = useCallback(
@@ -1469,6 +1506,37 @@ function ProductionOrderContent() {
   const template: ProcessTemplate | null =
     templates.find((t) => t.id === order.templateId) ?? null;
 
+  const workflowCurrentStageIndex = resolveWorkflowCurrentStageIndex(order);
+  const effectiveActiveStageIndex =
+    activeStageIndex ?? workflowCurrentStageIndex;
+
+  const qcStageIndex = findQualityControlStageIndex(order.stages);
+  const qcStageTemplate =
+    qcStageIndex >= 0 ? (template?.stages[qcStageIndex] ?? null) : null;
+  const qcStageExecution =
+    qcStageIndex >= 0 ? (order.stages[qcStageIndex] ?? null) : null;
+  const hasQcDeviations = orderHasQualityControlDeviations(
+    order,
+    qcStageTemplate?.steps[0]?.fields,
+  );
+  const qcViewAllowed = canViewStage(permissions, "quality_control");
+  const canEditQc =
+    order.status !== "rejected" &&
+    canEditStageByPerm(permissions, "quality_control");
+
+  useEffect(() => {
+    if (orderMainTab !== "workflow") return;
+    const stage = order.stages[effectiveActiveStageIndex];
+    if (stage && isQualityControlStageType(stage.type)) {
+      setActiveStageIndex(workflowCurrentStageIndex);
+    }
+  }, [
+    order.stages,
+    orderMainTab,
+    effectiveActiveStageIndex,
+    workflowCurrentStageIndex,
+  ]);
+
   const stageTemplate: StageTemplate | null =
     template?.stages[effectiveActiveStageIndex] ?? null;
 
@@ -1476,10 +1544,10 @@ function ProductionOrderContent() {
   const stageTitle = formatStageLabel(
     stageTemplate?.name ?? stageExecution?.name ?? "Этап",
   );
-  const stageCount = template?.stages.length ?? order.stages.length;
-  const stageOrdinal = Math.min(
-    Math.max(1, effectiveActiveStageIndex + 1),
-    Math.max(1, stageCount),
+  const stageCount = countWorkflowStages(order.stages);
+  const stageOrdinal = workflowStageOrdinal(
+    order.stages,
+    effectiveActiveStageIndex,
   );
 
   const isOrderReadonly = order.status !== "in_progress";
@@ -1491,7 +1559,7 @@ function ProductionOrderContent() {
     : false;
   const canEditStage =
     !isOrderReadonly &&
-    effectiveActiveStageIndex === order.currentStageIndex &&
+    effectiveActiveStageIndex === workflowCurrentStageIndex &&
     stageEditAllowed;
 
   const incomingQcHasNegative = useMemo(() => {
@@ -1561,7 +1629,7 @@ function ProductionOrderContent() {
   const canApproveReleaseTechProcess =
     permissions.approval === "write" &&
     order.status === "in_progress" &&
-    effectiveActiveStageIndex === order.currentStageIndex &&
+    effectiveActiveStageIndex === workflowCurrentStageIndex &&
     stageTemplate?.type === "release" &&
     stageExecution?.status !== "completed" &&
     Boolean(releaseStepForAction) &&
@@ -1619,7 +1687,7 @@ function ProductionOrderContent() {
   const releasePrintHref = `${import.meta.env.BASE_URL}proizvodstvo/${encodeURIComponent(order.id)}/print`;
   const printActEnabled =
     order.status !== "rejected" && isReleaseStageCompleted(order);
-  const currentWorkflowStage = order.stages[order.currentStageIndex];
+  const currentWorkflowStage = order.stages[workflowCurrentStageIndex];
   const canRejectByCurrentStagePermission = Boolean(
     currentWorkflowStage &&
       canEditStageByPerm(permissions, currentWorkflowStage.type),
@@ -1692,6 +1760,7 @@ function ProductionOrderContent() {
                 >
                   {formatOrderStatus(order.status)}
                 </span>
+                {hasQcDeviations ? <QcDeviationBadge /> : null}
                 {canEditStage && lastSavedAt ? (
                   <span
                     className="inline-flex shrink-0 items-center rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-900 ring-1 ring-emerald-600/20"
@@ -1846,17 +1915,60 @@ function ProductionOrderContent() {
         </div>
       ) : null}
 
-      <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <StageStepper
-          order={order}
-          template={template}
-          activeStageIndex={effectiveActiveStageIndex}
-          onSelectStage={(idx) => {
-            setActiveStageIndex(idx);
-            setActiveStepIndex(0);
-          }}
-        />
-      </div>
+      {qcStageIndex >= 0 ? (
+        <div
+          className="mb-4 flex flex-wrap gap-2 border-b border-slate-200"
+          role="tablist"
+          aria-label="Разделы карточки заказа"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={orderMainTab === "workflow"}
+            onClick={() => setOrderMainTab("workflow")}
+            className={[
+              "-mb-px rounded-t-lg border px-4 py-2.5 text-sm font-medium transition",
+              orderMainTab === "workflow"
+                ? "border-slate-200 border-b-white bg-white text-slate-900"
+                : "border-transparent text-slate-600 hover:text-slate-900",
+            ].join(" ")}
+          >
+            Этапы
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={orderMainTab === "quality_control"}
+            onClick={() => setOrderMainTab("quality_control")}
+            className={[
+              "-mb-px inline-flex items-center gap-2 rounded-t-lg border px-4 py-2.5 text-sm font-medium transition",
+              orderMainTab === "quality_control"
+                ? "border-slate-200 border-b-white bg-white text-slate-900"
+                : "border-transparent text-slate-600 hover:text-slate-900",
+            ].join(" ")}
+          >
+            <span>Контроль качества</span>
+            {hasQcDeviations ? (
+              <span className="inline-flex size-2 rounded-full bg-red-500 ring-2 ring-red-100" aria-hidden />
+            ) : null}
+          </button>
+        </div>
+      ) : null}
+
+      {orderMainTab === "workflow" ? (
+        <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <StageStepper
+            order={order}
+            template={template}
+            activeStageIndex={effectiveActiveStageIndex}
+            onSelectStage={(idx) => {
+              setOrderMainTab("workflow");
+              setActiveStageIndex(idx);
+              setActiveStepIndex(0);
+            }}
+          />
+        </div>
+      ) : null}
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 p-4">
@@ -1868,25 +1980,73 @@ function ProductionOrderContent() {
                   aria-hidden
                 />
                 <div className="min-w-0">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                    Этап {stageOrdinal} из {stageCount}
-                  </div>
-                  <div className="mt-0.5 text-lg font-semibold leading-snug tracking-tight text-slate-900">
-                    {stageTitle}
-                  </div>
+                  {orderMainTab === "workflow" ? (
+                    <>
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Этап {stageOrdinal} из {stageCount}
+                      </div>
+                      <div className="mt-0.5 text-lg font-semibold leading-snug tracking-tight text-slate-900">
+                        {stageTitle}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        Независимый раздел
+                      </div>
+                      <div className="mt-0.5 text-lg font-semibold leading-snug tracking-tight text-slate-900">
+                        Контроль качества
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
-              {viewedStepCompletion ? (
+              {orderMainTab === "workflow" && viewedStepCompletion ? (
                 <div className="mt-1 text-xs text-slate-500">
                   Завершил: {viewedStepCompletion.by} ·{" "}
                   {formatRuDateTime(viewedStepCompletion.at)}
+                </div>
+              ) : orderMainTab === "quality_control" ? (
+                <div className="mt-1 text-xs text-slate-500">
+                  Контроль качества не блокирует выпуск и завершение заказа.
                 </div>
               ) : null}
             </div>
           </div>
         </div>
 
-        {stageTemplate && stageExecution ? (
+        {orderMainTab === "quality_control" && qcStageIndex >= 0 ? (
+          <div className="p-4">
+            {!qcViewAllowed ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                <div className="font-semibold text-slate-900">Нет доступа</div>
+                <p className="mt-1 text-slate-600">
+                  У вашей группы нет прав на просмотр контроля качества.
+                </p>
+              </div>
+            ) : qcStageTemplate && qcStageExecution ? (
+              <QualityControlStage
+                stageTemplate={qcStageTemplate}
+                stageExecution={qcStageExecution}
+                canEdit={canEditQc}
+                onChangeField={(stepIndex, fieldId, value) =>
+                  patchUpdateFieldValue({
+                    orderId: order.id,
+                    stageIndex: qcStageIndex,
+                    stepIndex,
+                    fieldId,
+                    value,
+                    updatedBy: auditUserId,
+                  })
+                }
+              />
+            ) : (
+              <div className="text-sm text-slate-500">
+                Нет данных контроля качества для этого заказа.
+              </div>
+            )}
+          </div>
+        ) : stageTemplate && stageExecution ? (
           <div className="p-4">
             {!stageViewAllowed ? (
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
@@ -1895,38 +2055,6 @@ function ProductionOrderContent() {
                   У вашей группы нет прав на просмотр этого этапа.
                 </p>
               </div>
-            ) : stageTemplate.type === "quality_control" ? (
-              <QualityControlStage
-                stageTemplate={stageTemplate}
-                stageExecution={stageExecution}
-                canEdit={canEditStage}
-                onChangeField={(stepIndex, fieldId, value) =>
-                  patchUpdateFieldValue({
-                    orderId: order.id,
-                    stageIndex: effectiveActiveStageIndex,
-                    stepIndex,
-                    fieldId,
-                    value,
-                    updatedBy: auditUserId,
-                  })
-                }
-                onConfirm={() => {
-                  if (!canEditStage) return;
-                  const stepIndex = 0;
-                  completeStep({
-                    orderId: order.id,
-                    stageIndex: effectiveActiveStageIndex,
-                    stepIndex,
-                    completedBy: auditUserId,
-                  });
-                  completeStage({
-                    orderId: order.id,
-                    stageIndex: effectiveActiveStageIndex,
-                    completedBy: auditUserId,
-                  });
-                  scrollProductionOrderMainToTop();
-                }}
-              />
             ) : (
               <StepsStage
                 order={order}
@@ -1997,11 +2125,11 @@ function ProductionOrderContent() {
               />
             )}
           </div>
-        ) : (
+        ) : orderMainTab === "workflow" ? (
           <div className="p-4 text-sm text-slate-500">
             Не найден шаблон этапа для этого заказа.
           </div>
-        )}
+        ) : null}
       </div>
 
       {showReject && (
@@ -2742,9 +2870,9 @@ function StageStepper({
   activeStageIndex: number;
   onSelectStage: (idx: number) => void;
 }) {
-  const stageCount = order.stages.length;
-
-  const lastIdx = stageCount - 1;
+  const workflowStages = order.stages
+    .map((st, idx) => ({ st, idx }))
+    .filter(({ st }) => isWorkflowStageType(st.type));
 
   return (
     <nav
@@ -2752,15 +2880,16 @@ function StageStepper({
       className="w-full max-w-full overflow-x-visible overflow-y-visible"
     >
       <ol className="flex list-none flex-wrap items-stretch justify-stretch gap-y-3 overflow-visible p-0 sm:flex-nowrap">
-        {order.stages.map((st, idx) => {
+        {workflowStages.map(({ st, idx }, workflowPos) => {
           const tplName = template?.stages[idx]?.name;
           const name = formatStageLabel(
-            tplName ?? st.name ?? `Этап ${idx + 1}`,
+            tplName ?? st.name ?? `Этап ${workflowPos + 1}`,
           );
           const isActive = idx === activeStageIndex;
           const visual = getStageDotVisual(order, st, idx);
           const prevDone =
-            idx > 0 && order.stages[idx - 1]?.status === "completed";
+            workflowPos > 0 &&
+            workflowStages[workflowPos - 1]!.st.status === "completed";
           const segmentAfterDone = st.status === "completed";
           const { text: statusText, pillClass: statusPillClass } =
             getStageStepperColumnStatus(order, st, idx);
@@ -2799,10 +2928,10 @@ function StageStepper({
                     className={stageDotClass(visual, isActive)}
                     aria-hidden
                   >
-                    {idx + 1}
+                    {workflowPos + 1}
                   </span>
                   <div className="flex min-h-0 min-w-0 flex-1 items-center justify-start overflow-visible">
-                    {idx < lastIdx ? (
+                    {workflowPos < workflowStages.length - 1 ? (
                       <div
                         className={[
                           "h-1 min-w-2 shrink-0 rounded-none",
@@ -2835,7 +2964,7 @@ function StageStepper({
                   </span>
                 </div>
                 <span className="sr-only">
-                  {`Этап ${idx + 1} из ${stageCount}: ${name}, ${statusText}`}
+                  {`Этап ${workflowPos + 1} из ${workflowStages.length}: ${name}, ${statusText}`}
                 </span>
               </button>
             </li>
@@ -3597,87 +3726,25 @@ function formatQcReferenceCell(range: FieldReferenceRange | undefined): string {
   return "—";
 }
 
-function qcValueOutOfRange(
-  value: FieldValue,
-  range: FieldReferenceRange | undefined,
-): boolean {
-  if (!range) return false;
-  if (typeof value !== "number" || Number.isNaN(value)) return false;
-  if (range.min !== undefined && value < range.min) return true;
-  if (range.max !== undefined && value > range.max) return true;
-  return false;
-}
-
 function QualityControlStage({
   stageTemplate,
   stageExecution,
   canEdit,
   onChangeField,
-  onConfirm,
 }: {
   stageTemplate: StageTemplate;
   stageExecution: ProductionOrder["stages"][number];
   canEdit: boolean;
   onChangeField: (stepIndex: number, fieldId: string, value: FieldValue) => void;
-  onConfirm: () => void;
 }) {
   const stepTemplate = stageTemplate.steps[0];
   const stepExecution = stageExecution.steps[0];
-  const [qcConfirmOpen, setQcConfirmOpen] = useState(false);
   const stepFields = useMemo(
     () => (stepTemplate ? ensureDeviationFields(stepTemplate.fields) : []),
     [stepTemplate],
   );
 
-  const editable = Boolean(
-    stepTemplate &&
-      stepExecution &&
-      canEdit &&
-      stepExecution.status !== "completed",
-  );
-
-  const deviationNotesRequired = (() => {
-    const raw = stepExecution?.fieldValues?.[DEVIATION_FLAG_FIELD_ID];
-    return raw === "Да" || raw === "да" || raw === true;
-  })();
-
-  const missingRequired =
-    stepTemplate && stepExecution
-      ? stepFields.filter((f) => {
-          const required =
-            Boolean(f.required) ||
-            (f.id === DEVIATION_NOTES_FIELD_ID && deviationNotesRequired);
-          if (!required) return false;
-          if (f.type === "section_header") return false;
-          const raw = stepExecution.fieldValues[f.id];
-          if (raw === null || raw === undefined) return true;
-          switch (f.type) {
-            case "text":
-            case "select":
-            case "date":
-              return typeof raw !== "string" || raw.trim().length === 0;
-            case "number":
-              return typeof raw !== "number" || Number.isNaN(raw) || raw < 0;
-            case "checkbox":
-              return raw !== true;
-            default:
-              return false;
-          }
-        })
-      : [];
-
-  const confirmDisabled = !editable || missingRequired.length > 0;
-  const confirmTitle =
-    missingRequired.length > 0
-      ? `Заполните обязательные поля: ${missingRequired
-          .slice(0, 3)
-          .map((f) => f.label)
-          .join(", ")}${missingRequired.length > 3 ? "…" : ""}`
-      : undefined;
-
-  useEffect(() => {
-    setQcConfirmOpen(false);
-  }, [confirmDisabled]);
+  const editable = Boolean(stepTemplate && stepExecution && canEdit);
 
   if (!stepTemplate || !stepExecution) {
     return <div className="text-sm text-slate-500">Нет данных этапа КК.</div>;
@@ -3699,6 +3766,11 @@ function QualityControlStage({
   const deviationNotesField =
     stepFields.find((f) => f.id === DEVIATION_NOTES_FIELD_ID) ?? null;
 
+  const deviationNotesRequired = (() => {
+    const raw = stepExecution.fieldValues[DEVIATION_FLAG_FIELD_ID];
+    return raw === "Да" || raw === "да" || raw === true;
+  })();
+
   const deviationSentiment = (() => {
     const raw = stepExecution.fieldValues[DEVIATION_FLAG_FIELD_ID];
     if (typeof raw !== "string") return undefined;
@@ -3712,8 +3784,10 @@ function QualityControlStage({
     <div>
       {editable ? (
         <div className="mb-3 text-sm text-slate-600">
-          Введите показатели и подтвердите результаты.
+          Показатели сохраняются автоматически. Раздел доступен до и после выпуска.
         </div>
+      ) : !canEdit ? (
+        <div className="mb-3 text-sm text-slate-500">Только просмотр.</div>
       ) : null}
 
       <div className="space-y-3">
@@ -3819,45 +3893,8 @@ function QualityControlStage({
             </NestedRailBlock>
           </CollapsibleSection>
         ) : null}
-
-        {editable ? (
-          <div className="mt-1 flex flex-col items-end gap-2">
-            {confirmDisabled && missingRequired.length > 0 ? (
-              <MissingRequiredFieldsHint fields={missingRequired} />
-            ) : null}
-            <button
-              type="button"
-              onClick={() => {
-                if (confirmDisabled) return;
-                setQcConfirmOpen(true);
-              }}
-              title={confirmTitle}
-              disabled={confirmDisabled}
-              className={[
-                "rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700",
-                confirmDisabled
-                  ? "cursor-not-allowed opacity-60"
-                  : "cursor-pointer",
-              ].join(" ")}
-            >
-              Подтвердить результаты
-            </button>
-          </div>
-        ) : null}
       </div>
     </div>
-    <IrreversibleConfirmModal
-      open={qcConfirmOpen}
-      title="Подтвердить результаты?"
-      description="Результаты контроля качества будут зафиксированы, этап завершён. Изменение показателей после этого будет недоступно."
-      confirmLabel="Да, подтвердить"
-      onCancel={() => setQcConfirmOpen(false)}
-      onConfirm={() => {
-        if (confirmDisabled) return;
-        onConfirm();
-        setQcConfirmOpen(false);
-      }}
-    />
     </>
   );
 }
