@@ -69,6 +69,8 @@ const DEVIATION_SECTION_HEADER_ID = "sec-dev";
 const DEVIATION_FLAG_FIELD_ID = "devFlag";
 const DEVIATION_NOTES_FIELD_ID = "devNotes";
 const DEVIATION_SUMMARY_FIELD_ID = "devSummary";
+const STORAGE_ALIQUOT_COUNT_FIELD_ID = "__storageAliquotCount";
+const STORAGE_ALIQUOT_CONTROL_FIELD_ID = "__storageAliquotControl";
 const REGISTRATION_COLLECTION_SECTION_ID = "sec-blood";
 const REGISTRATION_INCOMING_QC_SECTION_ID = "sec-qc";
 
@@ -265,7 +267,6 @@ function storageSettingsDefaultValues(
 ): Record<string, FieldValue> {
   const map: Record<string, FieldValue> = {};
   if (!storage?.enabled) return map;
-  const count = storageAliquotCount(storage);
   const assignDefault = (fieldId: string, field: ConfigurableMaterialField) => {
     if (field.id === "storageStart") {
       map[fieldId] = todayDateOnly();
@@ -281,30 +282,32 @@ function storageSettingsDefaultValues(
     map[fieldId] = value;
   };
   for (const field of storage.fields) {
-    if (count > 1) {
-      for (let idx = 1; idx <= count; idx += 1) {
-        assignDefault(storageAliquotFieldId(field.id, idx), field);
-      }
-    } else {
-      assignDefault(field.id, field);
-    }
+    assignDefault(field.id, field);
   }
   return map;
 }
 
-function storageAliquotCount(
-  storage: ProductStorageSettings | null | undefined,
+function storageAliquotCountFromValues(
+  values: Record<string, FieldValue> | undefined,
 ): number {
-  if (!storage?.enabled) return 1;
-  return typeof storage.aliquotCount === "number" &&
-    Number.isFinite(storage.aliquotCount) &&
-    storage.aliquotCount > 0
-    ? Math.max(1, Math.floor(storage.aliquotCount))
-    : 1;
+  const raw = values?.[STORAGE_ALIQUOT_COUNT_FIELD_ID];
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return Math.max(0, Math.floor(raw));
+  }
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : 0;
+  }
+  return 0;
 }
 
 function storageAliquotFieldId(fieldId: string, aliquotNumber: number): string {
   return `${fieldId}__aliquot_${aliquotNumber}`;
+}
+
+function storageBaseFieldIdFromAliquotId(fieldId: string): string | null {
+  const match = fieldId.match(/^(.*)__aliquot_\d+$/);
+  return match?.[1] ?? null;
 }
 
 function storageAliquotNoteFieldId(aliquotNumber: number): string {
@@ -324,11 +327,19 @@ function makeStorageAliquotNoteField(aliquotNumber: number): FieldDefinition {
 
 function expandStorageFieldsForAliquots(
   storage: ProductStorageSettings,
+  aliquotCount: number,
 ): FieldDefinition[] {
   const baseFields = storage.fields.map(mapMaterialFieldToRuntimeFieldDefinition);
-  const count = storageAliquotCount(storage);
+  const count = Math.max(0, Math.floor(aliquotCount));
 
-  const fields: FieldDefinition[] = [];
+  const fields: FieldDefinition[] = [
+    {
+      id: STORAGE_ALIQUOT_CONTROL_FIELD_ID,
+      label: "Аликвоты",
+      type: "text",
+      required: false,
+    },
+  ];
   for (let idx = 1; idx <= count; idx += 1) {
     for (const field of baseFields) {
       fields.push({
@@ -380,6 +391,11 @@ function fieldValueWithStageDefaults(input: {
   if (stageType === "storage") {
     const fallback = storageDefaults[field.id];
     if (fallback !== undefined) return fallback;
+    const baseFieldId = storageBaseFieldIdFromAliquotId(field.id);
+    if (baseFieldId) {
+      const baseFallback = storageDefaults[baseFieldId];
+      if (baseFallback !== undefined) return baseFallback;
+    }
   }
   return rawFromExecution;
 }
@@ -2805,11 +2821,15 @@ function CollapsibleSection({
 function AliquotStorageBlock({
   title,
   complete,
+  canDelete,
+  onDelete,
   defaultOpen,
   children,
 }: {
   title: string;
   complete: boolean;
+  canDelete: boolean;
+  onDelete: () => void;
   defaultOpen: boolean;
   children: React.ReactNode;
 }) {
@@ -2852,23 +2872,46 @@ function AliquotStorageBlock({
             {title}
           </span>
         </span>
-        {complete ? (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-300">
-            <svg
-              className="size-3.5"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              aria-hidden
+        <span className="flex shrink-0 items-center gap-2">
+          {complete ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-300">
+              <svg
+                className="size-3.5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M16.704 5.29a1 1 0 010 1.42l-7.25 7.25a1 1 0 01-1.415 0L3.296 9.21a1 1 0 111.415-1.415l4.036 4.036 6.543-6.543a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              Заполнено
+            </span>
+          ) : null}
+          {canDelete ? (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="inline-flex items-center rounded-md border border-red-200 bg-white px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+              title="Удалить аликвоту"
+              aria-label={`Удалить ${title}`}
             >
-              <path
-                fillRule="evenodd"
-                d="M16.704 5.29a1 1 0 010 1.42l-7.25 7.25a1 1 0 01-1.415 0L3.296 9.21a1 1 0 111.415-1.415l4.036 4.036 6.543-6.543a1 1 0 011.414 0z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Заполнено
-          </span>
-        ) : null}
+              Удалить
+            </span>
+          ) : null}
+        </span>
       </button>
       <div
         id={contentId}
@@ -3425,7 +3468,10 @@ function StepsStage({
     if (stageTemplate.type === "storage") {
       const storage = order.settingsSnapshot?.storage;
       if (!storage?.enabled) return ensureDeviationFields(activeStepTpl.fields);
-      const storageFields = expandStorageFieldsForAliquots(storage);
+      const storageFields = expandStorageFieldsForAliquots(
+        storage,
+        storageAliquotCountFromValues(activeStepExec?.fieldValues),
+      );
       return ensureDeviationFields(storageFields);
     }
     if (
@@ -3444,7 +3490,7 @@ function StepsStage({
       );
     }
     return activeStepTpl.fields;
-  }, [activeStepTpl, order.settingsSnapshot, stageTemplate.type]);
+  }, [activeStepExec?.fieldValues, activeStepTpl, order.settingsSnapshot, stageTemplate.type]);
 
   const missingRequiredActions = (() => {
     if (stageTemplate.type !== "production") return false;
@@ -4748,24 +4794,58 @@ function FormFields({
 
           const renderStorageDataGrid = () => {
             const storage = order.settingsSnapshot?.storage;
-            const aliquotCount = storageAliquotCount(storage);
+            const aliquotCount = storageAliquotCountFromValues(stepExecution.fieldValues);
             const fieldsByAliquot: FieldDefinition[][] =
-              aliquotCount > 1
-                ? Array.from({ length: aliquotCount }, (_, idx) => {
-                    const suffix = `__aliquot_${idx + 1}`;
-                    return g.fields.filter((f) => f.id.endsWith(suffix));
-                  })
-                : [g.fields];
+              Array.from({ length: aliquotCount }, (_, idx) => {
+                const suffix = `__aliquot_${idx + 1}`;
+                return g.fields.filter((f) => f.id.endsWith(suffix));
+              });
 
             const fieldCellClassName = (field: FieldDefinition) =>
               field.multiline ? "md:col-span-12" : "md:col-span-4";
 
+            const addAliquot = () => {
+              onChange(STORAGE_ALIQUOT_COUNT_FIELD_ID, aliquotCount + 1);
+            };
+
+            const clearAliquotValues = (aliquotNumber: number) => {
+              if (!storage) return;
+              for (const field of storage.fields) {
+                onChange(storageAliquotFieldId(field.id, aliquotNumber), null);
+              }
+              onChange(storageAliquotNoteFieldId(aliquotNumber), null);
+            };
+
+            const deleteAliquot = (aliquotNumber: number) => {
+              if (!storage || aliquotCount <= 0) return;
+              for (let idx = aliquotNumber; idx < aliquotCount; idx += 1) {
+                for (const field of storage.fields) {
+                  const targetId = storageAliquotFieldId(field.id, idx);
+                  const sourceId = storageAliquotFieldId(field.id, idx + 1);
+                  onChange(targetId, stepExecution.fieldValues[sourceId] ?? null);
+                }
+                onChange(
+                  storageAliquotNoteFieldId(idx),
+                  stepExecution.fieldValues[storageAliquotNoteFieldId(idx + 1)] ?? null,
+                );
+              }
+              clearAliquotValues(aliquotCount);
+              onChange(STORAGE_ALIQUOT_COUNT_FIELD_ID, aliquotCount - 1);
+            };
+
             return (
               <div className="space-y-4">
+                {aliquotCount === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-600">
+                    Аликвоты пока не добавлены.
+                  </div>
+                ) : null}
                 {fieldsByAliquot.map((aliquotFields, idx) => (
                   <AliquotStorageBlock
                     key={idx}
                     title={`Аликвота ${idx + 1}`}
+                    canDelete={canEdit}
+                    onDelete={() => deleteAliquot(idx + 1)}
                     complete={aliquotFields
                       .filter((field) => isFieldRequired(field))
                       .every((field) =>
@@ -4788,6 +4868,16 @@ function FormFields({
                     )}
                   </AliquotStorageBlock>
                 ))}
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={addAliquot}
+                    disabled={!canEdit}
+                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    Добавить аликвоту
+                  </button>
+                </div>
               </div>
             );
           };
