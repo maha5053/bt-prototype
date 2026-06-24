@@ -22,55 +22,41 @@ export interface ProductStorageSettings {
 
 export const DEFAULT_STORAGE_STAGE_FIELDS: ConfigurableMaterialField[] = [
   {
-    id: "storageCondition",
-    label: "Условие хранения",
-    type: "select",
-    required: true,
-    options: [
-      "Комнатная температура",
-      "2–8 °C",
-      "≤ −20 °C",
-      "≤ −70 °C",
-      "LN2 / паровая фаза",
-      "Другое",
-    ],
-    defaultValue: "2–8 °C",
-  },
-  {
     id: "storageLocation",
     label: "Место хранения",
-    type: "select",
+    type: "catalog",
     required: true,
-    options: getStoragePlaceCatalogOptions(),
     defaultValue: null,
+    catalogCode: "storagePlaces",
+  },
+  {
+    id: "storageTemperature",
+    label: "Температурный режим",
+    type: "catalog",
+    required: true,
+    defaultValue: null,
+    catalogCode: "temperatureRegime",
+  },
+  {
+    id: "storageResponsible",
+    label: "Ответственный",
+    type: "catalog",
+    required: true,
+    defaultValue: null,
+    catalogCode: "users",
   },
   {
     id: "storageStart",
-    label: "Дата начала хранения",
+    label: "Начало хранения",
     type: "date",
     required: true,
     defaultValue: null,
   },
   {
     id: "storageEnd",
-    label: "Дата окончания хранения",
+    label: "Дата выдачи",
     type: "date",
-    required: false,
-    defaultValue: null,
-  },
-  {
-    id: "storageContainer",
-    label: "Контейнер хранения",
-    type: "text",
-    required: false,
-    defaultValue: "",
-  },
-  {
-    id: "storageResponsible",
-    label: "Ответственный",
-    type: "select",
-    required: false,
-    options: [...USERS],
+    required: true,
     defaultValue: null,
   },
 ];
@@ -78,7 +64,7 @@ export const DEFAULT_STORAGE_STAGE_FIELDS: ConfigurableMaterialField[] = [
 const DEPRECATED_STORAGE_FIELD_IDS = new Set([
   "storageDeviation",
   "storageDeviationNotes",
-  "storageTemperature",
+  "storageContainer",
 ]);
 
 export const DEFAULT_PRODUCT_STORAGE_SETTINGS: ProductStorageSettings = {
@@ -754,10 +740,15 @@ export function normalizeProductStorageSettings(
 ): ProductStorageSettings {
   const base = clone(DEFAULT_PRODUCT_STORAGE_SETTINGS);
   if (!input) return base;
+  const fieldIdAliases: Record<string, string> = {
+    storageCondition: "storageTemperature",
+    storageEndDate: "storageEnd",
+  };
   const deletedFieldIds = Array.isArray(input.deletedFieldIds)
     ? input.deletedFieldIds
         .filter((id): id is string => typeof id === "string")
         .map((id) => id.trim())
+        .map((id) => fieldIdAliases[id] ?? id)
         .filter((id) => id.length > 0 && !DEPRECATED_STORAGE_FIELD_IDS.has(id))
     : [];
   const deletedFieldIdSet = new Set(deletedFieldIds);
@@ -796,20 +787,25 @@ export function normalizeProductStorageSettings(
       const options = getStoragePlaceCatalogOptions();
       const storedDefault =
         typeof found.defaultValue === "string" ? found.defaultValue.trim() : "";
-      if (merged.type === "catalog") {
-        const catalogOptions = getConfigurableMaterialCatalogOptions(merged.catalogCode);
-        return {
-          ...merged,
-          options: undefined,
-          defaultValue:
-            storedDefault && catalogOptions.includes(storedDefault) ? storedDefault : null,
-          helpText: "",
-        };
-      }
       return {
         ...merged,
-        type: "select",
-        options,
+        type: "catalog",
+        catalogCode: "storagePlaces",
+        options: undefined,
+        defaultValue:
+          storedDefault && options.includes(storedDefault) ? storedDefault : null,
+        helpText: "",
+      };
+    }
+    if (baseField.id === "storageTemperature") {
+      const options = [...TEMPERATURE_REGIME_CATALOG_OPTIONS];
+      const storedDefault =
+        typeof found.defaultValue === "string" ? found.defaultValue.trim() : "";
+      return {
+        ...merged,
+        type: "catalog",
+        catalogCode: "temperatureRegime",
+        options: undefined,
         defaultValue:
           storedDefault && options.includes(storedDefault) ? storedDefault : null,
         helpText: "",
@@ -819,20 +815,11 @@ export function normalizeProductStorageSettings(
       const options = [...USERS];
       const storedDefault =
         typeof found.defaultValue === "string" ? found.defaultValue.trim() : "";
-      if (merged.type === "catalog") {
-        const catalogOptions = getConfigurableMaterialCatalogOptions(merged.catalogCode);
-        return {
-          ...merged,
-          options: undefined,
-          defaultValue:
-            storedDefault && catalogOptions.includes(storedDefault) ? storedDefault : null,
-          helpText: "",
-        };
-      }
       return {
         ...merged,
-        type: "select",
-        options,
+        type: "catalog",
+        catalogCode: "users",
+        options: undefined,
         defaultValue:
           storedDefault && options.includes(storedDefault) ? storedDefault : null,
         helpText: "",
@@ -880,7 +867,8 @@ export function normalizeProductStorageSettings(
   const seenFieldIds = new Set<string>();
   for (const field of input.fields ?? []) {
     if (typeof field.id !== "string" || !field.id.trim()) continue;
-    const id = field.id.trim();
+    const rawId = field.id.trim();
+    const id = fieldIdAliases[rawId] ?? rawId;
     if (DEPRECATED_STORAGE_FIELD_IDS.has(id) || deletedFieldIdSet.has(id)) continue;
     if (seenFieldIds.has(id)) continue;
     seenFieldIds.add(id);
