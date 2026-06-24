@@ -4851,7 +4851,7 @@ function FormFields({
                       .every((field) =>
                         isRequiredFieldValueFilled(field, resolveValue(field)),
                       )}
-                    defaultOpen={idx === 0}
+                    defaultOpen={idx === aliquotCount - 1}
                   >
                     {aliquotFields.length === 0 ? (
                       <div className="text-sm text-slate-500">
