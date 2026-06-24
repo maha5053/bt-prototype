@@ -82,7 +82,8 @@ export function getDefaultProductionPermissions(): ProductionPermissions {
 export function mergeUserPermissions(
   partial?: Partial<ProductionPermissions>,
 ): ProductionPermissions {
-  return { ...getDefaultProductionPermissions(), ...partial };
+  void partial;
+  return getDefaultProductionPermissions();
 }
 
 const LEGACY_USER_PERMISSIONS_STORAGE_KEY = "bio-user-permissions";
@@ -182,42 +183,23 @@ export function getDefaultUserGroupMembership(): UserGroupMembership {
 export function normalizeGroupPermissionMatrix(
   input: GroupPermissionMatrix,
 ): GroupPermissionMatrix {
-  const def = getDefaultGroupPermissionMatrix();
-  const out: GroupPermissionMatrix = { ...def };
-  for (const g of USER_GROUP_LABELS) {
-    const row = input?.[g.id];
-    if (!row || typeof row !== "object") continue;
-    out[g.id] = mergeUserPermissions(row);
-  }
-  return out;
+  void input;
+  return getDefaultGroupPermissionMatrix();
 }
 
 export function normalizeUserGroupMembership(
   input: UserGroupMembership,
 ): UserGroupMembership {
-  const def = getDefaultUserGroupMembership();
-  const valid = new Set(USER_GROUP_LABELS.map((g) => g.id));
-  const out: UserGroupMembership = { ...def };
-  for (const u of MOCK_USERS) {
-    const raw = input?.[u.id];
-    if (!Array.isArray(raw)) continue;
-    out[u.id] = raw.filter((x): x is UserGroupId => typeof x === "string" && valid.has(x as UserGroupId));
-  }
-  return out;
+  void input;
+  return getDefaultUserGroupMembership();
 }
 
 /** Legacy per-user boolean overrides → access levels. true=write, false=read. */
 export function legacyOverridesToAccessPartial(
   legacy?: Partial<Record<PermissionKey, boolean>>,
 ): Partial<ProductionPermissions> {
-  if (!legacy) return {};
-  const out: Partial<ProductionPermissions> = {};
-  for (const c of PERMISSION_MATRIX_COLUMN_LABELS) {
-    const v = legacy[c.key];
-    if (v === undefined) continue;
-    out[c.key] = v ? "write" : "read";
-  }
-  return out;
+  void legacy;
+  return {};
 }
 
 export function getEffectivePermissionsForUser(
@@ -225,19 +207,10 @@ export function getEffectivePermissionsForUser(
   matrix: GroupPermissionMatrix,
   membership: UserGroupMembership,
 ): ProductionPermissions {
-  const groups = membership[userId] ?? [];
-  const out = PERMISSION_MATRIX_COLUMN_LABELS.reduce((acc, c) => {
-    acc[c.key] = "none";
-    return acc;
-  }, {} as ProductionPermissions);
-  for (const g of groups) {
-    const row = matrix[g];
-    if (!row) continue;
-    for (const c of PERMISSION_MATRIX_COLUMN_LABELS) {
-      out[c.key] = maxAccess(out[c.key], row[c.key] ?? "none");
-    }
-  }
-  return out;
+  void userId;
+  void matrix;
+  void membership;
+  return getDefaultProductionPermissions();
 }
 
 /** Тип этапа заказа → ключ права (как в матрице админки). */

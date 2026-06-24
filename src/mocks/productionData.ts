@@ -15,6 +15,8 @@ export type StageType =
 
 export interface ProductStorageSettings {
   enabled: boolean;
+  aliquotCount: number | null;
+  deletedFieldIds?: string[];
   fields: ConfigurableMaterialField[];
 }
 
@@ -81,6 +83,8 @@ const DEPRECATED_STORAGE_FIELD_IDS = new Set([
 
 export const DEFAULT_PRODUCT_STORAGE_SETTINGS: ProductStorageSettings = {
   enabled: false,
+  aliquotCount: null,
+  deletedFieldIds: [],
   fields: DEFAULT_STORAGE_STAGE_FIELDS.map((field) => ({ ...field })),
 };
 
@@ -245,7 +249,48 @@ export type ConfigurableMaterialFieldType =
   | "number"
   | "date"
   | "checkbox"
-  | "select";
+  | "select"
+  | "catalog";
+
+export type ConfigurableMaterialCatalogCode =
+  | "temperatureRegime"
+  | "users"
+  | "storagePlaces";
+
+export const TEMPERATURE_REGIME_CATALOG_OPTIONS = [
+  "Комнатная температура",
+  "2–8 °C",
+  "≤ −20 °C",
+  "≤ −70 °C",
+  "LN2 / паровая фаза",
+  "Другое",
+];
+
+export const CONFIGURABLE_MATERIAL_CATALOG_LABELS: Record<
+  ConfigurableMaterialCatalogCode,
+  string
+> = {
+  temperatureRegime: "Температурный режим",
+  users: "Пользователи",
+  storagePlaces: "Места хранения",
+};
+
+export function normalizeConfigurableMaterialCatalogCode(
+  input: unknown,
+): ConfigurableMaterialCatalogCode {
+  return input === "users" || input === "storagePlaces" || input === "temperatureRegime"
+    ? input
+    : "temperatureRegime";
+}
+
+export function getConfigurableMaterialCatalogOptions(
+  catalogCode: ConfigurableMaterialCatalogCode | undefined,
+): string[] {
+  const normalized = normalizeConfigurableMaterialCatalogCode(catalogCode);
+  if (normalized === "users") return [...USERS];
+  if (normalized === "storagePlaces") return getStoragePlaceCatalogOptions();
+  return [...TEMPERATURE_REGIME_CATALOG_OPTIONS];
+}
 
 export interface ConfigurableMaterialField {
   id: string;
@@ -256,6 +301,8 @@ export interface ConfigurableMaterialField {
   unit?: string;
   helpText?: string;
   options?: string[];
+  /** Для типа `catalog`: выбранный системный справочник. */
+  catalogCode?: ConfigurableMaterialCatalogCode;
   /** Для входного контроля (select): вариант, который считается "ок" (зелёная подсветка). */
   okOption?: string;
 }
@@ -663,14 +710,18 @@ function materialFieldToRuntimeField(field: ConfigurableMaterialField): FieldDef
   const isStorageLocation = field.id === "storageLocation";
   const isStorageResponsible = field.id === "storageResponsible";
   const type =
-    isStorageLocation || isStorageResponsible ? "select" : field.type;
-  const options = isStorageLocation
-    ? getStoragePlaceCatalogOptions()
-    : isStorageResponsible
-      ? [...USERS]
-      : type === "select"
-        ? (field.options ?? []).filter((opt) => opt.trim())
-        : undefined;
+    isStorageLocation || isStorageResponsible || field.type === "catalog"
+      ? "select"
+      : field.type;
+  const options = field.type === "catalog"
+    ? getConfigurableMaterialCatalogOptions(field.catalogCode)
+    : isStorageLocation
+      ? getStoragePlaceCatalogOptions()
+      : isStorageResponsible
+        ? [...USERS]
+        : type === "select"
+          ? (field.options ?? []).filter((opt) => opt.trim())
+          : undefined;
   return {
     id: field.id,
     label: field.label,
@@ -703,65 +754,155 @@ export function normalizeProductStorageSettings(
 ): ProductStorageSettings {
   const base = clone(DEFAULT_PRODUCT_STORAGE_SETTINGS);
   if (!input) return base;
-  const storedById = new Map<string, ConfigurableMaterialField>();
+  const deletedFieldIds = Array.isArray(input.deletedFieldIds)
+    ? input.deletedFieldIds
+        .filter((id): id is string => typeof id === "string")
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0 && !DEPRECATED_STORAGE_FIELD_IDS.has(id))
+    : [];
+  const deletedFieldIdSet = new Set(deletedFieldIds);
+  const baseFieldById = new Map(base.fields.map((field) => [field.id, field]));
+
+  const normalizeBaseField = (
+    baseField: ConfigurableMaterialField,
+    found?: ConfigurableMaterialField,
+  ): ConfigurableMaterialField => {
+    if (!found) return { ...baseField };
+    const merged: ConfigurableMaterialField = {
+      ...baseField,
+      ...found,
+      id: baseField.id,
+      label:
+        typeof found.label === "string" && found.label.trim()
+          ? found.label.trim()
+          : baseField.label,
+      type:
+        found.type === "number" ||
+        found.type === "date" ||
+        found.type === "checkbox" ||
+        found.type === "select" ||
+        found.type === "catalog" ||
+        found.type === "text"
+          ? found.type
+          : baseField.type,
+      required: Boolean(found.required),
+      options: found.type === "select" ? found.options ?? baseField.options : undefined,
+      catalogCode:
+        found.type === "catalog"
+          ? normalizeConfigurableMaterialCatalogCode(found.catalogCode)
+          : undefined,
+    };
+    if (baseField.id === "storageLocation") {
+      const options = getStoragePlaceCatalogOptions();
+      const storedDefault =
+        typeof found.defaultValue === "string" ? found.defaultValue.trim() : "";
+      if (merged.type === "catalog") {
+        const catalogOptions = getConfigurableMaterialCatalogOptions(merged.catalogCode);
+        return {
+          ...merged,
+          options: undefined,
+          defaultValue:
+            storedDefault && catalogOptions.includes(storedDefault) ? storedDefault : null,
+          helpText: "",
+        };
+      }
+      return {
+        ...merged,
+        type: "select",
+        options,
+        defaultValue:
+          storedDefault && options.includes(storedDefault) ? storedDefault : null,
+        helpText: "",
+      };
+    }
+    if (baseField.id === "storageResponsible") {
+      const options = [...USERS];
+      const storedDefault =
+        typeof found.defaultValue === "string" ? found.defaultValue.trim() : "";
+      if (merged.type === "catalog") {
+        const catalogOptions = getConfigurableMaterialCatalogOptions(merged.catalogCode);
+        return {
+          ...merged,
+          options: undefined,
+          defaultValue:
+            storedDefault && catalogOptions.includes(storedDefault) ? storedDefault : null,
+          helpText: "",
+        };
+      }
+      return {
+        ...merged,
+        type: "select",
+        options,
+        defaultValue:
+          storedDefault && options.includes(storedDefault) ? storedDefault : null,
+        helpText: "",
+      };
+    }
+    return merged;
+  };
+
+  const normalizeCustomField = (
+    field: ConfigurableMaterialField,
+  ): ConfigurableMaterialField => {
+    const label = typeof field.label === "string" ? field.label.trim() : "";
+    const type: ConfigurableMaterialField["type"] =
+      field.type === "number" ||
+      field.type === "date" ||
+      field.type === "checkbox" ||
+      field.type === "select" ||
+      field.type === "catalog" ||
+      field.type === "text"
+        ? field.type
+        : "text";
+    const options =
+      type === "select"
+        ? (field.options ?? [])
+            .map((option) => option.trim())
+            .filter((option) => option.length > 0)
+        : undefined;
+    return {
+      ...field,
+      id: field.id.trim(),
+      label,
+      type,
+      required: Boolean(field.required),
+      unit: (field.unit ?? "").trim(),
+      helpText: (field.helpText ?? "").trim(),
+      options,
+      catalogCode:
+        type === "catalog"
+          ? normalizeConfigurableMaterialCatalogCode(field.catalogCode)
+          : undefined,
+    };
+  };
+
+  const fields: ConfigurableMaterialField[] = [];
+  const seenFieldIds = new Set<string>();
   for (const field of input.fields ?? []) {
     if (typeof field.id !== "string" || !field.id.trim()) continue;
     const id = field.id.trim();
-    if (DEPRECATED_STORAGE_FIELD_IDS.has(id)) continue;
-    storedById.set(id, field);
+    if (DEPRECATED_STORAGE_FIELD_IDS.has(id) || deletedFieldIdSet.has(id)) continue;
+    if (seenFieldIds.has(id)) continue;
+    seenFieldIds.add(id);
+    const baseField = baseFieldById.get(id);
+    fields.push(baseField ? normalizeBaseField(baseField, field) : normalizeCustomField(field));
   }
+
+  for (const baseField of base.fields) {
+    if (deletedFieldIdSet.has(baseField.id) || seenFieldIds.has(baseField.id)) continue;
+    fields.push(normalizeBaseField(baseField));
+  }
+
+  const aliquotCount =
+    typeof input.aliquotCount === "number" && Number.isFinite(input.aliquotCount)
+      ? Math.max(0, Math.floor(input.aliquotCount))
+      : null;
+
   return {
     enabled: Boolean(input.enabled),
-    fields: base.fields.map((baseField) => {
-      const found = storedById.get(baseField.id);
-      if (!found) return { ...baseField };
-      const merged: ConfigurableMaterialField = {
-        ...baseField,
-        ...found,
-        id: baseField.id,
-        label:
-          typeof found.label === "string" && found.label.trim()
-            ? found.label.trim()
-            : baseField.label,
-        type:
-          found.type === "number" ||
-          found.type === "date" ||
-          found.type === "checkbox" ||
-          found.type === "select" ||
-          found.type === "text"
-            ? found.type
-            : baseField.type,
-        required: Boolean(found.required),
-        options: found.type === "select" ? found.options ?? baseField.options : undefined,
-      };
-      if (baseField.id === "storageLocation") {
-        const options = getStoragePlaceCatalogOptions();
-        const storedDefault =
-          typeof found.defaultValue === "string" ? found.defaultValue.trim() : "";
-        return {
-          ...merged,
-          type: "select",
-          options,
-          defaultValue:
-            storedDefault && options.includes(storedDefault) ? storedDefault : null,
-          helpText: "",
-        };
-      }
-      if (baseField.id === "storageResponsible") {
-        const options = [...USERS];
-        const storedDefault =
-          typeof found.defaultValue === "string" ? found.defaultValue.trim() : "";
-        return {
-          ...merged,
-          type: "select",
-          options,
-          defaultValue:
-            storedDefault && options.includes(storedDefault) ? storedDefault : null,
-          helpText: "",
-        };
-      }
-      return merged;
-    }),
+    aliquotCount,
+    deletedFieldIds,
+    fields,
   };
 }
 

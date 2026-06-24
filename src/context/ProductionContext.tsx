@@ -10,6 +10,8 @@ import {
   type ConfigurableMaterialField,
   type ConfigurableMaterialFieldType,
   DEFAULT_MATERIAL_TYPE_SETTINGS,
+  getConfigurableMaterialCatalogOptions,
+  normalizeConfigurableMaterialCatalogCode,
   normalizeRegistrationMaterialBalance,
   normalizeOrderSettingsSnapshot,
   normalizeProductStorageSettings,
@@ -163,7 +165,7 @@ function normalizeFieldDefaultValue(input: {
     }
     return null;
   }
-  if (input.type === "select") {
+  if (input.type === "select" || input.type === "catalog") {
     if (typeof input.value !== "string") return null;
     const trimmed = input.value.trim();
     if (!trimmed) return null;
@@ -193,10 +195,20 @@ function normalizeMaterialField(
     input.type === "date" ||
     input.type === "checkbox" ||
     input.type === "select" ||
+    input.type === "catalog" ||
     input.type === "text"
       ? input.type
       : fallback.type;
-  const options = type === "select" ? normalizeFieldOptions(input.options) : undefined;
+  const catalogCode =
+    type === "catalog"
+      ? normalizeConfigurableMaterialCatalogCode(input.catalogCode)
+      : undefined;
+  const options =
+    type === "select"
+      ? normalizeFieldOptions(input.options)
+      : type === "catalog"
+        ? getConfigurableMaterialCatalogOptions(catalogCode)
+        : undefined;
   return {
     ...fallback,
     ...input,
@@ -206,6 +218,7 @@ function normalizeMaterialField(
     type,
     required: Boolean(input.required),
     options,
+    catalogCode,
     unit: typeof input.unit === "string" ? input.unit.trim() : "",
     helpText: typeof input.helpText === "string" ? input.helpText.trim() : "",
     defaultValue: normalizeFieldDefaultValue({

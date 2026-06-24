@@ -6,7 +6,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 import { ProductionJournalDevTools } from "../components/ProductionJournalDevTools";
 import {
@@ -24,6 +23,7 @@ import {
 } from "../mocks/usersMock";
 import {
   PRODUCTION_REJECTION_PHASE_LABELS,
+  getConfigurableMaterialCatalogOptions,
   type ConfigurableMaterialField,
   type FieldDefinition,
   type FieldReferenceRange,
@@ -75,9 +75,6 @@ const REGISTRATION_INCOMING_QC_SECTION_ID = "sec-qc";
 /** Узкое поле — как «Дата рождения» на вкладке регистрации. */
 const ORDER_FIELD_SM_WRAP = "min-w-0 w-full md:w-auto md:shrink-0";
 const ORDER_FIELD_SM_INPUT = "w-full md:w-[24ch] md:max-w-[24ch]";
-
-/** Среднее поле в строке (делит ряд пополам с соседним). */
-const ORDER_FIELD_MD_WRAP = "min-w-0 w-full md:flex-1 md:basis-0";
 
 const ORDER_FIELD_INPUT_CLS = "w-full";
 
@@ -156,14 +153,18 @@ function mapMaterialFieldToRuntimeFieldDefinition(
   const isStorageLocation = field.id === "storageLocation";
   const isStorageResponsible = field.id === "storageResponsible";
   const type =
-    isStorageLocation || isStorageResponsible ? "select" : field.type;
-  const options = isStorageLocation
-    ? getStoragePlaceCatalogOptions()
-    : isStorageResponsible
-      ? [...USERS]
-      : type === "select"
-        ? (field.options ?? []).filter((opt) => opt.trim())
-        : undefined;
+    isStorageLocation || isStorageResponsible || field.type === "catalog"
+      ? "select"
+      : field.type;
+  const options = field.type === "catalog"
+    ? getConfigurableMaterialCatalogOptions(field.catalogCode)
+    : isStorageLocation
+      ? getStoragePlaceCatalogOptions()
+      : isStorageResponsible
+        ? [...USERS]
+        : type === "select"
+          ? (field.options ?? []).filter((opt) => opt.trim())
+          : undefined;
   return {
     id: field.id,
     label: field.label,
@@ -264,21 +265,81 @@ function storageSettingsDefaultValues(
 ): Record<string, FieldValue> {
   const map: Record<string, FieldValue> = {};
   if (!storage?.enabled) return map;
-  for (const field of storage.fields) {
+  const count = storageAliquotCount(storage);
+  const assignDefault = (fieldId: string, field: ConfigurableMaterialField) => {
     if (field.id === "storageStart") {
-      map[field.id] = todayDateOnly();
-      continue;
+      map[fieldId] = todayDateOnly();
+      return;
     }
     if (field.id === "storageResponsible" && currentUserId) {
-      map[field.id] = currentUserId;
-      continue;
+      map[fieldId] = currentUserId;
+      return;
     }
     const value = field.defaultValue;
-    if (value == null) continue;
-    if (typeof value === "string" && value.trim() === "") continue;
-    map[field.id] = value;
+    if (value == null) return;
+    if (typeof value === "string" && value.trim() === "") return;
+    map[fieldId] = value;
+  };
+  for (const field of storage.fields) {
+    if (count > 1) {
+      for (let idx = 1; idx <= count; idx += 1) {
+        assignDefault(storageAliquotFieldId(field.id, idx), field);
+      }
+    } else {
+      assignDefault(field.id, field);
+    }
   }
   return map;
+}
+
+function storageAliquotCount(
+  storage: ProductStorageSettings | null | undefined,
+): number {
+  if (!storage?.enabled) return 1;
+  return typeof storage.aliquotCount === "number" &&
+    Number.isFinite(storage.aliquotCount) &&
+    storage.aliquotCount > 0
+    ? Math.max(1, Math.floor(storage.aliquotCount))
+    : 1;
+}
+
+function storageAliquotFieldId(fieldId: string, aliquotNumber: number): string {
+  return `${fieldId}__aliquot_${aliquotNumber}`;
+}
+
+function expandStorageFieldsForAliquots(
+  storage: ProductStorageSettings,
+): FieldDefinition[] {
+  const baseFields = storage.fields.map(mapMaterialFieldToRuntimeFieldDefinition);
+  const count = storageAliquotCount(storage);
+  if (count <= 1) return baseFields;
+
+  const fields: FieldDefinition[] = [];
+  for (let idx = 1; idx <= count; idx += 1) {
+    for (const field of baseFields) {
+      fields.push({
+        ...field,
+        id: storageAliquotFieldId(field.id, idx),
+      });
+    }
+  }
+  return fields;
+}
+
+function isRequiredFieldValueFilled(field: FieldDefinition, raw: FieldValue): boolean {
+  if (raw === null || raw === undefined) return false;
+  switch (field.type) {
+    case "text":
+    case "select":
+    case "date":
+      return typeof raw === "string" && raw.trim().length > 0;
+    case "number":
+      return typeof raw === "number" && Number.isFinite(raw) && raw >= 0;
+    case "checkbox":
+      return raw === true;
+    default:
+      return true;
+  }
 }
 
 function fieldValueWithStageDefaults(input: {
@@ -2726,6 +2787,84 @@ function CollapsibleSection({
   );
 }
 
+function AliquotStorageBlock({
+  title,
+  complete,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  complete: boolean;
+  defaultOpen: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const contentId = useId();
+
+  return (
+    <section
+      className={[
+        "rounded-lg border p-0 shadow-sm transition",
+        complete
+          ? "border-emerald-200 bg-emerald-50/40"
+          : "border-slate-200 bg-slate-50/50",
+      ].join(" ")}
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={contentId}
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60"
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          <svg
+            className={[
+              "size-4 shrink-0 text-slate-400 transition",
+              open ? "" : "-rotate-90",
+            ].join(" ")}
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden
+          >
+            <path
+              fillRule="evenodd"
+              d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.25a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <span className="truncate text-sm font-semibold text-slate-800">
+            {title}
+          </span>
+        </span>
+        {complete ? (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-300">
+            <svg
+              className="size-3.5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden
+            >
+              <path
+                fillRule="evenodd"
+                d="M16.704 5.29a1 1 0 010 1.42l-7.25 7.25a1 1 0 01-1.415 0L3.296 9.21a1 1 0 111.415-1.415l4.036 4.036 6.543-6.543a1 1 0 011.414 0z"
+                clipRule="evenodd"
+              />
+            </svg>
+            Заполнено
+          </span>
+        ) : null}
+      </button>
+      <div
+        id={contentId}
+        className={["px-3 pb-3", open ? "block" : "hidden", "print:block"].join(" ")}
+      >
+        {children}
+      </div>
+    </section>
+  );
+}
+
 function formatRuDateTime(iso: string): string {
   const d = new Date(iso);
   const day = String(d.getDate()).padStart(2, "0");
@@ -3271,7 +3410,7 @@ function StepsStage({
     if (stageTemplate.type === "storage") {
       const storage = order.settingsSnapshot?.storage;
       if (!storage?.enabled) return ensureDeviationFields(activeStepTpl.fields);
-      const storageFields = storage.fields.map(mapMaterialFieldToRuntimeFieldDefinition);
+      const storageFields = expandStorageFieldsForAliquots(storage);
       return ensureDeviationFields(storageFields);
     }
     if (
@@ -4593,75 +4732,45 @@ function FormFields({
           );
 
           const renderStorageDataGrid = () => {
-            const byId = new Map(g.fields.map((f) => [f.id, f] as const));
-            const condition = byId.get("storageCondition") ?? null;
-            const location = byId.get("storageLocation") ?? null;
-            const start = byId.get("storageStart") ?? null;
-            const end = byId.get("storageEnd") ?? null;
-            const container = byId.get("storageContainer") ?? null;
-            const responsible = byId.get("storageResponsible") ?? null;
+            const storage = order.settingsSnapshot?.storage;
+            const aliquotCount = storageAliquotCount(storage);
+            const fieldsByAliquot: FieldDefinition[][] =
+              aliquotCount > 1
+                ? Array.from({ length: aliquotCount }, (_, idx) => {
+                    const suffix = `__aliquot_${idx + 1}`;
+                    return g.fields.filter((f) => f.id.endsWith(suffix));
+                  })
+                : [g.fields];
 
-            const used = new Set([
-              "storageCondition",
-              "storageLocation",
-              "storageStart",
-              "storageEnd",
-              "storageContainer",
-              "storageResponsible",
-            ]);
-            const rest = g.fields.filter((f) => !used.has(f.id));
-
-            const storageRow = (children: ReactNode) => (
-              <div className="flex flex-col gap-4 md:flex-row md:items-end md:gap-4">
-                {children}
-              </div>
-            );
-
-            const smCell = (field: FieldDefinition, inputClassName?: string) => (
-              <div key={field.id} className={ORDER_FIELD_SM_WRAP}>
-                {renderFieldCustom(
-                  field,
-                  [ORDER_FIELD_SM_INPUT, inputClassName].filter(Boolean).join(" "),
-                )}
-              </div>
-            );
-
-            const mdCell = (field: FieldDefinition) => (
-              <div key={field.id} className={ORDER_FIELD_MD_WRAP}>
-                {renderFieldCustom(field, ORDER_FIELD_INPUT_CLS)}
-              </div>
-            );
+            const fieldCellClassName = "md:col-span-4";
 
             return (
               <div className="space-y-4">
-                {location || condition
-                  ? storageRow(
-                      <>
-                        {location ? mdCell(location) : null}
-                        {condition ? mdCell(condition) : null}
-                      </>,
-                    )
-                  : null}
-                {start || end
-                  ? storageRow(
-                      <>
-                        {start ? smCell(start) : null}
-                        {end ? smCell(end) : null}
-                      </>,
-                    )
-                  : null}
-                {container
-                  ? storageRow(mdCell(container))
-                  : null}
-                {responsible
-                  ? storageRow(
-                      <div className="min-w-0 w-full md:max-w-md md:shrink-0">
-                        {renderFieldCustom(responsible, ORDER_FIELD_INPUT_CLS)}
-                      </div>,
-                    )
-                  : null}
-                {rest.map((f) => (
-                  <div key={f.id}>{renderFieldRow(f)}</div>
+                {fieldsByAliquot.map((aliquotFields, idx) => (
+                  <AliquotStorageBlock
+                    key={idx}
+                    title={`Аликвота ${idx + 1}`}
+                    complete={aliquotFields
+                      .filter((field) => isFieldRequired(field))
+                      .every((field) =>
+                        isRequiredFieldValueFilled(field, resolveValue(field)),
+                      )}
+                    defaultOpen={idx === 0}
+                  >
+                    {aliquotFields.length === 0 ? (
+                      <div className="text-sm text-slate-500">
+                        Нет полей для этой аликвоты.
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 md:grid-cols-12">
+                        {aliquotFields.map((field) => (
+                          <div key={field.id} className={fieldCellClassName}>
+                            {renderFieldCustom(field, ORDER_FIELD_INPUT_CLS)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </AliquotStorageBlock>
                 ))}
               </div>
             );
@@ -5243,4 +5352,3 @@ function FieldInput({
     />
   );
 }
-

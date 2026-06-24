@@ -12,11 +12,14 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import App from "./App.tsx";
 import { CurrentUserProvider } from "./context/CurrentUserContext.tsx";
+import { ProductionProvider } from "./context/ProductionContext.tsx";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <CurrentUserProvider>
-      <App />
+      <ProductionProvider>
+        <App />
+      </ProductionProvider>
     </CurrentUserProvider>
   </StrictMode>,
 );

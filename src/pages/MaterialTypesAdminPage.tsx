@@ -4,10 +4,16 @@ import { Link, useParams } from "react-router-dom";
 import { MaterialTypesDevTools } from "../components/MaterialTypesDevTools";
 import { ProductionProvider, useProduction } from "../context/ProductionContext";
 import type {
+  ConfigurableMaterialCatalogCode,
   ConfigurableMaterialField,
   ConfigurableMaterialFieldType,
   FieldValue,
   MaterialTypeSettings,
+} from "../mocks/productionData";
+import {
+  CONFIGURABLE_MATERIAL_CATALOG_LABELS,
+  getConfigurableMaterialCatalogOptions,
+  normalizeConfigurableMaterialCatalogCode,
 } from "../mocks/productionData";
 
 const FIELD_TYPE_LABEL: Record<ConfigurableMaterialFieldType, string> = {
@@ -16,6 +22,7 @@ const FIELD_TYPE_LABEL: Record<ConfigurableMaterialFieldType, string> = {
   date: "Дата",
   checkbox: "Чекбокс",
   select: "Список",
+  catalog: "Справочник",
 };
 
 const MATERIAL_EDITOR_TABS = [
@@ -68,6 +75,12 @@ function normalizeOptions(options: string[] | undefined): string[] {
 
 function normalizeField(field: ConfigurableMaterialField): ConfigurableMaterialField {
   const options = field.type === "select" ? normalizeOptions(field.options) : undefined;
+  const catalogCode =
+    field.type === "catalog"
+      ? normalizeConfigurableMaterialCatalogCode(field.catalogCode)
+      : undefined;
+  const valueOptions =
+    field.type === "catalog" ? getConfigurableMaterialCatalogOptions(catalogCode) : options;
   const okOption =
     typeof field.okOption === "string" ? field.okOption.trim() : undefined;
   const normalizedOkOption =
@@ -83,6 +96,7 @@ function normalizeField(field: ConfigurableMaterialField): ConfigurableMaterialF
     unit: (field.unit ?? "").trim(),
     helpText: (field.helpText ?? "").trim(),
     options,
+    catalogCode,
     okOption: normalizedOkOption,
   };
 
@@ -102,10 +116,10 @@ function normalizeField(field: ConfigurableMaterialField): ConfigurableMaterialF
     return normalized;
   }
 
-  if (field.type === "select") {
+  if (field.type === "select" || field.type === "catalog") {
     if (
       typeof field.defaultValue === "string" &&
-      options?.some((option) => option === field.defaultValue)
+      valueOptions?.some((option) => option === field.defaultValue)
     ) {
       normalized.defaultValue = field.defaultValue;
     } else {
@@ -718,6 +732,7 @@ function FieldRow({
               defaultValue: valueFromInput("", nextType),
               options:
                 nextType === "select" ? prev.options?.length ? prev.options : [""] : undefined,
+              catalogCode: nextType === "catalog" ? "temperatureRegime" : undefined,
               okOption: undefined,
             }));
           }}
@@ -750,6 +765,33 @@ function FieldRow({
             ) : null}
           </div>
         ) : null}
+        {field.type === "catalog" ? (
+          <div className="mt-2">
+            <select
+              value={normalizeConfigurableMaterialCatalogCode(field.catalogCode)}
+              onChange={(e) => {
+                const catalogCode = e.target.value as ConfigurableMaterialCatalogCode;
+                onPatch(section, field.id, (prev) => ({
+                  ...prev,
+                  catalogCode,
+                  defaultValue: null,
+                }));
+              }}
+              className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+            >
+              {(
+                Object.keys(
+                  CONFIGURABLE_MATERIAL_CATALOG_LABELS,
+                ) as ConfigurableMaterialCatalogCode[]
+              ).map((catalogCode) => (
+                <option key={catalogCode} value={catalogCode}>
+                  {CONFIGURABLE_MATERIAL_CATALOG_LABELS[catalogCode]}
+                </option>
+              ))}
+            </select>
+            <div className="mt-1 text-xs text-slate-500">Источник значений поля.</div>
+          </div>
+        ) : null}
       </td>
       <td className="px-3 py-2">
         <input
@@ -779,6 +821,24 @@ function FieldRow({
             className="size-4 rounded border-slate-300 text-blue-600"
             aria-label="Значение по умолчанию"
           />
+        ) : field.type === "catalog" ? (
+          <select
+            value={String(defaultValueForType(field.defaultValue, field.type))}
+            onChange={(e) =>
+              onPatch(section, field.id, (prev) => ({
+                ...prev,
+                defaultValue: e.target.value || null,
+              }))
+            }
+            className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+          >
+            <option value="">Не выбрано</option>
+            {getConfigurableMaterialCatalogOptions(field.catalogCode).map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         ) : (
           <input
             type={
