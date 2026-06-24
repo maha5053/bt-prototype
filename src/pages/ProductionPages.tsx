@@ -310,6 +310,13 @@ function storageBaseFieldIdFromAliquotId(fieldId: string): string | null {
   return match?.[1] ?? null;
 }
 
+function storageAliquotNumberFromFieldId(fieldId: string): number | null {
+  const match = fieldId.match(/__aliquot_(\d+)$/);
+  if (!match?.[1]) return null;
+  const parsed = Number(match[1]);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : null;
+}
+
 function storageAliquotNoteFieldId(aliquotNumber: number): string {
   return `storageNote__aliquot_${aliquotNumber}`;
 }
@@ -2641,6 +2648,11 @@ function requestOpenProductionField(fieldId: string) {
   window.setTimeout(() => scrollToProductionField(fieldId), 0);
 }
 
+type MissingRequiredField = {
+  field: FieldDefinition;
+  label: string;
+};
+
 /** Прокрутка области контента приложения (`main` в AppLayout) к началу после смены этапа. */
 function scrollProductionOrderMainToTop() {
   const run = () => {
@@ -2661,21 +2673,21 @@ function scrollProductionOrderMainToTop() {
 function MissingRequiredFieldsHint({
   fields,
 }: {
-  fields: FieldDefinition[];
+  fields: MissingRequiredField[];
 }) {
   const shown = fields.slice(0, 3);
   return (
     <div className="text-right text-xs text-slate-500">
       Заполните обязательные поля:{" "}
-      {shown.map((f, i) => (
-        <span key={f.id}>
+      {shown.map((item, i) => (
+        <span key={item.field.id}>
           {i > 0 ? ", " : null}
           <button
             type="button"
-            onClick={() => requestOpenProductionField(f.id)}
+            onClick={() => requestOpenProductionField(item.field.id)}
             className="cursor-pointer text-slate-700 underline decoration-slate-300 underline-offset-2 transition hover:text-slate-900"
           >
-            {f.label}
+            {item.label}
           </button>
         </span>
       ))}
@@ -3513,26 +3525,26 @@ function StepsStage({
   const stepHeading = (stepIndex: number, name: string) =>
     `Шаг ${stepIndex + 1} из ${stepTotal}: ${formatStageLabel(name)}`;
 
-  const missingRequiredFields = (() => {
+  const missingRequiredFields: MissingRequiredField[] = (() => {
     if (!activeStepTpl || !activeStepExec) return [];
     const devFlagRaw = activeStepExec.fieldValues[DEVIATION_FLAG_FIELD_ID];
     const deviationNotesRequired =
       devFlagRaw === "Да" || devFlagRaw === "да" || devFlagRaw === true;
-    return activeStepTplFields.filter((f) => {
+    return activeStepTplFields.flatMap((f) => {
       const required =
         Boolean(f.required) ||
         (f.id === DEVIATION_NOTES_FIELD_ID && deviationNotesRequired);
-      if (!required) return false;
-      if (f.type === "section_header") return false;
+      if (!required) return [];
+      if (f.type === "section_header") return [];
       if (
         stageTemplate.type === "release" &&
         isReleaseSupersededSignerField(f)
       ) {
-        return false;
+        return [];
       }
-      if (typeof f.refStageIndex === "number" || f.refFieldId) return false;
-      if (f.refDeviations && f.refDeviations.length > 0) return false;
-      if (f.computeRule) return false;
+      if (typeof f.refStageIndex === "number" || f.refFieldId) return [];
+      if (f.refDeviations && f.refDeviations.length > 0) return [];
+      if (f.computeRule) return [];
 
       const raw = fieldValueWithStageDefaults({
         field: f,
@@ -3541,23 +3553,34 @@ function StepsStage({
         registrationDefaults,
         storageDefaults,
       });
-      if (raw === null || raw === undefined) return true;
+      const displayLabel = (() => {
+        if (stageTemplate.type !== "storage") return f.label;
+        const aliquotNumber = storageAliquotNumberFromFieldId(f.id);
+        if (!aliquotNumber) return f.label;
+        return `Аликвота ${aliquotNumber}. ${f.label}`;
+      })();
+      const missing = { field: f, label: displayLabel };
+      if (raw === null || raw === undefined) return [missing];
 
       switch (f.type) {
         case "text":
         case "select":
         case "date":
-          return typeof raw !== "string" || raw.trim().length === 0;
+          return typeof raw !== "string" || raw.trim().length === 0
+            ? [missing]
+            : [];
         case "number":
           return (
             typeof raw !== "number" ||
             Number.isNaN(raw) ||
             raw < 0
-          );
+          )
+            ? [missing]
+            : [];
         case "checkbox":
-          return raw !== true;
+          return raw !== true ? [missing] : [];
         default:
-          return false;
+          return [];
       }
     });
   })();
@@ -3578,7 +3601,7 @@ function StepsStage({
     missingRequiredFields.length > 0
       ? `Заполните обязательные поля: ${missingRequiredFields
           .slice(0, 3)
-          .map((f) => f.label)
+          .map((item) => item.label)
           .join(", ")}${missingRequiredFields.length > 3 ? "…" : ""}`
       : missingRequiredActions
         ? "Отметьте все обязательные действия."

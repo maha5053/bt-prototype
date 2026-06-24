@@ -56,7 +56,7 @@ export const DEFAULT_STORAGE_STAGE_FIELDS: ConfigurableMaterialField[] = [
     id: "storageEnd",
     label: "Дата выдачи",
     type: "date",
-    required: true,
+    required: false,
     defaultValue: null,
   },
 ];
@@ -660,6 +660,21 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+export const THROMBOLYSATE_TEMPLATE: ProcessTemplate = {
+  ...clone(THROMBOGEL_NEW_TEMPLATE),
+  id: "tpl-thrombolysate",
+  name: "Тромболизат",
+  storageStage: {
+    ...clone(DEFAULT_PRODUCT_STORAGE_SETTINGS),
+    enabled: true,
+    deletedFieldIds: [],
+    fields: DEFAULT_STORAGE_STAGE_FIELDS.map((field) => ({ ...field })),
+  },
+  registrationMaterialBalance: DEFAULT_REGISTRATION_MATERIAL_BALANCE_BLOOD.map((item) => ({
+    ...item,
+  })),
+};
+
 function toSystemFields(fields: FieldDefinition[]): FieldDefinition[] {
   return fields.map((f) => ({ ...clone(f), isSystem: true }));
 }
@@ -1016,6 +1031,7 @@ export function createTemplateWithSystemStages(
 
 export const INITIAL_PROCESS_TEMPLATES: ProcessTemplate[] = [
   THROMBOGEL_NEW_TEMPLATE,
+  THROMBOLYSATE_TEMPLATE,
 ];
 
 function mergeFieldDefinitions(
