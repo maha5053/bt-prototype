@@ -307,12 +307,26 @@ function storageAliquotFieldId(fieldId: string, aliquotNumber: number): string {
   return `${fieldId}__aliquot_${aliquotNumber}`;
 }
 
+function storageAliquotNoteFieldId(aliquotNumber: number): string {
+  return `storageNote__aliquot_${aliquotNumber}`;
+}
+
+function makeStorageAliquotNoteField(aliquotNumber: number): FieldDefinition {
+  return {
+    id: storageAliquotNoteFieldId(aliquotNumber),
+    label: "Примечание",
+    type: "text",
+    required: false,
+    multiline: true,
+    placeholder: "Введите примечание к аликвоте…",
+  };
+}
+
 function expandStorageFieldsForAliquots(
   storage: ProductStorageSettings,
 ): FieldDefinition[] {
   const baseFields = storage.fields.map(mapMaterialFieldToRuntimeFieldDefinition);
   const count = storageAliquotCount(storage);
-  if (count <= 1) return baseFields;
 
   const fields: FieldDefinition[] = [];
   for (let idx = 1; idx <= count; idx += 1) {
@@ -322,6 +336,7 @@ function expandStorageFieldsForAliquots(
         id: storageAliquotFieldId(field.id, idx),
       });
     }
+    fields.push(makeStorageAliquotNoteField(idx));
   }
   return fields;
 }
@@ -4742,7 +4757,8 @@ function FormFields({
                   })
                 : [g.fields];
 
-            const fieldCellClassName = "md:col-span-4";
+            const fieldCellClassName = (field: FieldDefinition) =>
+              field.multiline ? "md:col-span-12" : "md:col-span-4";
 
             return (
               <div className="space-y-4">
@@ -4764,7 +4780,7 @@ function FormFields({
                     ) : (
                       <div className="grid gap-3 md:grid-cols-12">
                         {aliquotFields.map((field) => (
-                          <div key={field.id} className={fieldCellClassName}>
+                          <div key={field.id} className={fieldCellClassName(field)}>
                             {renderFieldCustom(field, ORDER_FIELD_INPUT_CLS)}
                           </div>
                         ))}
